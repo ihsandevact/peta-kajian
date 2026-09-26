@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Peta Kajian Sunnah",
-  description: "Cari jadwal kajian terdekat di sekitarmu",
+  title: "Peta Kajian Indonesia",
+  description: "Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

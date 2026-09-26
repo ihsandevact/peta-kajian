@@ -29,6 +29,7 @@ export default function Home() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
   const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 
   useEffect(() => {
     async function loadData() {
@@ -62,59 +63,138 @@ export default function Home() {
         if (!hasAllFacilities) return false;
       }
 
-      // Waktu
+      // Status Filter: Terbaru, Selesai, Rutin
       const sessionDate = new Date(s.start_datetime);
-      const today = new Date();
-      const isToday = sessionDate.toDateString() === today.toDateString();
-      const tomorrow = new Date(today);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const isTomorrow = sessionDate.toDateString() === tomorrow.toDateString();
-
-      if (filters.time === 'hari-ini' && !isToday) return false;
-      if (filters.time === 'besok' && !isTomorrow) return false;
+      const now = new Date();
+      const isPast = sessionDate < now;
+      const isRutin = s.is_recurring;
+      
+      if (filters.time === 'terbaru' && (isPast && !isRutin)) return false;
+      if (filters.time === 'selesai' && (!isPast || isRutin)) return false;
+      if (filters.time === 'rutin' && !isRutin) return false;
       
       return true;
     });
   }, [sessions, filters]);
 
+  // SMART SORTING: Upcoming/Rutin di atas, Selesai di bawah
+  const sortedSessions = useMemo(() => {
+    return [...filteredSessions].sort((a, b) => {
+      const now = new Date();
+      const dateA = new Date(a.start_datetime);
+      const dateB = new Date(b.start_datetime);
+      
+      const aIsFuture = dateA >= now || a.is_recurring;
+      const bIsFuture = dateB >= now || b.is_recurring;
+
+      if (aIsFuture && !bIsFuture) return -1;
+      if (!aIsFuture && bIsFuture) return 1;
+
+      if (aIsFuture && bIsFuture) {
+        return dateA.getTime() - dateB.getTime(); // Terdekat dengan hari ini di atas
+      } else {
+        return dateB.getTime() - dateA.getTime(); // Paling baru selesai di atas
+      }
+    });
+  }, [filteredSessions]);
+
+  // OBSERVER: Auto-Focus dinamis setiap kali daftar filter berubah
+  useEffect(() => {
+    if (sortedSessions.length > 0) {
+      setSelectedSession((prev) => {
+        if (prev && sortedSessions.some(s => s.id === prev.id)) {
+          return prev;
+        }
+        return sortedSessions[0];
+      });
+    } else {
+      setSelectedSession(null);
+    }
+  }, [sortedSessions]);
+
   return (
     <div className="w-full h-screen bg-surface font-geist text-on-surface flex overflow-hidden">
       
       {/* GLOBAL SIDEBAR (Kiri Jauh) */}
-      <aside className="hidden lg:flex w-64 bg-surface-container-lowest z-50 flex-col justify-between py-6 shadow-[0_1px_8px_rgba(0,0,0,0.04)] shrink-0">
-        <div className="flex flex-col gap-6 px-3">
-          <div className="flex items-center gap-2 px-2">
-            <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
+      <aside className={`hidden lg:flex transition-all duration-300 bg-surface-container-lowest z-50 flex-col justify-between py-6 shadow-[0_1px_8px_rgba(0,0,0,0.04)] shrink-0 relative ${isSidebarCollapsed ? 'w-[72px]' : 'w-64'}`}>
+        
+        {/* Toggle Button */}
+        <button 
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className={`absolute -right-3 top-8 w-6 h-6 bg-surface-container-high rounded-full flex items-center justify-center text-on-surface hover:bg-primary-container hover:text-on-primary transition-colors shadow-sm z-50`}
+        >
+          <span className="material-symbols-outlined text-[14px]">
+            {isSidebarCollapsed ? 'chevron_right' : 'chevron_left'}
+          </span>
+        </button>
+
+        <div className={`flex flex-col gap-6 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
+          {/* Logo Area */}
+          <div className={`flex items-center gap-2 ${isSidebarCollapsed ? 'justify-center' : 'px-2'}`}>
+            <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center shrink-0">
               <span className="material-symbols-outlined text-on-primary text-[18px]">mosque</span>
             </div>
-            <div className="flex flex-col">
-              <span className="font-semibold text-base text-on-surface leading-tight">Peta Kajian</span>
-              <span className="text-[11px] font-medium text-outline">Sunnah Explorer</span>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="flex flex-col overflow-hidden whitespace-nowrap">
+                <span className="font-semibold text-base text-on-surface leading-tight">Peta Kajian</span>
+                <span className="text-[11px] font-medium text-outline">Seluruh Indonesia</span>
+              </div>
+            )}
           </div>
+          
+          {/* Navigation Links */}
           <nav className="flex flex-col gap-1">
-            <a href="#" className="flex items-center gap-2 px-3 py-2 transition-colors bg-primary-container text-on-primary text-xs font-medium rounded-lg">
+            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary-container text-on-primary`}>
               <span className="material-symbols-outlined text-[20px]">map</span>
-              Jelajah Peta
+              {!isSidebarCollapsed && <span>Jelajah Peta</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Jelajah Peta
+                </span>
+              )}
             </a>
-            <a href="#" className="flex items-center gap-2 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors text-xs font-medium">
+            
+            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
               <span className="material-symbols-outlined text-[20px]">calendar_today</span>
-              Jadwal Rutin
+              {!isSidebarCollapsed && <span>Jadwal Rutin</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Jadwal Rutin
+                </span>
+              )}
             </a>
-            <a href="#" className="flex items-center gap-2 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors text-xs font-medium">
+            
+            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
               <span className="material-symbols-outlined text-[20px]">school</span>
-              Daftar Asatidz
+              {!isSidebarCollapsed && <span>Daftar Asatidz</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Daftar Asatidz
+                </span>
+              )}
             </a>
-            <a href="#" className="flex items-center gap-2 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors text-xs font-medium">
+            
+            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
               <span className="material-symbols-outlined text-[20px]">location_city</span>
-              Masjid Rekanan
+              {!isSidebarCollapsed && <span>Masjid Rekanan</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Masjid Rekanan
+                </span>
+              )}
             </a>
           </nav>
         </div>
-        <div className="px-3 flex flex-col gap-2">
-          <a href="#" className="flex items-center gap-2 px-3 py-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors text-xs font-medium">
+        
+        <div className={`flex flex-col gap-2 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
+          <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
             <span className="material-symbols-outlined text-[20px]">add_circle</span>
-            Kirim Info Kajian
+            {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
+            {isSidebarCollapsed && (
+              <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                Kirim Info Kajian
+              </span>
+            )}
           </a>
         </div>
       </aside>
@@ -143,7 +223,7 @@ export default function Home() {
           {/* Kolom Kanan: Map */}
           <div className="absolute inset-0 w-full h-full md:relative md:flex-1 bg-[#f1f5f9] overflow-hidden z-10">
             <MapComponent 
-              sessions={filteredSessions} 
+              sessions={sortedSessions} 
               selectedSession={selectedSession}
               onSelectSession={setSelectedSession}
             />
@@ -169,7 +249,7 @@ export default function Home() {
               <SidebarFilter 
                 filters={filters} 
                 setFilters={setFilters} 
-                sessions={filteredSessions} 
+                sessions={sortedSessions} 
                 selectedSession={selectedSession}
                 onSelectSession={(session) => {
                   setSelectedSession(session);

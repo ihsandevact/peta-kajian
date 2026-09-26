@@ -69,7 +69,7 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
       <div className="flex p-4 pb-2 bg-surface-container-lowest/95 backdrop-blur-md flex-col gap-3 border-b border-surface-container-high shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
-            <h1 className="font-semibold text-base text-on-surface tracking-tight">Kajian Sunnah</h1>
+            <h1 className="font-semibold text-base text-on-surface tracking-tight">Peta Kajian</h1>
             <span className="w-2 h-2 rounded-full bg-primary-container inline-block ml-1.5 align-middle"></span>
           </div>
           <span className="text-[10px] uppercase tracking-wider text-outline px-2 py-0.5 rounded bg-surface-container-low">
@@ -92,8 +92,9 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
           <Pill active={filters.time === 'semua'} label="Semua" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
-          <Pill active={filters.time === 'hari-ini'} label="Hari Ini" onClick={() => setFilters(p => ({ ...p, time: 'hari-ini' }))} />
-          <Pill active={filters.time === 'besok'} label="Besok" onClick={() => setFilters(p => ({ ...p, time: 'besok' }))} />
+          <Pill active={filters.time === 'terbaru'} label="Terbaru" onClick={() => setFilters(p => ({ ...p, time: 'terbaru' }))} />
+          <Pill active={filters.time === 'selesai'} label="Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
+          <Pill active={filters.time === 'rutin'} label="Rutin" onClick={() => setFilters(p => ({ ...p, time: 'rutin' }))} />
           <Pill active={!filters.audience.includes('ikhwan')} label="Khusus Akhwat" onClick={() => setFilters(p => ({ ...p, audience: p.audience.includes('ikhwan') ? ['akhwat'] : ['umum', 'ikhwan', 'akhwat'] }))} />
         </div>
       </div>
@@ -107,8 +108,13 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
       <div className="flex-1 overflow-y-auto" ref={listRef}>
         {sessions.map((session, index) => {
           const dateObj = new Date(session.start_datetime);
+          const dateStr = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
           const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-          const islamicTime = getIslamicTimeLabel(session.start_datetime);
+          
+          const now = new Date();
+          const isPast = dateObj < now;
+          const isRutin = session.is_recurring;
+          
           const isAkhwatOnly = session.audience_type === 'akhwat';
           const distanceFake = (2.1 + (index * 1.3)).toFixed(1); // Fake distance
           const isSelected = selectedSession?.id === session.id;
@@ -122,19 +128,23 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
                 ${isSelected ? 'bg-primary-container/10 shadow-[inset_3px_0_0_0_#15803d]' : 'hover:bg-surface-container-low'}
               `}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className={`text-[13px] font-semibold ${isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
-                    {timeStr} WIB {islamicTime && `(${islamicTime})`}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-[12px] font-bold ${isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
+                    {dateStr} • {timeStr} WIB
                   </span>
-                  <span className="text-outline text-xs">•</span>
-                  {isAkhwatOnly ? (
-                    <span className="text-[11px] text-tertiary bg-tertiary-fixed/40 px-1.5 py-0.5 rounded">Khusus Akhwat</span>
+                  
+                  {isRutin ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] uppercase tracking-wide border border-[#bae6fd]">Rutin</span>
+                  ) : isPast ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide">Selesai</span>
                   ) : (
-                    <span className="text-[11px] text-on-surface-variant capitalize">{session.audience_type}</span>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#dcfce7] text-[#166534] uppercase tracking-wide border border-[#bbf7d0]">Akan Datang</span>
                   )}
+
+                  <span className="text-[11px] text-on-surface-variant capitalize px-1 bg-surface-container-low rounded">{session.audience_type}</span>
                 </div>
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">{distanceFake} km</span>
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0 mt-0.5">{distanceFake} km</span>
               </div>
               <div className="mt-1">
                 <h2 className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">{session.title}</h2>
@@ -149,7 +159,11 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
                   <span>Rute Google Maps</span>
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                 </a>
-                <span className="text-[11px] text-outline truncate max-w-[120px]">{session.book_title}</span>
+                {session.book_title && session.book_title !== 'null' && (
+                  <span className="text-[11px] text-outline truncate max-w-[120px]" title={session.book_title}>
+                    {session.book_title}
+                  </span>
+                )}
               </div>
             </div>
           );

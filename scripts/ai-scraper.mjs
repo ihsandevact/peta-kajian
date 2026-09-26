@@ -37,7 +37,12 @@ const TELEGRAM_CHANNELS = [
   'infokajian_id',
   'grupislamsunnah',
   'rumayshocom',
-  'dzulqarnainms'
+  'dzulqarnainms',
+  'khalidbasalamahofficial',
+  'adihidayatofficial',
+  'hannan_attaki',
+  'felixsiauw',
+  'ustadzabdulsomad_official'
 ];
 
 async function scrapeTelegramChannel(channelUsername) {
