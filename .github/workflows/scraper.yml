@@ -1,0 +1,33 @@
+name: Daily AI Scraper Bot
+
+on:
+  schedule:
+    # Berjalan setiap hari pada jam 20:00 UTC (Tepat jam 03:00 Pagi WIB)
+    - cron: '0 20 * * *'
+  
+  workflow_dispatch:
+    # Memungkinkan kita menjalankan bot ini secara manual dengan klik tombol di Github
+
+jobs:
+  scrape-kajian:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Install Dependencies
+        run: npm install
+
+      - name: 🚀 Run AI Scraper Bot
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_MAPTILER_KEY: ${{ secrets.NEXT_PUBLIC_MAPTILER_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: node scripts/ai-scraper.mjs
