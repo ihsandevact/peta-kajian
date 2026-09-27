@@ -202,21 +202,6 @@ export default function Home() {
       {/* AREA KANAN */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        {/* TOP HEADER DESKTOP & MOBILE */}
-        <header className="h-16 bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-6 shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-medium text-outline flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">public</span>
-              Seluruh Indonesia
-            </span>
-          </div>
-          <div className="flex items-center">
-            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center cursor-pointer hover:opacity-90">
-              <span className="material-symbols-outlined text-on-primary text-[18px]">person</span>
-            </div>
-          </div>
-        </header>
-
         {/* MAIN CONTENT SPLIT */}
         <main className="flex-1 flex w-full h-full relative overflow-hidden bg-surface md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */">
           

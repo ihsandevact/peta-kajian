@@ -100,7 +100,7 @@ export default function AppMap({ sessions, selectedSession, onSelectSession }: A
             offset={20}
           >
             <div className="-m-3 pb-3">
-              <VenueCard session={selectedSession} onClose={() => onSelectSession(null)} />
+              <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />
             </div>
           </Popup>
         )}

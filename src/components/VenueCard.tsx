@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { StudySession } from '@/lib/services/kajian';
 
 interface VenueCardProps {
@@ -8,6 +8,10 @@ interface VenueCardProps {
 
 export default function VenueCard({ session, onClose }: VenueCardProps) {
   const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [session.id, session.poster_url]);
   
   const dateObj = new Date(session.start_datetime);
   
