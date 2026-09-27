@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import SidebarFilter from '@/components/SidebarFilter';
 import { fetchActiveSessions, type StudySession } from '@/lib/services/kajian';
+import { calculateDistance } from '@/utils/distance';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -30,11 +31,31 @@ export default function Home() {
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
   const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+
+  // Minta lokasi pengguna saat aplikasi dimuat
+  useEffect(() => {
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        },
+        (error) => {
+          console.error('Error getting location', error);
+          // Silent fail agar tidak mengganggu pengguna yang menolak akses GPS
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  }, []);
 
   useEffect(() => {
     async function loadData() {
+      setIsLoading(true);
       const data = await fetchActiveSessions();
       setSessions(data);
+      setIsLoading(false);
     }
     loadData();
   }, []);
@@ -81,6 +102,18 @@ export default function Home() {
   // SMART SORTING: Upcoming/Rutin di atas, Selesai di bawah
   const sortedSessions = useMemo(() => {
     return [...filteredSessions].sort((a, b) => {
+      // Sorting Jarak (Terdekat)
+      if (filters.time === 'terdekat' && userLocation) {
+        const latA = a.venues?.lat || 0;
+        const lngA = a.venues?.lng || 0;
+        const latB = b.venues?.lat || 0;
+        const lngB = b.venues?.lng || 0;
+        const distA = calculateDistance(userLocation.lat, userLocation.lng, latA, lngA);
+        const distB = calculateDistance(userLocation.lat, userLocation.lng, latB, lngB);
+        return distA - distB;
+      }
+
+      // Default Sorting (Waktu)
       const now = new Date();
       const hasDateA = !!a.start_datetime;
       const hasDateB = !!b.start_datetime;
@@ -101,17 +134,12 @@ export default function Home() {
         return 0;
       }
     });
-  }, [filteredSessions]);
+  }, [filteredSessions, filters.time, userLocation]);
 
-  // OBSERVER: Auto-Focus dinamis setiap kali daftar filter berubah
+  // OBSERVER: Auto-Focus dinamis setiap kali daftar filter/sorting berubah
   useEffect(() => {
     if (sortedSessions.length > 0) {
-      setSelectedSession((prev) => {
-        if (prev && sortedSessions.some(s => s.id === prev.id)) {
-          return prev;
-        }
-        return sortedSessions[0];
-      });
+      setSelectedSession(sortedSessions[0]);
     } else {
       setSelectedSession(null);
     }
@@ -245,6 +273,8 @@ export default function Home() {
                   setSelectedSession(session);
                   if (session) setIsSheetExpanded(false); // Otomatis collapse saat kajian dipilih agar map terlihat
                 }}
+                isLoading={isLoading}
+                userLocation={userLocation}
               />
             </div>
           </div>
