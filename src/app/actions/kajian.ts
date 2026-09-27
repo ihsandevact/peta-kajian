@@ -17,15 +17,20 @@ export async function submitKajian(formData: FormData) {
     const title = formData.get('title') as string
     const speaker_name = formData.get('speaker_name') as string
     const book_title = formData.get('book_title') as string || null
-    const start_datetime = formData.get('start_datetime') as string
+    const start_datetime_raw = formData.get('start_datetime') as string
+    const start_datetime = start_datetime_raw ? start_datetime_raw : null
     const venue_name = formData.get('venue_name') as string
     const poster_url = formData.get('poster_url') as string || null
     const audience_type = formData.get('audience') as string
     const is_recurring = formData.get('is_recurring') === 'on'
     const recurring_pattern = is_recurring ? (formData.get('recurring_pattern') as string || null) : null
 
-    if (!title || !speaker_name || !start_datetime || !venue_name) {
+    if (!title || !speaker_name || !venue_name) {
       return { success: false, error: 'Harap isi semua kolom yang wajib.' }
+    }
+    
+    if (!is_recurring && !start_datetime) {
+      return { success: false, error: 'Waktu pelaksanaan wajib diisi untuk kajian non-rutin.' }
     }
 
     // 3. Geocoding Masjid (Mengubah nama menjadi koordinat)

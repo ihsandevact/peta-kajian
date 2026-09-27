@@ -108,8 +108,10 @@ export default function DashboardPage() {
               </label>
 
               <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-on-surface">Waktu Pelaksanaan Terdekat <span className="text-error">*</span></span>
-                <input type="datetime-local" name="start_datetime" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" required />
+                <span className="text-sm font-medium text-on-surface">
+                  Waktu Pelaksanaan {isRecurring && <span className="text-outline font-normal">(Opsional)</span>} {!isRecurring && <span className="text-error">*</span>}
+                </span>
+                <input type="datetime-local" name="start_datetime" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" required={!isRecurring} />
               </label>
             </div>
 

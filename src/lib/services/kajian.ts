@@ -22,7 +22,8 @@ export interface StudySession {
   book_title?: string;
   audience_type: 'umum' | 'ikhwan' | 'akhwat';
   is_recurring: boolean;
-  start_datetime: string;
+  recurring_pattern?: string;
+  start_datetime?: string;
   poster_url?: string;
   status: 'confirmed' | 'canceled' | 'postponed';
   venues?: Venue; // Joined data

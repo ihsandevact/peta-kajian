@@ -13,27 +13,32 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
     setImgError(false);
   }, [session.id, session.poster_url]);
   
-  const dateObj = new Date(session.start_datetime);
+  const hasDate = !!session.start_datetime;
+  const dateObj = hasDate ? new Date(session.start_datetime!) : null;
   
-  // Format Tanggal: "Sel, 26 Feb"
-  const dateStr = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
-  // Format Waktu: "18:30"
-  const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+  // Format Tanggal
+  const dateStr = dateObj 
+    ? dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
+    : (session.recurring_pattern || 'Waktu Rutin Belum Ditentukan');
+  
+  // Format Waktu
+  const timeStr = dateObj 
+    ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+    : '';
 
   const hasPoster = session.poster_url && !imgError;
 
   // --- GOOGLE CALENDAR GENERATOR ---
-  // Kita asumsikan durasi kajian adalah 2 jam
-  const endDateObj = new Date(dateObj.getTime() + 2 * 60 * 60 * 1000);
-  
-  const formatGoogleDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, '');
-  
   const gCalUrl = new URL('https://calendar.google.com/calendar/render');
-  gCalUrl.searchParams.append('action', 'TEMPLATE');
-  gCalUrl.searchParams.append('text', session.title);
-  gCalUrl.searchParams.append('dates', `${formatGoogleDate(dateObj)}/${formatGoogleDate(endDateObj)}`);
-  gCalUrl.searchParams.append('details', `Pemateri: ${session.speaker_name}\nKitab: ${session.book_title && session.book_title !== 'null' ? session.book_title : '-'}\n\nDitemukan via Peta Kajian Seluruh Indonesia.`);
-  gCalUrl.searchParams.append('location', `${session.venues?.name || ''}, ${session.venues?.address || ''}`);
+  if (hasDate) {
+    const endDateObj = new Date(dateObj!.getTime() + 2 * 60 * 60 * 1000);
+    const formatGoogleDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, '');
+    gCalUrl.searchParams.append('action', 'TEMPLATE');
+    gCalUrl.searchParams.append('text', session.title);
+    gCalUrl.searchParams.append('dates', `${formatGoogleDate(dateObj!)}/${formatGoogleDate(endDateObj)}`);
+    gCalUrl.searchParams.append('details', `Pemateri: ${session.speaker_name}\nKitab: ${session.book_title && session.book_title !== 'null' ? session.book_title : '-'}\n\nDitemukan via Peta Kajian Seluruh Indonesia.`);
+    gCalUrl.searchParams.append('location', `${session.venues?.name || ''}, ${session.venues?.address || ''}`);
+  }
 
   return (
     <div className="w-[280px] bg-surface-container-lowest rounded-xl shadow-lg pointer-events-auto transition-all transform origin-bottom flex flex-col relative overflow-hidden">
@@ -96,8 +101,12 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           
           {/* Baris Waktu */}
           <div className="flex items-start gap-1.5 text-[12px] text-on-surface-variant">
-            <span className="material-symbols-outlined text-[16px] text-outline mt-0.5 shrink-0">calendar_month</span>
-            <span className="leading-tight font-medium">{dateStr} • {timeStr} WIB</span>
+            <span className="material-symbols-outlined text-[16px] text-outline mt-0.5 shrink-0">
+              {hasDate ? 'calendar_month' : 'event_repeat'}
+            </span>
+            <span className="leading-tight font-medium">
+              {hasDate ? `${dateStr} • ${timeStr} WIB` : dateStr}
+            </span>
           </div>
 
           {/* Baris Kitab (Jika Ada) */}
@@ -136,15 +145,17 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           </a>
 
           {/* Tombol Simpan Kalender */}
-          <a 
-            href={gCalUrl.toString()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[11px] font-medium text-primary hover:text-on-primary hover:bg-primary transition-colors border border-primary/30 px-2 py-1.5 rounded-lg"
-          >
-            <span className="material-symbols-outlined text-[14px]">event_available</span>
-            Simpan Kalender
-          </a>
+          {hasDate && (
+            <a 
+              href={gCalUrl.toString()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] font-medium text-primary hover:text-on-primary hover:bg-primary transition-colors border border-primary/30 px-2 py-1.5 rounded-lg"
+            >
+              <span className="material-symbols-outlined text-[14px]">event_available</span>
+              Simpan Kalender
+            </a>
+          )}
           
         </div>
       </div>

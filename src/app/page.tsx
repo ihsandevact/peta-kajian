@@ -64,9 +64,10 @@ export default function Home() {
       }
 
       // Status Filter: Terbaru, Selesai, Rutin
-      const sessionDate = new Date(s.start_datetime);
+      const hasDate = !!s.start_datetime;
+      const sessionDate = hasDate ? new Date(s.start_datetime!) : null;
       const now = new Date();
-      const isPast = sessionDate < now;
+      const isPast = hasDate && sessionDate! < now;
       const isRutin = s.is_recurring;
       
       if (filters.time === 'terbaru' && (isPast && !isRutin)) return false;
@@ -81,19 +82,23 @@ export default function Home() {
   const sortedSessions = useMemo(() => {
     return [...filteredSessions].sort((a, b) => {
       const now = new Date();
-      const dateA = new Date(a.start_datetime);
-      const dateB = new Date(b.start_datetime);
+      const hasDateA = !!a.start_datetime;
+      const hasDateB = !!b.start_datetime;
+      const dateA = hasDateA ? new Date(a.start_datetime!) : null;
+      const dateB = hasDateB ? new Date(b.start_datetime!) : null;
       
-      const aIsFuture = dateA >= now || a.is_recurring;
-      const bIsFuture = dateB >= now || b.is_recurring;
+      const aIsFuture = (hasDateA && dateA! >= now) || a.is_recurring;
+      const bIsFuture = (hasDateB && dateB! >= now) || b.is_recurring;
 
       if (aIsFuture && !bIsFuture) return -1;
       if (!aIsFuture && bIsFuture) return 1;
 
       if (aIsFuture && bIsFuture) {
-        return dateA.getTime() - dateB.getTime(); // Terdekat dengan hari ini di atas
+        if (hasDateA && hasDateB) return dateA!.getTime() - dateB!.getTime();
+        return 0;
       } else {
-        return dateB.getTime() - dateA.getTime(); // Paling baru selesai di atas
+        if (hasDateA && hasDateB) return dateB!.getTime() - dateA!.getTime();
+        return 0;
       }
     });
   }, [filteredSessions]);
