@@ -50,7 +50,10 @@ export default function AppMap({ sessions, selectedSession, onSelectSession }: A
         
         {sessions.map(session => {
           const isSelected = selectedSession?.id === session.id;
-          const sessionTime = new Date(session.start_datetime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          const hasDate = !!session.start_datetime;
+          const sessionTime = hasDate 
+            ? new Date(session.start_datetime!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+            : 'Rutin';
           const isAkhwat = session.audience_type === 'akhwat';
           
           return (

@@ -107,12 +107,13 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
       {/* 3. Scrollable List of Kajian Items */}
       <div className="flex-1 overflow-y-auto" ref={listRef}>
         {sessions.map((session, index) => {
-          const dateObj = new Date(session.start_datetime);
-          const dateStr = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
-          const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+          const hasDate = !!session.start_datetime;
+          const dateObj = hasDate ? new Date(session.start_datetime!) : null;
+          const dateStr = dateObj ? dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+          const timeStr = dateObj ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
           
           const now = new Date();
-          const isPast = dateObj < now;
+          const isPast = hasDate && dateObj! < now;
           const isRutin = session.is_recurring;
           
           const isAkhwatOnly = session.audience_type === 'akhwat';
@@ -131,7 +132,7 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className={`text-[12px] font-bold ${isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
-                    {dateStr} • {timeStr} WIB
+                    {hasDate ? `${dateStr} • ${timeStr} WIB` : (session.recurring_pattern || 'Kajian Rutin')}
                   </span>
                   
                   {isRutin ? (
