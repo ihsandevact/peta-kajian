@@ -7,5 +7,5 @@ export async function POST(request: Request) {
   // Sign out
   await supabase.auth.signOut()
 
-  return NextResponse.redirect(new URL('/dkm/login', request.url))
+  return NextResponse.redirect(new URL('/kontributor/login', request.url))
 }

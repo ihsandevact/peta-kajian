@@ -187,7 +187,7 @@ export default function Home() {
         </div>
         
         <div className={`flex flex-col gap-2 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          <a href="/dkm/dashboard" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
+          <a href="/kontributor/dashboard" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
             <span className="material-symbols-outlined text-[20px]">add_circle</span>
             {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
             {isSidebarCollapsed && (

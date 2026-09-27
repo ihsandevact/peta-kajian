@@ -31,9 +31,9 @@ export default function LoginPage() {
           <span className="material-symbols-outlined text-[32px] text-on-primary-container">mosque</span>
         </div>
         
-        <h1 className="text-2xl font-bold text-on-surface mb-2 tracking-tight">Portal DKM</h1>
+        <h1 className="text-2xl font-bold text-on-surface mb-2 tracking-tight">Portal Kontributor</h1>
         <p className="text-sm text-on-surface-variant mb-8">
-          Masuk ke dasbor panitia untuk mempublikasikan jadwal kajian secara mandiri ke seluruh Indonesia.
+          Bantu umat menemukan majelis ilmu. Masuk sebagai relawan untuk mempublikasikan jadwal kajian ke seluruh Indonesia.
         </p>
 
         <button
@@ -48,7 +48,7 @@ export default function LoginPage() {
         </button>
 
         <p className="text-[11px] text-outline mt-8">
-          Hanya untuk panitia dan penyelenggara kajian.
+          Terbuka untuk seluruh jamaah dan relawan majelis ilmu.
         </p>
       </div>
     </div>

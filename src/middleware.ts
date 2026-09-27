@@ -2,40 +2,20 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/utils/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
-  // Update session & get response object
-  const response = await updateSession(request)
+  // Update session & get response object + user
+  const { supabaseResponse, user } = await updateSession(request)
 
-  // Protect /dkm/dashboard routes
-  if (request.nextUrl.pathname.startsWith('/dkm/dashboard')) {
-    // Verify auth in middleware if possible, but actually updateSession already refreshed it.
-    // To properly block unauthenticated users:
-    const { createServerClient } = await import('@supabase/ssr')
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll() {},
-        },
-      }
-    )
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
+  // Protect /kontributor/dashboard routes
+  if (request.nextUrl.pathname.startsWith('/kontributor/dashboard')) {
     if (!user) {
       // Redirect to login page if no user
       const url = request.nextUrl.clone()
-      url.pathname = '/dkm/login'
+      url.pathname = '/kontributor/login'
       return NextResponse.redirect(url)
     }
   }
 
-  return response
+  return supabaseResponse
 }
 
 export const config = {
