@@ -3,8 +3,10 @@
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { submitKajian } from '@/app/actions/kajian'
+import Map, { Marker, NavigationControl } from 'react-map-gl/maplibre'
+import 'maplibre-gl/dist/maplibre-gl.css'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -15,6 +17,37 @@ export default function DashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
+
+  // Map States
+  const [viewState, setViewState] = useState({
+    longitude: 106.816666,
+    latitude: -6.200000,
+    zoom: 11
+  })
+  const [markerPos, setMarkerPos] = useState({ lat: -6.200000, lng: 106.816666 })
+  const [venueQuery, setVenueQuery] = useState('')
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false)
+
+  const handleSearchLocation = async () => {
+    if (!venueQuery) return;
+    setIsSearchingLocation(true);
+    try {
+      const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
+      const res = await fetch(`https://api.maptiler.com/geocoding/${encodeURIComponent(venueQuery)}.json?key=${maptilerKey}&bbox=95.0,-11.0,141.0,6.0&limit=1`);
+      const data = await res.json();
+      if (data.features && data.features.length > 0) {
+        const [lng, lat] = data.features[0].center;
+        setViewState({ longitude: lng, latitude: lat, zoom: 14 });
+        setMarkerPos({ lat, lng });
+      } else {
+        alert('Lokasi tidak ditemukan. Silakan geser peta secara manual.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Gagal mencari lokasi.');
+    }
+    setIsSearchingLocation(false);
+  };
 
   useEffect(() => {
     const supabase = createClient()
@@ -115,16 +148,65 @@ export default function DashboardPage() {
               </label>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-on-surface">Nama Masjid / Lokasi <span className="text-error">*</span></span>
-                <input type="text" name="venue_name" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="Contoh: Masjid Nurul Iman Blok M" required />
-              </label>
+            <div className="flex flex-col gap-4 border border-surface-container-high rounded-xl p-4 bg-surface-container-lowest">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-on-surface">Cari Area Masjid / Lokasi <span className="text-error">*</span></span>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      name="venue_name" 
+                      value={venueQuery}
+                      onChange={(e) => setVenueQuery(e.target.value)}
+                      className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" 
+                      placeholder="Contoh: Masjid Nurul Iman Blok M" 
+                      required 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleSearchLocation}
+                      disabled={isSearchingLocation}
+                      className="px-3 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg text-sm font-medium transition-colors whitespace-nowrap flex items-center justify-center min-w-[70px]"
+                    >
+                      {isSearchingLocation ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : 'Cari'}
+                    </button>
+                  </div>
+                </label>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-on-surface">URL Poster (Opsional)</span>
-                <input type="url" name="poster_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://..." />
-              </label>
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-on-surface">URL Poster (Opsional)</span>
+                  <input type="url" name="poster_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://..." />
+                </label>
+              </div>
+
+              {/* Peta Mini */}
+              <div className="w-full h-[250px] rounded-lg overflow-hidden border border-outline-variant relative">
+                <div className="absolute top-2 left-2 z-10 bg-surface/90 backdrop-blur text-[11px] px-2 py-1 rounded shadow-sm text-on-surface font-medium border border-surface-container-high pointer-events-none">
+                  Geser pin merah ke lokasi persis masjid
+                </div>
+                <Map
+                  {...viewState}
+                  onMove={evt => setViewState(evt.viewState)}
+                  mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}`}
+                  attributionControl={false}
+                >
+                  <NavigationControl position="bottom-right" />
+                  <Marker
+                    longitude={markerPos.lng}
+                    latitude={markerPos.lat}
+                    draggable
+                    onDragEnd={(e) => setMarkerPos({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
+                  >
+                    <div className="text-error cursor-grab active:cursor-grabbing transform -translate-y-1/2">
+                      <span className="material-symbols-outlined text-[36px]" style={{ fontVariationSettings: "'FILL' 1" }}>location_on</span>
+                    </div>
+                  </Marker>
+                </Map>
+              </div>
+
+              {/* Hidden Inputs for coordinates */}
+              <input type="hidden" name="lat" value={markerPos.lat} />
+              <input type="hidden" name="lng" value={markerPos.lng} />
             </div>
 
             <div className="flex gap-6 mt-2">

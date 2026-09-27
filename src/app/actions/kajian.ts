@@ -33,21 +33,29 @@ export async function submitKajian(formData: FormData) {
       return { success: false, error: 'Waktu pelaksanaan wajib diisi untuk kajian non-rutin.' }
     }
 
-    // 3. Geocoding Masjid (Mengubah nama menjadi koordinat)
-    let lat = -6.200000 // Default fallback Jakarta
-    let lng = 106.816666
+    // 3. Ambil Koordinat Presisi
+    const latStr = formData.get('lat') as string
+    const lngStr = formData.get('lng') as string
+    
+    let lat = parseFloat(latStr)
+    let lng = parseFloat(lngStr)
     let address = venue_name
 
-    const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY
-    if (maptilerKey) {
-      const geoUrl = `https://api.maptiler.com/geocoding/${encodeURIComponent(venue_name)}.json?key=${maptilerKey}&bbox=95.0,-11.0,141.0,6.0&limit=1`
-      const res = await fetch(geoUrl)
-      const data = await res.json()
-      
-      if (data.features && data.features.length > 0) {
-        lng = data.features[0].center[0]
-        lat = data.features[0].center[1]
-        address = data.features[0].place_name
+    if (isNaN(lat) || isNaN(lng)) {
+      // Fallback geocoding (kalau Javascript di browser mati)
+      const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY
+      if (maptilerKey) {
+        const geoUrl = `https://api.maptiler.com/geocoding/${encodeURIComponent(venue_name)}.json?key=${maptilerKey}&bbox=95.0,-11.0,141.0,6.0&limit=1`
+        const res = await fetch(geoUrl)
+        const data = await res.json()
+        
+        if (data.features && data.features.length > 0) {
+          lng = data.features[0].center[0]
+          lat = data.features[0].center[1]
+          address = data.features[0].place_name
+        }
+      } else {
+        return { success: false, error: 'Koordinat lokasi gagal ditemukan.' }
       }
     }
 
