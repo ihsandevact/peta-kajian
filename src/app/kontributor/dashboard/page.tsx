@@ -11,6 +11,8 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 
 setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs')
 
+const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'
+
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
@@ -30,26 +32,35 @@ export default function DashboardPage() {
   const [markerPos, setMarkerPos] = useState({ lat: -6.200000, lng: 106.816666 })
   const [venueQuery, setVenueQuery] = useState('')
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
+  const [searchResults, setSearchResults] = useState<any[]>([])
 
   const handleSearchLocation = async () => {
     if (!venueQuery) return;
     setIsSearchingLocation(true);
+    setSearchResults([]);
     try {
-      const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-      const res = await fetch(`https://api.maptiler.com/geocoding/${encodeURIComponent(venueQuery)}.json?key=${maptilerKey}&bbox=95.0,-11.0,141.0,6.0&limit=1`);
+      const res = await fetch(`https://api.maptiler.com/geocoding/${encodeURIComponent(venueQuery)}.json?key=${MAPTILER_KEY}&bbox=95.0,-11.0,141.0,6.0&limit=5`);
       const data = await res.json();
       if (data.features && data.features.length > 0) {
-        const [lng, lat] = data.features[0].center;
-        setViewState({ longitude: lng, latitude: lat, zoom: 14 });
-        setMarkerPos({ lat, lng });
+        setSearchResults(data.features);
+        if (data.features.length === 1) {
+          selectLocation(data.features[0]);
+        }
       } else {
-        alert('Lokasi tidak ditemukan. Silakan geser peta secara manual.');
+        alert('Area tidak ditemukan. Coba ketik nama kota atau kecamatan yang lebih umum.');
       }
     } catch (e) {
       console.error(e);
       alert('Gagal mencari lokasi.');
     }
     setIsSearchingLocation(false);
+  };
+
+  const selectLocation = (feature: any) => {
+    const [lng, lat] = feature.center;
+    setViewState({ longitude: lng, latitude: lat, zoom: 15 });
+    setMarkerPos({ lat, lng });
+    setSearchResults([]);
   };
 
   useEffect(() => {
@@ -154,16 +165,26 @@ export default function DashboardPage() {
             <div className="flex flex-col gap-4 border border-surface-container-high rounded-xl p-4 bg-surface-container-lowest">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-on-surface">Cari Area Masjid / Lokasi <span className="text-error">*</span></span>
+                  <span className="text-sm font-medium text-on-surface">Nama Masjid / Lokasi <span className="text-error">*</span></span>
+                  <input type="text" name="venue_name" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="Contoh: Masjid Nurul Iman Blok M" required />
+                </label>
+                
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-on-surface">URL Poster (Opsional)</span>
+                  <input type="url" name="poster_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://..." />
+                </label>
+              </div>
+
+              <div className="border-t border-surface-container-high pt-4 mt-2">
+                <label className="flex flex-col gap-1.5 relative">
+                  <span className="text-sm font-medium text-on-surface">Tandai Titik Peta (Wajib) <span className="text-error">*</span></span>
                   <div className="flex gap-2">
                     <input 
                       type="text" 
-                      name="venue_name" 
                       value={venueQuery}
                       onChange={(e) => setVenueQuery(e.target.value)}
                       className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" 
-                      placeholder="Contoh: Masjid Nurul Iman Blok M" 
-                      required 
+                      placeholder="Cari Kecamatan atau Kota untuk melompat cepat" 
                     />
                     <button 
                       type="button" 
@@ -174,11 +195,26 @@ export default function DashboardPage() {
                       {isSearchingLocation ? <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> : 'Cari'}
                     </button>
                   </div>
-                </label>
-
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-on-surface">URL Poster (Opsional)</span>
-                  <input type="url" name="poster_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://..." />
+                  
+                  {searchResults.length > 1 && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-surface-container-high rounded-lg shadow-lg z-50 overflow-hidden">
+                      <ul className="max-h-48 overflow-y-auto">
+                        {searchResults.map((feat) => (
+                          <li 
+                            key={feat.id} 
+                            onClick={() => selectLocation(feat)}
+                            className="px-3 py-2 text-sm hover:bg-surface-container-low cursor-pointer border-b border-surface-container-high last:border-b-0"
+                          >
+                            <span className="font-medium text-on-surface block">{feat.text}</span>
+                            <span className="text-[11px] text-on-surface-variant line-clamp-1">{feat.place_name}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <span className="text-[11px] text-outline mt-1 leading-tight">
+                    Jika area tidak ditemukan, abaikan pencarian. Cukup geser peta dan letakkan <b>Pin Merah</b> persis di atas bangunan masjid.
+                  </span>
                 </label>
               </div>
 
@@ -190,7 +226,7 @@ export default function DashboardPage() {
                 <Map
                   {...viewState}
                   onMove={evt => setViewState(evt.viewState)}
-                  mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${process.env.NEXT_PUBLIC_MAPTILER_KEY}`}
+                  mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`}
                   attributionControl={false}
                 >
                   <NavigationControl position="bottom-right" />
