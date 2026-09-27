@@ -6,7 +6,10 @@ import Link from 'next/link'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { submitKajian } from '@/app/actions/kajian'
 import Map, { Marker, NavigationControl } from 'react-map-gl/maplibre'
+import { setWorkerUrl } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
+
+setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs')
 
 export default function DashboardPage() {
   const router = useRouter()
