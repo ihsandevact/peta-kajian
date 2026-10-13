@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import SidebarFilter from '@/components/SidebarFilter';
-import { fetchActiveSessions, type StudySession } from '@/lib/services/kajian';
+import { fetchActiveSessions, hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
 import { calculateDistance } from '@/utils/distance';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
@@ -62,14 +62,15 @@ export default function Home() {
 
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
-      if (!s.venues?.lat || !s.venues?.lng) return false;
+      // Kajian tanpa lokasi fisik hanya valid jika online
+      if (!hasPhysicalLocation(s) && !s.is_online) return false;
       
       // Search Query
       if (filters.searchQuery) {
         const query = filters.searchQuery.toLowerCase();
         const matchTitle = s.title.toLowerCase().includes(query);
         const matchSpeaker = s.speaker_name.toLowerCase().includes(query);
-        const matchVenue = s.venues?.name.toLowerCase().includes(query);
+        const matchVenue = s.venues?.name?.toLowerCase().includes(query);
         if (!matchTitle && !matchSpeaker && !matchVenue) return false;
       }
 
@@ -84,7 +85,7 @@ export default function Home() {
         if (!hasAllFacilities) return false;
       }
 
-      // Status Filter: Terbaru, Selesai, Rutin
+      // Status Filter: Terbaru, Selesai, Rutin, Online
       const hasDate = !!s.start_datetime;
       const sessionDate = hasDate ? new Date(s.start_datetime!) : null;
       const now = new Date();
@@ -94,6 +95,7 @@ export default function Home() {
       if (filters.time === 'terbaru' && (isPast && !isRutin)) return false;
       if (filters.time === 'selesai' && (!isPast || isRutin)) return false;
       if (filters.time === 'rutin' && !isRutin) return false;
+      if (filters.time === 'online' && !s.is_online) return false;
       
       return true;
     });
@@ -102,14 +104,15 @@ export default function Home() {
   // SMART SORTING: Upcoming/Rutin di atas, Selesai di bawah
   const sortedSessions = useMemo(() => {
     return [...filteredSessions].sort((a, b) => {
-      // Sorting Jarak (Terdekat)
+      // Sorting Jarak (Terdekat) — kajian tanpa lokasi fisik ditaruh paling bawah
       if (filters.time === 'terdekat' && userLocation) {
-        const latA = a.venues?.lat || 0;
-        const lngA = a.venues?.lng || 0;
-        const latB = b.venues?.lat || 0;
-        const lngB = b.venues?.lng || 0;
-        const distA = calculateDistance(userLocation.lat, userLocation.lng, latA, lngA);
-        const distB = calculateDistance(userLocation.lat, userLocation.lng, latB, lngB);
+        const aHasLoc = hasPhysicalLocation(a);
+        const bHasLoc = hasPhysicalLocation(b);
+        if (aHasLoc && !bHasLoc) return -1;
+        if (!aHasLoc && bHasLoc) return 1;
+        if (!aHasLoc && !bHasLoc) return 0;
+        const distA = calculateDistance(userLocation.lat, userLocation.lng, a.venues!.lat, a.venues!.lng);
+        const distB = calculateDistance(userLocation.lat, userLocation.lng, b.venues!.lat, b.venues!.lng);
         return distA - distB;
       }
 

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import type { FilterState } from '@/app/page';
-import type { StudySession } from '@/lib/services/kajian';
+import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
 
@@ -121,6 +121,7 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
           <Pill active={filters.time === 'terbaru'} label="Terbaru" onClick={() => setFilters(p => ({ ...p, time: 'terbaru' }))} />
           <Pill active={filters.time === 'selesai'} label="Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
           <Pill active={filters.time === 'rutin'} label="Rutin" onClick={() => setFilters(p => ({ ...p, time: 'rutin' }))} />
+          <Pill active={filters.time === 'online'} label="Online" onClick={() => setFilters(p => ({ ...p, time: 'online' }))} />
           <Pill active={!filters.audience.includes('ikhwan')} label="Khusus Akhwat" onClick={() => setFilters(p => ({ ...p, audience: p.audience.includes('ikhwan') ? ['akhwat'] : ['umum', 'ikhwan', 'akhwat'] }))} />
         </div>
       </div>
@@ -186,6 +187,13 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
                     )}
 
                     <span className="text-[11px] text-on-surface-variant capitalize px-1 bg-surface-container-low rounded">{session.audience_type}</span>
+
+                    {session.is_online && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#fee2e2] text-[#b91c1c] uppercase tracking-wide border border-[#fecaca]">
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#dc2626]"></span>
+                        {session.venues ? 'Hybrid' : 'Online'}
+                      </span>
+                    )}
                   </div>
                   {distanceLabel && (
                     <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0 mt-0.5">{distanceLabel}</span>
@@ -195,15 +203,32 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
                   <h2 className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">{session.title}</h2>
                   <p className="text-[13px] text-on-surface-variant mt-0.5">{session.speaker_name}</p>
                 </div>
-                <div className="mt-1 flex items-center gap-1 text-outline text-[13px]">
-                  <span className="material-symbols-outlined text-[15px]">location_on</span>
-                  <span className="truncate">{session.venues?.name}</span>
-                </div>
-                <div className="mt-2 pt-1.5 flex items-center justify-between">
-                  <a href={`https://maps.google.com/?q=${session.venues?.lat},${session.venues?.lng}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors">
-                    <span>Rute Google Maps</span>
-                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                  </a>
+                {session.venues ? (
+                  <div className="mt-1 flex items-center gap-1 text-outline text-[13px]">
+                    <span className="material-symbols-outlined text-[15px]">location_on</span>
+                    <span className="truncate">{session.venues.name}</span>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center gap-1 text-outline text-[13px]">
+                    <span className="material-symbols-outlined text-[15px] text-[#dc2626]">videocam</span>
+                    <span className="truncate">Kajian Online / Live Streaming</span>
+                  </div>
+                )}
+                <div className="mt-2 pt-1.5 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {hasPhysicalLocation(session) && (
+                      <a href={`https://maps.google.com/?q=${session.venues?.lat},${session.venues?.lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors">
+                        <span>Rute Google Maps</span>
+                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                      </a>
+                    )}
+                    {session.stream_url && (
+                      <a href={session.stream_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] font-medium text-[#dc2626] hover:text-[#991b1b] transition-colors">
+                        <span className="material-symbols-outlined text-[14px]">play_circle</span>
+                        <span>Tonton Live</span>
+                      </a>
+                    )}
+                  </div>
                   {session.book_title && session.book_title !== 'null' && (
                     <span className="text-[11px] text-outline truncate max-w-[120px]" title={session.book_title}>
                       {session.book_title}

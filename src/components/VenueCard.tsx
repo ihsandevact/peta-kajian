@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { StudySession } from '@/lib/services/kajian';
+import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 
 interface VenueCardProps {
   session: StudySession;
@@ -118,31 +118,56 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           )}
 
           {/* Baris Lokasi */}
-          <div className="flex items-start gap-1.5 text-[12px] text-on-surface-variant">
-            <span className="material-symbols-outlined text-[16px] text-outline mt-0.5 shrink-0">location_on</span>
-            <div className="flex flex-col">
-              <span className="font-medium text-on-surface">{session.venues?.name}</span>
-              {session.venues?.address && (
-                <span className="text-[11px] opacity-80 line-clamp-2 mt-0.5">{session.venues?.address}</span>
-              )}
+          {session.venues && (
+            <div className="flex items-start gap-1.5 text-[12px] text-on-surface-variant">
+              <span className="material-symbols-outlined text-[16px] text-outline mt-0.5 shrink-0">location_on</span>
+              <div className="flex flex-col">
+                <span className="font-medium text-on-surface">{session.venues.name}</span>
+                {session.venues.address && (
+                  <span className="text-[11px] opacity-80 line-clamp-2 mt-0.5">{session.venues.address}</span>
+                )}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Baris Live Streaming (Online / Hybrid) */}
+          {session.is_online && (
+            <div className="flex items-start gap-1.5 text-[12px] text-on-surface-variant">
+              <span className="material-symbols-outlined text-[16px] text-[#dc2626] mt-0.5 shrink-0">videocam</span>
+              <span className="leading-tight font-medium">Disiarkan secara live</span>
+            </div>
+          )}
 
         </div>
         
         {/* Aksi Bawah */}
-        <div className="mt-4 pt-3 flex items-center justify-between border-t border-surface-container-high/50">
+        <div className="mt-4 pt-3 flex items-center justify-between gap-2 flex-wrap border-t border-surface-container-high/50">
           
           {/* Tombol Rute Maps */}
-          <a 
-            href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors bg-surface-container-low px-2 py-1.5 rounded-lg"
-          >
-            <span className="material-symbols-outlined text-[14px]">directions_car</span>
-            Rute Maps
-          </a>
+          {hasPhysicalLocation(session) && (
+            <a 
+              href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors bg-surface-container-low px-2 py-1.5 rounded-lg"
+            >
+              <span className="material-symbols-outlined text-[14px]">directions_car</span>
+              Rute Maps
+            </a>
+          )}
+
+          {/* Tombol Tonton Live */}
+          {session.stream_url && (
+            <a 
+              href={session.stream_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-[11px] font-medium text-[#dc2626] hover:bg-[#fee2e2] transition-colors border border-[#fecaca] px-2 py-1.5 rounded-lg"
+            >
+              <span className="material-symbols-outlined text-[14px]">play_circle</span>
+              Tonton Live
+            </a>
+          )}
 
           {/* Tombol Simpan Kalender */}
           {hasDate && (

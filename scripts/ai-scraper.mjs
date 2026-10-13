@@ -90,15 +90,30 @@ const responseSchema = {
           book_title: { type: "STRING", description: "Nama kitab yang dibahas, null jika tidak ada" },
           audience_type: { type: "STRING", description: "Satu dari: 'umum', 'ikhwan', atau 'akhwat'" },
           start_datetime: { type: "STRING", description: "Waktu mulai dalam format ISO8601 (YYYY-MM-DDTHH:mm:ssZ). Gunakan tahun ini." },
-          venue_name: { type: "STRING", description: "Nama Masjid beserta daerahnya (contoh: Masjid Nurul Iman Blok M)" },
+          venue_name: { type: "STRING", nullable: true, description: "Nama Masjid fisik beserta daerahnya (contoh: Masjid Nurul Iman Blok M). null jika kajian hanya online." },
+          is_online: { type: "BOOLEAN", description: "true jika kajian disiarkan live (YouTube/Zoom/Instagram/dll)." },
+          stream_url: { type: "STRING", nullable: true, description: "URL live streaming jika disebutkan, null jika tidak ada." },
           poster_url: { type: "STRING", description: "URL gambar poster (salin kembali URL yang diberikan)" }
         },
-        required: ["title", "speaker_name", "audience_type", "start_datetime", "venue_name"]
+        required: ["title", "speaker_name", "audience_type", "start_datetime", "is_online"]
       }
     }
   },
   required: ["kajian_list"]
 };
+
+// Nama "venue" yang sebenarnya adalah channel online, bukan tempat fisik
+const ONLINE_VENUE_PATTERN = /\b(live|streaming|youtube|zoom|online|instagram|daring)\b/i;
+
+function isValidHttpUrl(value) {
+  if (!value || typeof value !== 'string') return false;
+  try {
+    const u = new URL(value);
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
 
 async function geocodeVenue(venueName) {
   if (!MAPTILER_KEY) return null;
@@ -152,6 +167,13 @@ async function runScraper() {
     Tugas Anda adalah memilah teks tersebut, mengabaikan pengumuman yang BUKAN kajian, lalu mengembalikan data kajian ke format JSON yang valid.
     PENTING: Salin 'URL Poster Asli' persis seperti yang diberikan ke kolom poster_url. Jika 'Tidak ada poster', isi dengan null.
     
+    ATURAN KAJIAN ONLINE:
+    - Jika kajian disiarkan via YouTube/Zoom/Instagram Live/Facebook Live/channel streaming DAN tidak menyebut masjid/tempat fisik,
+      set is_online=true dan venue_name=null. JANGAN mengisi venue_name dengan nama channel (contoh salah: "Live Streaming KHB Official").
+    - Jika kajian diadakan di masjid fisik DAN juga disiarkan live, set is_online=true dan isi venue_name dengan nama masjid (hybrid).
+    - Jika hanya di masjid fisik, set is_online=false.
+    - Isi stream_url hanya jika URL streaming tertulis jelas di teks. Jangan mengarang URL.
+    
     Data Mentah Telegram:
     ${promptInput}
   `;
@@ -201,57 +223,76 @@ async function runScraper() {
   for (const kajian of kajianList) {
     console.log(`⚙️  Memproses: ${kajian.title} (${kajian.speaker_name})`);
     
-    // 1. Cek & Insert Venue
-    let venueId;
-    const { data: existingVenue } = await supabase
-      .from('venues')
-      .select('id, name')
-      .ilike('name', `%${kajian.venue_name}%`)
-      .limit(1)
-      .maybeSingle();
+    // 0. Normalisasi: jaring pengaman jika AI tetap mengisi nama channel sebagai venue
+    let venueName = (kajian.venue_name || '').trim() || null;
+    let isOnline = !!kajian.is_online;
+    if (venueName && ONLINE_VENUE_PATTERN.test(venueName)) {
+      console.log(`   📺 "${venueName}" terdeteksi sebagai channel online, bukan masjid.`);
+      venueName = null;
+      isOnline = true;
+    }
+    const streamUrl = isOnline && isValidHttpUrl(kajian.stream_url) ? kajian.stream_url : null;
 
-    if (existingVenue) {
-      venueId = existingVenue.id;
-      console.log(`   🏠 Masjid sudah terdaftar: ${existingVenue.name}`);
-    } else {
-      let lat = -6.2; // Default jakarta
-      let lng = 106.8;
-      let address = kajian.venue_name;
+    if (!venueName && !isOnline) {
+      console.log(`   ⚠️  Tidak ada lokasi fisik maupun info online. Dilewati.`);
+      console.log("------------------------------------------");
+      continue;
+    }
 
-      const geo = await geocodeVenue(kajian.venue_name);
-      if (geo) {
-        lat = geo.lat;
-        lng = geo.lng;
-        address = geo.full_address;
-      }
-
-      venueId = crypto.randomUUID();
-      const { error: venueError } = await supabase
+    // 1. Cek & Insert Venue (hanya untuk kajian offline / hybrid)
+    let venueId = null;
+    if (venueName) {
+      const { data: existingVenue } = await supabase
         .from('venues')
-        .insert({
-          id: venueId,
-          name: kajian.venue_name,
-          address: address,
-          location: `POINT(${lng} ${lat})`,
-          facilities: {}
-        });
+        .select('id, name')
+        .ilike('name', `%${venueName}%`)
+        .limit(1)
+        .maybeSingle();
 
-      if (venueError) {
-        console.error("   ❌ Gagal insert venue:", venueError.message);
-        continue;
+      if (existingVenue) {
+        venueId = existingVenue.id;
+        console.log(`   🏠 Masjid sudah terdaftar: ${existingVenue.name}`);
+      } else {
+        const geo = await geocodeVenue(venueName);
+        if (!geo) {
+          // Jangan pakai koordinat default: lebih baik dilewati daripada muncul pin palsu
+          if (!isOnline) {
+            console.log(`   ⚠️  Koordinat "${venueName}" tidak ditemukan. Kajian dilewati agar tidak muncul pin palsu.`);
+            console.log("------------------------------------------");
+            continue;
+          }
+          console.log(`   ⚠️  Koordinat "${venueName}" tidak ditemukan. Disimpan sebagai kajian online saja.`);
+        } else {
+          venueId = crypto.randomUUID();
+          const { error: venueError } = await supabase
+            .from('venues')
+            .insert({
+              id: venueId,
+              name: venueName,
+              address: geo.full_address,
+              location: `POINT(${geo.lng} ${geo.lat})`,
+              facilities: {}
+            });
+
+          if (venueError) {
+            console.error("   ❌ Gagal insert venue:", venueError.message);
+            continue;
+          }
+          console.log(`   🏠 Masjid BARU ditambahkan: ${venueName}`);
+        }
       }
-      console.log(`   🏠 Masjid BARU ditambahkan: ${kajian.venue_name}`);
+    } else {
+      console.log(`   📺 Kajian online (tanpa lokasi fisik).`);
     }
 
     // 2. Cek Duplikasi Kajian
-    const { data: existingSession } = await supabase
+    let dupQuery = supabase
       .from('study_sessions')
       .select('id')
-      .eq('venue_id', venueId)
       .ilike('speaker_name', kajian.speaker_name)
-      .eq('start_datetime', kajian.start_datetime)
-      .limit(1)
-      .maybeSingle();
+      .eq('start_datetime', kajian.start_datetime);
+    dupQuery = venueId ? dupQuery.eq('venue_id', venueId) : dupQuery.is('venue_id', null);
+    const { data: existingSession } = await dupQuery.limit(1).maybeSingle();
 
     if (existingSession) {
       console.log(`   ⏭️  Kajian sudah ada di jadwal (Duplikat). Dilewati (Skip).`);
@@ -271,6 +312,8 @@ async function runScraper() {
         start_datetime: kajian.start_datetime,
         poster_url: kajian.poster_url,
         is_recurring: false,
+        is_online: isOnline,
+        stream_url: streamUrl,
         status: 'confirmed'
       });
 

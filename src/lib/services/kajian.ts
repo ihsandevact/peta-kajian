@@ -16,7 +16,7 @@ export interface Venue {
 
 export interface StudySession {
   id: string;
-  venue_id: string;
+  venue_id: string | null;
   speaker_name: string;
   title: string;
   book_title?: string;
@@ -26,7 +26,14 @@ export interface StudySession {
   start_datetime?: string;
   poster_url?: string;
   status: 'confirmed' | 'canceled' | 'postponed';
-  venues?: Venue; // Joined data
+  is_online?: boolean;
+  stream_url?: string | null;
+  venues?: Venue | null; // Joined data (null untuk kajian online murni)
+}
+
+/** Kajian yang punya titik koordinat fisik (offline / hybrid) */
+export function hasPhysicalLocation(s: StudySession): boolean {
+  return !!(s.venues?.lat && s.venues?.lng);
 }
 
 // Untuk sementara kita menggunakan query biasa

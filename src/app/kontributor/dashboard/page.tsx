@@ -18,6 +18,9 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isRecurring, setIsRecurring] = useState(false)
+  const [mode, setMode] = useState<'offline' | 'online' | 'hybrid'>('offline')
+  const needsVenue = mode !== 'online'
+  const needsStream = mode !== 'offline'
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null)
@@ -162,18 +165,53 @@ export default function DashboardPage() {
               </label>
             </div>
 
-            <div className="flex flex-col gap-4 border border-surface-container-high rounded-xl p-4 bg-surface-container-lowest">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-on-surface">Nama Masjid / Lokasi <span className="text-error">*</span></span>
-                  <input type="text" name="venue_name" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="Contoh: Masjid Nurul Iman Blok M" required />
-                </label>
-                
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-on-surface">URL Poster (Opsional)</span>
-                  <input type="url" name="poster_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://..." />
-                </label>
+            {/* Mode Kajian */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-on-surface">Mode Kajian <span className="text-error">*</span></span>
+              <input type="hidden" name="mode" value={mode} />
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { value: 'offline', label: 'Offline', icon: 'mosque', desc: 'Di masjid' },
+                  { value: 'online', label: 'Online', icon: 'videocam', desc: 'Live streaming' },
+                  { value: 'hybrid', label: 'Hybrid', icon: 'connected_tv', desc: 'Masjid + live' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setMode(opt.value)}
+                    className={`flex flex-col items-center gap-0.5 py-2.5 rounded-lg border text-sm transition-colors ${
+                      mode === opt.value
+                        ? 'border-primary bg-primary-container/15 text-primary font-semibold'
+                        : 'border-surface-container-high bg-surface-container-low text-on-surface-variant hover:bg-surface-container'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">{opt.icon}</span>
+                    <span>{opt.label}</span>
+                    <span className="text-[10px] font-normal opacity-75">{opt.desc}</span>
+                  </button>
+                ))}
               </div>
+            </div>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-on-surface">URL Poster (Opsional)</span>
+              <input type="url" name="poster_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://..." />
+            </label>
+
+            {needsStream && (
+              <label className="flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                <span className="text-sm font-medium text-on-surface">Link Live Streaming <span className="text-error">*</span></span>
+                <input type="url" name="stream_url" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="https://youtube.com/@channel/live" required />
+                <span className="text-[11px] text-outline">Link YouTube, Zoom, Instagram Live, atau platform lain.</span>
+              </label>
+            )}
+
+            {needsVenue && (
+            <div className="flex flex-col gap-4 border border-surface-container-high rounded-xl p-4 bg-surface-container-lowest animate-in fade-in slide-in-from-top-2 duration-300">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium text-on-surface">Nama Masjid / Lokasi <span className="text-error">*</span></span>
+                <input type="text" name="venue_name" className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="Contoh: Masjid Nurul Iman Blok M" required />
+              </label>
 
               <div className="border-t border-surface-container-high pt-4 mt-2">
                 <label className="flex flex-col gap-1.5 relative">
@@ -247,6 +285,7 @@ export default function DashboardPage() {
               <input type="hidden" name="lat" value={markerPos.lat} />
               <input type="hidden" name="lng" value={markerPos.lng} />
             </div>
+            )}
 
             <div className="flex gap-6 mt-2">
               <label className="flex items-center gap-2 cursor-pointer">

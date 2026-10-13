@@ -2,7 +2,7 @@ import * as React from 'react';
 import Map, { NavigationControl, Marker, Popup, type MapRef } from 'react-map-gl/maplibre';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { type StudySession } from '@/lib/services/kajian';
+import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import VenueCard from './VenueCard';
 
 setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
@@ -27,8 +27,12 @@ export default function AppMap({ sessions, selectedSession, onSelectSession }: A
   const getLat = (s: StudySession) => s.venues?.lat || 0;
   const getLng = (s: StudySession) => s.venues?.lng || 0;
 
+  // Kajian online murni tidak punya titik di peta
+  const mappableSessions = React.useMemo(() => sessions.filter(hasPhysicalLocation), [sessions]);
+  const selectedHasLocation = !!selectedSession && hasPhysicalLocation(selectedSession);
+
   React.useEffect(() => {
-    if (selectedSession && mapRef.current) {
+    if (selectedSession && hasPhysicalLocation(selectedSession) && mapRef.current) {
       mapRef.current.flyTo({
         center: [getLng(selectedSession), getLat(selectedSession)],
         zoom: 14,
@@ -48,7 +52,7 @@ export default function AppMap({ sessions, selectedSession, onSelectSession }: A
       >
         <NavigationControl position="bottom-right" showCompass={false} />
         
-        {sessions.map(session => {
+        {mappableSessions.map(session => {
           const isSelected = selectedSession?.id === session.id;
           const hasDate = !!session.start_datetime;
           const sessionTime = hasDate 
@@ -91,7 +95,7 @@ export default function AppMap({ sessions, selectedSession, onSelectSession }: A
           );
         })}
 
-        {selectedSession && (
+        {selectedSession && selectedHasLocation && (
           <Popup
             anchor="bottom"
             longitude={getLng(selectedSession)}
