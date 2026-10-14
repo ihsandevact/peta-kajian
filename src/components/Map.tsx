@@ -3,6 +3,7 @@ import Map, { NavigationControl, Marker, Popup, type MapRef } from 'react-map-gl
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
+import type { SelectedRegion } from '@/utils/regions';
 import VenueCard from './VenueCard';
 
 setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
@@ -13,9 +14,10 @@ interface AppMapProps {
   sessions: StudySession[];
   selectedSession: StudySession | null;
   onSelectSession: (s: StudySession | null) => void;
+  flyToRegion?: SelectedRegion | null;
 }
 
-export default function AppMap({ sessions, selectedSession, onSelectSession }: AppMapProps) {
+export default function AppMap({ sessions, selectedSession, onSelectSession, flyToRegion }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
   
   const [viewState, setViewState] = React.useState({
@@ -31,16 +33,36 @@ export default function AppMap({ sessions, selectedSession, onSelectSession }: A
   const mappableSessions = React.useMemo(() => sessions.filter(hasPhysicalLocation), [sessions]);
   const selectedHasLocation = !!selectedSession && hasPhysicalLocation(selectedSession);
 
+  // Terbang ke kajian terpilih saat diklik
   React.useEffect(() => {
     if (selectedSession && hasPhysicalLocation(selectedSession) && mapRef.current) {
       mapRef.current.flyTo({
         center: [getLng(selectedSession), getLat(selectedSession)],
         zoom: 14,
         duration: 1500,
-        essential: true // this animation is considered essential with respect to prefers-reduced-motion
+        essential: true
       });
     }
   }, [selectedSession]);
+
+  // Terbang ke wilayah/kota yang dipilih dari filter
+  React.useEffect(() => {
+    if (flyToRegion && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [flyToRegion.center[0], flyToRegion.center[1]],
+        zoom: flyToRegion.zoom,
+        duration: 1600,
+        essential: true
+      });
+    } else if (flyToRegion === null && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [118.0, -2.0],
+        zoom: 4.5,
+        duration: 1400,
+        essential: true
+      });
+    }
+  }, [flyToRegion]);
 
   return (
     <div className="w-full h-full relative">

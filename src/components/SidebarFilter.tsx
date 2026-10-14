@@ -3,21 +3,34 @@ import type { FilterState } from '@/app/page';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
+import RegionPickerModal from './RegionPickerModal';
+import type { SelectedRegion } from '@/utils/regions';
 
 interface SidebarFilterProps {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   sessions: StudySession[];
+  allSessions?: StudySession[];
   selectedSession: StudySession | null;
   onSelectSession: (s: StudySession | null) => void;
   isLoading?: boolean;
   userLocation?: {lat: number, lng: number} | null;
 }
 
-export default function SidebarFilter({ filters, setFilters, sessions, selectedSession, onSelectSession, isLoading = false, userLocation = null }: SidebarFilterProps) {
+export default function SidebarFilter({
+  filters,
+  setFilters,
+  sessions,
+  allSessions,
+  selectedSession,
+  onSelectSession,
+  isLoading = false,
+  userLocation = null,
+}: SidebarFilterProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
+  const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -114,6 +127,45 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
           />
         </div>
 
+        {/* Region Selector Bar */}
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => setIsRegionModalOpen(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border shrink-0 ${
+              filters.region
+                ? 'bg-primary text-white border-primary shadow-xs'
+                : 'bg-surface-container-low hover:bg-surface-container border-surface-container-high text-on-surface'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              {filters.region ? 'location_on' : 'explore'}
+            </span>
+            <span className="max-w-[130px] sm:max-w-[160px] truncate">
+              {filters.region ? filters.region.name : 'Pilih Wilayah / Kota'}
+            </span>
+            <span className="material-symbols-outlined text-[16px] opacity-75">
+              arrow_drop_down
+            </span>
+          </button>
+
+          {filters.region ? (
+            <button
+              type="button"
+              onClick={() => setFilters((p) => ({ ...p, region: null }))}
+              className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-0.5 shrink-0"
+              title="Reset ke Seluruh Indonesia"
+            >
+              <span className="material-symbols-outlined text-[14px]">close</span>
+              Reset Wilayah
+            </button>
+          ) : (
+            <span className="text-[11px] text-outline truncate">
+              Seluruh Indonesia
+            </span>
+          )}
+        </div>
+
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
           <Pill active={filters.time === 'semua'} label="Semua" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
@@ -128,7 +180,9 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
 
       {/* 2. Result Count Subtext Bar */}
       <div className="flex px-4 py-1.5 bg-surface-container-low/70 items-center justify-between text-outline text-[11px] font-medium shrink-0">
-        <span>Menampilkan {sessions.length} kajian</span>
+        <span>
+          Menampilkan {sessions.length} kajian{filters.region ? ` di ${filters.region.name}` : ''}
+        </span>
       </div>
 
       {/* 3. Scrollable List of Kajian Items */}
@@ -246,6 +300,15 @@ export default function SidebarFilter({ filters, setFilters, sessions, selectedS
           </div>
         )}
       </div>
+
+      {/* Modal Pemilih Wilayah */}
+      <RegionPickerModal
+        isOpen={isRegionModalOpen}
+        onClose={() => setIsRegionModalOpen(false)}
+        selectedRegion={filters.region}
+        onSelectRegion={(r) => setFilters((p) => ({ ...p, region: r }))}
+        sessions={allSessions || sessions}
+      />
     </div>
   );
 }

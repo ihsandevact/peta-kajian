@@ -7,6 +7,7 @@ import SidebarFilter from '@/components/SidebarFilter';
 import { fetchActiveSessions, hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
 import { calculateDistance } from '@/utils/distance';
 import { createClient } from '@/utils/supabase/client';
+import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -18,6 +19,7 @@ export type FilterState = {
   radius: number;
   searchQuery: string;
   facilities: string[];
+  region: SelectedRegion | null;
 };
 
 export default function Home() {
@@ -27,6 +29,7 @@ export default function Home() {
     radius: 20,
     searchQuery: '',
     facilities: [],
+    region: null,
   });
 
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -92,13 +95,19 @@ export default function Home() {
       // Kajian tanpa lokasi fisik hanya valid jika online
       if (!hasPhysicalLocation(s) && !s.is_online) return false;
       
-      // Search Query
+      // Filter Wilayah / Provinsi / Kota
+      if (filters.region && !sessionMatchesRegion(s, filters.region)) {
+        return false;
+      }
+
+      // Search Query (judul, pemateri, masjid, dan alamat)
       if (filters.searchQuery) {
         const query = filters.searchQuery.toLowerCase();
         const matchTitle = s.title.toLowerCase().includes(query);
         const matchSpeaker = s.speaker_name.toLowerCase().includes(query);
         const matchVenue = s.venues?.name?.toLowerCase().includes(query);
-        if (!matchTitle && !matchSpeaker && !matchVenue) return false;
+        const matchAddress = s.venues?.address?.toLowerCase().includes(query);
+        if (!matchTitle && !matchSpeaker && !matchVenue && !matchAddress) return false;
       }
 
       // Kategori
@@ -293,6 +302,7 @@ export default function Home() {
               sessions={sortedSessions} 
               selectedSession={selectedSession}
               onSelectSession={setSelectedSession}
+              flyToRegion={filters.region}
             />
           </div>
           
@@ -317,6 +327,7 @@ export default function Home() {
                 filters={filters} 
                 setFilters={setFilters} 
                 sessions={sortedSessions} 
+                allSessions={sessions}
                 selectedSession={selectedSession}
                 onSelectSession={(session) => {
                   setSelectedSession(session);
