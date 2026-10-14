@@ -2,9 +2,11 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
 import SidebarFilter from '@/components/SidebarFilter';
 import { fetchActiveSessions, hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
 import { calculateDistance } from '@/utils/distance';
+import { createClient } from '@/utils/supabase/client';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -33,6 +35,31 @@ export default function Home() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Periksa status login pengguna
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        setCurrentUser(data.user);
+      } else {
+        supabase.auth.getSession().then(({ data: sess }) => {
+          if (sess?.session?.user) {
+            setCurrentUser(sess.session.user);
+          }
+        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Minta lokasi pengguna saat aplikasi dimuat
   useEffect(() => {
@@ -179,7 +206,7 @@ export default function Home() {
           </div>
           
           {/* Navigation Links */}
-          <nav className="flex flex-col gap-1">
+          <nav className="flex flex-col gap-1.5">
             <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary-container text-on-primary`}>
               <span className="material-symbols-outlined text-[20px]">map</span>
               {!isSidebarCollapsed && <span>Jelajah Peta</span>}
@@ -190,40 +217,23 @@ export default function Home() {
               )}
             </a>
             
-            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
-              <span className="material-symbols-outlined text-[20px]">calendar_today</span>
-              {!isSidebarCollapsed && <span>Jadwal Rutin</span>}
+            <Link 
+              href="/leaderboard"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
+            >
+              <span className="material-symbols-outlined text-[20px] text-amber-500">workspace_premium</span>
+              {!isSidebarCollapsed && <span>Leaderboard Relawan</span>}
               {isSidebarCollapsed && (
                 <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Jadwal Rutin
+                  Leaderboard Relawan
                 </span>
               )}
-            </a>
-            
-            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
-              <span className="material-symbols-outlined text-[20px]">school</span>
-              {!isSidebarCollapsed && <span>Daftar Asatidz</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Daftar Asatidz
-                </span>
-              )}
-            </a>
-            
-            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
-              <span className="material-symbols-outlined text-[20px]">location_city</span>
-              {!isSidebarCollapsed && <span>Masjid Rekanan</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Masjid Rekanan
-                </span>
-              )}
-            </a>
+            </Link>
           </nav>
         </div>
         
-        <div className={`flex flex-col gap-2 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          <a href="/kontributor/dashboard" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
+        <div className={`flex flex-col gap-1.5 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
+          <Link href="/kontributor/dashboard" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
             <span className="material-symbols-outlined text-[20px]">add_circle</span>
             {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
             {isSidebarCollapsed && (
@@ -231,7 +241,43 @@ export default function Home() {
                 Kirim Info Kajian
               </span>
             )}
-          </a>
+          </Link>
+
+          {currentUser ? (
+            <Link
+              href="/kontributor/profile"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface hover:bg-surface-container-high`}
+            >
+              {currentUser.user_metadata?.avatar_url ? (
+                <img src={currentUser.user_metadata.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+              ) : (
+                <span className="material-symbols-outlined text-[20px] text-primary">account_circle</span>
+              )}
+              {!isSidebarCollapsed && (
+                <span className="truncate">
+                  {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Profil'}
+                </span>
+              )}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Profil Relawan
+                </span>
+              )}
+            </Link>
+          ) : (
+            <Link
+              href="/kontributor/login"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
+            >
+              <span className="material-symbols-outlined text-[20px]">login</span>
+              {!isSidebarCollapsed && <span>Masuk Relawan</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Masuk Relawan
+                </span>
+              )}
+            </Link>
+          )}
         </div>
       </aside>
 
@@ -286,27 +332,46 @@ export default function Home() {
 
         {/* MOBILE BOTTOM NAVIGATION (Hanya di HP) */}
         <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest shadow-[0_-2px_12px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom,0px)] border-t border-surface-container-high/50">
-          <div className="flex items-center justify-around h-16 px-1">
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary-container font-bold">
+          <div className="flex items-center justify-around h-16 px-2">
+            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary font-bold">
               <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>map</span>
               <span className="text-[10px] mt-0.5 tracking-tight">Peta</span>
             </a>
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors">
-              <span className="material-symbols-outlined text-[22px]">calendar_today</span>
-              <span className="text-[10px] mt-0.5 font-medium tracking-tight">Jadwal</span>
-            </a>
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors">
-              <span className="material-symbols-outlined text-[22px]">school</span>
-              <span className="text-[10px] mt-0.5 font-medium">Asatidz</span>
-            </a>
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors">
-              <span className="material-symbols-outlined text-[22px]">bookmark</span>
-              <span className="text-[10px] mt-0.5 font-medium">Favorit</span>
-            </a>
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors">
-              <span className="material-symbols-outlined text-[22px]">account_circle</span>
-              <span className="text-[10px] mt-0.5 font-medium">Profil</span>
-            </a>
+            <Link 
+              href="/leaderboard"
+              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+            >
+              <span className="material-symbols-outlined text-[22px] text-amber-500">workspace_premium</span>
+              <span className="text-[10px] mt-0.5 font-medium tracking-tight">Peringkat</span>
+            </Link>
+            <Link 
+              href="/kontributor/dashboard" 
+              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+            >
+              <span className="material-symbols-outlined text-[22px]">add_circle</span>
+              <span className="text-[10px] mt-0.5 font-medium tracking-tight">Kirim</span>
+            </Link>
+            {currentUser ? (
+              <Link
+                href="/kontributor/profile"
+                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+              >
+                {currentUser.user_metadata?.avatar_url ? (
+                  <img src={currentUser.user_metadata.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                  <span className="material-symbols-outlined text-[22px] text-primary">account_circle</span>
+                )}
+                <span className="text-[10px] mt-0.5 font-medium tracking-tight">Profil</span>
+              </Link>
+            ) : (
+              <Link
+                href="/kontributor/login"
+                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+              >
+                <span className="material-symbols-outlined text-[22px]">login</span>
+                <span className="text-[10px] mt-0.5 font-medium tracking-tight">Masuk</span>
+              </Link>
+            )}
           </div>
         </nav>
       </div>

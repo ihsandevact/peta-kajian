@@ -116,6 +116,8 @@ export async function submitKajian(formData: FormData) {
     }
 
     // 5. Simpan Sesi Kajian
+    const contributorName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Relawan Dakwah'
+
     const { error: sessionError } = await supabase
       .from('study_sessions')
       .insert({
@@ -131,7 +133,9 @@ export async function submitKajian(formData: FormData) {
         poster_url,
         is_online,
         stream_url,
-        status: 'confirmed'
+        status: 'confirmed',
+        created_by: user.id,
+        contributor_name: contributorName
       })
 
     if (sessionError) {

@@ -93,6 +93,7 @@ const responseSchema = {
           venue_name: { type: "STRING", nullable: true, description: "Nama Masjid fisik beserta daerahnya (contoh: Masjid Nurul Iman Blok M). null jika kajian hanya online." },
           is_online: { type: "BOOLEAN", description: "true jika kajian disiarkan live (YouTube/Zoom/Instagram/dll)." },
           stream_url: { type: "STRING", nullable: true, description: "URL live streaming jika disebutkan, null jika tidak ada." },
+          source_channel: { type: "STRING", nullable: true, description: "Username Telegram asal pengumuman (contoh: khalidbasalamahofficial)" },
           poster_url: { type: "STRING", description: "URL gambar poster (salin kembali URL yang diberikan)" }
         },
         required: ["title", "speaker_name", "audience_type", "start_datetime", "is_online"]
@@ -314,6 +315,7 @@ async function runScraper() {
         is_recurring: false,
         is_online: isOnline,
         stream_url: streamUrl,
+        contributor_name: kajian.source_channel ? `@${kajian.source_channel.replace(/^@/, '')}` : null,
         status: 'confirmed'
       });
 

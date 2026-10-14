@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
+import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -13,13 +14,24 @@ export async function GET(request: Request) {
       const forwardedHost = request.headers.get('x-forwarded-host')
       const isLocalEnv = process.env.NODE_ENV === 'development'
       
-      if (isLocalEnv) {
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
-      } else {
-        return NextResponse.redirect(`${origin}${next}`)
+      let redirectUrl = `${origin}${next}`
+      if (!isLocalEnv && forwardedHost) {
+        redirectUrl = `https://${forwardedHost}${next}`
       }
+
+      const response = NextResponse.redirect(redirectUrl)
+      
+      // Pastikan cookie auth tersalin utuh ke header Set-Cookie pada respons redirect
+      const cookieStore = await cookies()
+      cookieStore.getAll().forEach((cookie) => {
+        response.cookies.set(cookie.name, cookie.value, {
+          path: '/',
+          sameSite: 'lax',
+          secure: !isLocalEnv && !origin.includes('localhost'),
+        })
+      })
+
+      return response
     }
   }
 

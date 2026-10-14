@@ -67,15 +67,45 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
+    let mounted = true
     const supabase = createClient()
-    supabase.auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        router.push('/kontributor/login')
-      } else {
-        setUser(data.user)
+
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!mounted) return
+      if (user) {
+        setUser(user)
+        setLoading(false)
+        return
       }
+
+      // Fallback to getSession
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!mounted) return
+      if (session?.user) {
+        setUser(session.user)
+        setLoading(false)
+        return
+      }
+
+      router.push('/kontributor/login')
       setLoading(false)
+    }
+
+    checkAuth()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return
+      if (session?.user) {
+        setUser(session.user)
+        setLoading(false)
+      }
     })
+
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [router])
 
   async function onSubmit(formData: FormData) {
@@ -96,24 +126,54 @@ export default function DashboardPage() {
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-surface flex items-center justify-center">Memuat...</div>
+    return (
+      <div className="min-h-screen bg-surface flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs text-on-surface-variant font-medium">Memeriksa autentikasi...</p>
+      </div>
+    )
   }
 
   if (!user) return null;
 
+  const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Relawan'
+  const avatarUrl = user.user_metadata?.avatar_url
+
   return (
     <div className="min-h-screen bg-surface p-4 md:p-8">
-      <header className="max-w-4xl mx-auto flex items-center justify-between mb-8">
+      <header className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-2xl font-bold text-on-surface">Dasbor Kontributor</h1>
-          <p className="text-sm text-on-surface-variant">Ahlan wa sahlan, {user.email}</p>
+          <p className="text-sm text-on-surface-variant">Ahlan wa sahlan, <span className="font-semibold text-primary">{displayName}</span></p>
         </div>
-        <div className="flex items-center gap-4">
-          <Link href="/" className="text-sm font-medium text-primary hover:underline">
-            Buka Peta
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <Link 
+            href="/kontributor/profile" 
+            className="flex items-center gap-2 px-3 py-1.5 bg-surface-container border border-surface-container-high hover:border-primary text-on-surface rounded-full text-xs font-medium transition-all"
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-[18px] text-primary">account_circle</span>
+            )}
+            <span>Profil Saya</span>
+          </Link>
+          <Link 
+            href="/leaderboard" 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container border border-surface-container-high hover:border-amber-400 text-on-surface rounded-full text-xs font-medium transition-all"
+          >
+            <span className="material-symbols-outlined text-[18px] text-amber-500">trophy</span>
+            <span>Leaderboard</span>
+          </Link>
+          <Link 
+            href="/" 
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-full text-xs font-medium transition-colors"
+          >
+            <span className="material-symbols-outlined text-[18px]">map</span>
+            <span>Buka Peta</span>
           </Link>
           <form action="/auth/signout" method="post">
-            <button className="px-4 py-2 bg-error/10 text-error rounded-full text-sm font-medium hover:bg-error/20 transition-colors">
+            <button className="px-3 py-1.5 bg-error/10 text-error rounded-full text-xs font-medium hover:bg-error/20 transition-colors">
               Keluar
             </button>
           </form>
