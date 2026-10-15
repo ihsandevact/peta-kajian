@@ -74,6 +74,7 @@ export default function MobileNavDrawer({
   const adminNavLinks = [
     { href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', desc: 'Tinjau & setujui kiriman kajian' },
     { href: '/admin/users', label: 'Kelola Relawan', icon: 'group', desc: 'Daftar pengguna & hak akses' },
+    { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed', desc: 'Kelola sumber data scraper' },
   ];
 
   const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Relawan';

@@ -13,6 +13,8 @@ import MobileNavDrawer from '@/components/MobileNavDrawer';
 import { useAttendance } from '@/utils/attendance';
 import { useBookmarks } from '@/utils/bookmarks';
 import RequestContributorModal from '@/components/RequestContributorModal';
+import ProposeTelegramModal from '@/components/ProposeTelegramModal';
+import { fetchUserTelegramChannels, type TelegramChannel } from '@/lib/services/telegram';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -24,6 +26,9 @@ export default function ContributorProfilePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [roleInfo, setRoleInfo] = useState<UserRoleInfo | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isProposeTelegramOpen, setIsProposeTelegramOpen] = useState(false);
+  const [proposedChannels, setProposedChannels] = useState<TelegramChannel[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -62,6 +67,16 @@ export default function ContributorProfilePage() {
       }
     } catch (e) {
       console.error('Error fetching contributor sessions:', e);
+    }
+  }, []);
+
+  const loadProposedChannels = useCallback(async (userId: string) => {
+    setLoadingChannels(true);
+    try {
+      const data = await fetchUserTelegramChannels(userId);
+      setProposedChannels(data);
+    } finally {
+      setLoadingChannels(false);
     }
   }, []);
 
@@ -104,7 +119,10 @@ export default function ContributorProfilePage() {
       }
 
       setUser(currentUser);
-      await fetchUserSessions(currentUser.id, name);
+      await Promise.all([
+        fetchUserSessions(currentUser.id, name),
+        loadProposedChannels(currentUser.id),
+      ]);
       if (mounted) setLoading(false);
     }
 
@@ -749,6 +767,104 @@ export default function ContributorProfilePage() {
         </div>
           </>
         )}
+
+        {/* Usulan Channel Telegram untuk Pemantauan AI Scraper */}
+        <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-3xl p-5 sm:p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold shrink-0">
+                <span className="material-symbols-outlined text-[20px]">send</span>
+              </div>
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-on-surface">Usulan Channel Telegram</h2>
+                <p className="text-[11px] text-outline">Sumber info kajian yang Anda bantu usulkan untuk bot AI Scraper</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsProposeTelegramOpen(true)}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/40 dark:text-sky-300 border border-sky-200 dark:border-sky-800 transition-colors cursor-pointer self-start sm:self-center active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[16px]">add_circle</span>
+              <span>Usulkan Channel Baru</span>
+            </button>
+          </div>
+
+          {loadingChannels ? (
+            <div className="py-6 text-center text-outline text-xs flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined animate-spin text-[16px] text-sky-600">progress_activity</span>
+              <span>Memuat usulan channel...</span>
+            </div>
+          ) : proposedChannels.length === 0 ? (
+            <div className="py-6 px-4 rounded-2xl bg-surface-container/40 border border-surface-container-high/60 text-center space-y-1.5">
+              <p className="text-xs font-semibold text-on-surface">Belum ada channel Telegram yang diusulkan</p>
+              <p className="text-[11px] text-outline max-w-md mx-auto">
+                Punya rekomendasi channel Telegram publik yang sering membagikan info kajian? Usulkan agar bot AI kami dapat memantau dan mempublikasikannya secara otomatis!
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-surface-container-high/50 rounded-2xl border border-surface-container-high/70 overflow-hidden">
+              {proposedChannels.map((ch) => (
+                <div key={ch.id} className="p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-surface-container/20">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs sm:text-sm font-bold text-on-surface">{ch.channel_title}</span>
+                      {ch.status === 'pending' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 border border-amber-300">
+                          <span className="material-symbols-outlined text-[11px]">hourglass_top</span>
+                          Menunggu Review
+                        </span>
+                      )}
+                      {ch.status === 'approved' && ch.is_active && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-300 border border-emerald-300">
+                          <span className="material-symbols-outlined text-[11px]">check_circle</span>
+                          Aktif Dipantau
+                        </span>
+                      )}
+                      {ch.status === 'approved' && !ch.is_active && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-200 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-300 border border-neutral-300">
+                          <span className="material-symbols-outlined text-[11px]">pause</span>
+                          Dijeda Sementara
+                        </span>
+                      )}
+                      {ch.status === 'rejected' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-300 border border-rose-300">
+                          <span className="material-symbols-outlined text-[11px]">close</span>
+                          Ditolak
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs text-outline">
+                      <a
+                        href={`https://t.me/s/${ch.channel_username}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sky-600 hover:underline font-medium inline-flex items-center gap-0.5"
+                      >
+                        <span>@{ch.channel_username}</span>
+                        <span className="material-symbols-outlined text-[12px]">open_in_new</span>
+                      </a>
+                      {ch.city && (
+                        <>
+                          <span>•</span>
+                          <span>{ch.city}</span>
+                        </>
+                      )}
+                    </div>
+
+                    {ch.rejection_reason && (
+                      <p className="text-[11px] text-rose-700 dark:text-rose-300 mt-1">
+                        <strong>Catatan Admin:</strong> {ch.rejection_reason}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </main>
 
       {/* Edit Session Modal */}
@@ -771,6 +887,18 @@ export default function ContributorProfilePage() {
           }
         }}
         userEmail={email}
+      />
+
+      {/* Modal Usulan Channel Telegram */}
+      <ProposeTelegramModal
+        isOpen={isProposeTelegramOpen}
+        onClose={() => setIsProposeTelegramOpen(false)}
+        onSuccess={() => {
+          setToastMessage('Usulan channel Telegram berhasil dikirim! Menunggu verifikasi Admin.');
+          if (user?.id) {
+            loadProposedChannels(user.id);
+          }
+        }}
       />
     </div>
   );

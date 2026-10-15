@@ -31,8 +31,8 @@ const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
 import * as cheerio from 'cheerio';
 
-// Target Channel Telegram Publik (bisa ditambah sebanyak mungkin)
-const TELEGRAM_CHANNELS = [
+// Target Channel Telegram Publik Default (Fallback jika database kosong / offline)
+const DEFAULT_TELEGRAM_CHANNELS = [
   'kajianjabodetabek',
   'infokajian_id',
   'grupislamsunnah',
@@ -44,6 +44,27 @@ const TELEGRAM_CHANNELS = [
   'felixsiauw',
   'ustadzabdulsomad_official'
 ];
+
+async function getTargetTelegramChannels() {
+  try {
+    const { data, error } = await supabase
+      .from('telegram_channels')
+      .select('channel_username')
+      .eq('status', 'approved')
+      .eq('is_active', true);
+
+    if (!error && data && data.length > 0) {
+      const channels = data.map(c => c.channel_username.toLowerCase().trim());
+      console.log(`📡 Memuat ${channels.length} channel aktif dari database (telegram_channels).`);
+      return channels;
+    }
+  } catch (err) {
+    console.warn("⚠️ Gagal membaca tabel telegram_channels dari database, menggunakan fallback:", err.message);
+  }
+
+  console.log(`📡 Menggunakan ${DEFAULT_TELEGRAM_CHANNELS.length} channel default (fallback).`);
+  return DEFAULT_TELEGRAM_CHANNELS;
+}
 
 async function scrapeTelegramChannel(channelUsername) {
   console.log(`📡 Menyadap data dari Telegram: t.me/s/${channelUsername}...`);
@@ -138,10 +159,11 @@ async function geocodeVenue(venueName) {
 async function runScraper() {
   console.log("🤖 Memulai AI Scraper Bot (Multi-Channel Telegram)...\n");
 
+  const targetChannels = await getTargetTelegramChannels();
   let allRawMessages = [];
   
   // Looping untuk menyadap semua channel satu per satu
-  for (const channel of TELEGRAM_CHANNELS) {
+  for (const channel of targetChannels) {
     const msgs = await scrapeTelegramChannel(channel);
     allRawMessages = allRawMessages.concat(msgs);
     // Beri jeda 1 detik agar tidak dianggap spam oleh Telegram
@@ -153,7 +175,7 @@ async function runScraper() {
     return;
   }
 
-  console.log(`\n📦 Total terkumpul ${allRawMessages.length} pesan dari ${TELEGRAM_CHANNELS.length} channel.`);
+  console.log(`\n📦 Total terkumpul ${allRawMessages.length} pesan dari ${targetChannels.length} channel.`);
 
   // Format pesan agar AI mengerti hubungan teks dan posternya
   const promptInput = allRawMessages.map((msg, idx) => 

@@ -31,6 +31,7 @@ export default function AdminNav({ userEmail }: { userEmail?: string }) {
   const navItems = [
     { href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check' },
     { href: '/admin/users', label: 'Kelola Relawan', icon: 'group' },
+    { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed' },
   ];
 
   return (
