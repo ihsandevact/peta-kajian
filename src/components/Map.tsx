@@ -37,17 +37,22 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
   // Fungsi helper untuk terbang ke kajian dengan offset adaptif
   const flyToSession = React.useCallback((session: StudySession) => {
     if (!hasPhysicalLocation(session) || !mapRef.current) return;
-    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
-    // Di desktop, offset Y positif (misal: 150px - 210px) menempatkan marker lebih ke bawah,
-    // sehingga card popup yang berada di atas marker memiliki ruang lega di bagian atas dan tidak terpotong.
-    // Di mobile, offset Y negatif (-50px) menaikkan sedikit posisi agar tidak tertutup bottom sheet.
-    const desktopOffsetY = typeof window !== 'undefined'
-      ? Math.min(210, Math.max(150, Math.round(window.innerHeight * 0.24)))
-      : 160;
+    let offsetY = 160;
+    if (typeof window !== 'undefined') {
+      const isDesktop = window.innerWidth >= 768;
+      if (isDesktop) {
+        // Desktop: offset Y positif (150px - 210px) agar card tidak kepotong atas
+        offsetY = Math.min(210, Math.max(150, Math.round(window.innerHeight * 0.24)));
+      } else {
+        // Mobile: offset Y positif (85px - 125px) agar card & poster di atas marker
+        // tidak terpotong di tepi atas layar dan pas di ruang terbuka atas bottom sheet
+        offsetY = Math.min(125, Math.max(85, Math.round(window.innerHeight * 0.12)));
+      }
+    }
 
     mapRef.current.flyTo({
       center: [getLng(session), getLat(session)],
-      offset: isDesktop ? [0, desktopOffsetY] : [0, -50],
+      offset: [0, offsetY],
       zoom: 14,
       duration: 1200,
       essential: true
