@@ -133,7 +133,7 @@ export default function AdminUsersPage() {
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
       <AdminNav />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:py-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-8 flex flex-col gap-5 sm:gap-6">
         {/* Toast Notifikasi */}
         {toastMessage && (
           <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in fade-in duration-200">
@@ -247,7 +247,7 @@ export default function AdminUsersPage() {
 
                     {/* Actions */}
                     {u.userId && (
-                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-center justify-end sm:justify-start pt-2 sm:pt-0 border-t sm:border-t-0 border-surface-container-high/40 flex-wrap">
                         {/* Toggle Trusted */}
                         <button
                           type="button"
@@ -262,7 +262,7 @@ export default function AdminUsersPage() {
                           <span className="material-symbols-outlined text-[16px]">
                             {u.isTrusted ? 'verified' : 'new_releases'}
                           </span>
-                          <span>{u.isTrusted ? 'Trusted (Aktif)' : 'Jadikan Trusted'}</span>
+                          <span>{u.isTrusted ? 'Trusted (Bebas Kurasi)' : 'Jadikan Trusted'}</span>
                         </button>
 
                         {/* Toggle Role */}
@@ -273,7 +273,7 @@ export default function AdminUsersPage() {
                           className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors"
                         >
                           <span className="material-symbols-outlined text-[15px]">manage_accounts</span>
-                          <span>{isAdmin ? 'Ubah ke Kontributor' : 'Jadikan Admin'}</span>
+                          <span>{isAdmin ? 'Cabut Admin' : 'Jadikan Admin'}</span>
                         </button>
                       </div>
                     )}

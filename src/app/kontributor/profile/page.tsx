@@ -18,6 +18,7 @@ export default function ContributorProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -167,45 +168,48 @@ export default function ContributorProfilePage() {
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60">
-        <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           <Link
             href="/leaderboard"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2.5 rounded-lg hover:bg-surface-container"
+            className="inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            <span>Ke Leaderboard</span>
+            <span className="hidden sm:inline">Ke Leaderboard</span>
+            <span className="sm:hidden text-[11px]">Peringkat</span>
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isAdmin && (
               <Link
                 href="/admin"
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/40 hover:bg-amber-200 border border-amber-300 dark:border-amber-800 px-3 py-1.5 rounded-full transition-colors shadow-xs"
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/40 hover:bg-amber-200 border border-amber-300 dark:border-amber-800 px-2 sm:px-3 py-1.5 rounded-full transition-colors shadow-2xs"
               >
-                <span className="material-symbols-outlined text-[16px]">admin_panel_settings</span>
-                <span>Portal Admin</span>
+                <span className="material-symbols-outlined text-[15px] sm:text-[16px]">admin_panel_settings</span>
+                <span className="hidden sm:inline">Portal Admin</span>
+                <span className="sm:hidden">Admin</span>
               </Link>
             )}
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary px-3 py-1.5 rounded-full hover:bg-surface-container transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-on-surface-variant hover:text-primary px-2.5 sm:px-3 py-1.5 rounded-full hover:bg-surface-container transition-colors"
             >
-              <span className="material-symbols-outlined text-[16px]">map</span>
+              <span className="material-symbols-outlined text-[15px] sm:text-[16px]">map</span>
               <span>Peta</span>
             </Link>
             <Link
               href="/kontributor/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-primary hover:bg-primary/90 px-3.5 py-1.5 rounded-full shadow-sm transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white bg-primary hover:bg-primary/90 px-3 sm:px-3.5 py-1.5 rounded-full shadow-sm transition-colors whitespace-nowrap"
             >
-              <span className="material-symbols-outlined text-[16px]">add_circle</span>
-              <span>Kirim Kajian</span>
+              <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
+              <span className="hidden sm:inline">Kirim Kajian</span>
+              <span className="sm:hidden">Kirim</span>
             </Link>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 sm:py-8 flex flex-col gap-6">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-8 flex flex-col gap-5 sm:gap-6">
         {/* Toast Notifikasi */}
         {toastMessage && (
           <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
@@ -223,29 +227,37 @@ export default function ContributorProfilePage() {
         )}
 
         {/* User Profile Card */}
-        <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 text-center sm:text-left relative overflow-hidden">
+        <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-3xl p-5 sm:p-8 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 text-center sm:text-left relative overflow-hidden">
           <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
           {/* Avatar */}
           <div className="relative shrink-0">
-            {avatarUrl ? (
+            {avatarUrl && !avatarError ? (
               <img
                 src={avatarUrl}
                 alt={displayName}
+                onError={() => setAvatarError(true)}
                 className="w-20 h-20 sm:w-24 sm:h-24 rounded-full object-cover ring-4 ring-primary/20 shadow-md"
               />
             ) : (
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-2xl ring-4 ring-primary/20 shadow-md">
-                {displayName.slice(0, 2).toUpperCase()}
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center font-bold text-2xl sm:text-3xl ring-4 ring-primary/20 shadow-md select-none uppercase">
+                {displayName ? displayName.slice(0, 2).toUpperCase() : 'U'}
               </div>
             )}
-            <span className="absolute bottom-0 right-0 bg-emerald-600 text-white rounded-full p-1 shadow border-2 border-white" title="Relawan Terverifikasi">
-              <span className="material-symbols-outlined text-[14px] block">verified</span>
+            <span
+              className={`absolute bottom-0 right-0 w-7 h-7 sm:w-8 sm:h-8 aspect-square rounded-full flex items-center justify-center shadow-md border-2 border-surface-container-lowest shrink-0 ${
+                isAdmin ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'
+              }`}
+              title={isAdmin ? 'Administrator' : 'Relawan Terverifikasi'}
+            >
+              <span className="material-symbols-outlined text-[15px] sm:text-[17px] leading-none select-none font-bold">
+                {isAdmin ? 'shield_person' : 'check'}
+              </span>
             </span>
           </div>
 
           {/* Info & Meta */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 w-full">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1.5">
               <h1 className="text-xl sm:text-2xl font-bold text-on-surface truncate">
                 {displayName}
@@ -263,18 +275,18 @@ export default function ContributorProfilePage() {
               )}
             </div>
 
-            <p className="text-xs sm:text-sm text-on-surface-variant break-all mb-1">
+            <p className="text-xs sm:text-sm text-on-surface-variant break-all mb-1.5">
               {email}
             </p>
 
             <div className="flex items-center justify-center sm:justify-start gap-1.5 text-[11px] text-outline font-mono mb-3 flex-wrap">
               <span>User ID:</span>
-              <span className="bg-surface-container px-2 py-0.5 rounded font-medium text-on-surface select-all cursor-pointer border border-surface-container-high" title="User ID akun aktif Anda">
+              <span className="bg-surface-container px-2 py-0.5 rounded font-medium text-on-surface select-all cursor-pointer border border-surface-container-high max-w-[200px] sm:max-w-none truncate" title="User ID akun aktif Anda">
                 {user.id}
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-outline">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 text-xs text-outline">
               {joinedDate && (
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-[15px]">calendar_month</span>
@@ -289,7 +301,7 @@ export default function ContributorProfilePage() {
           </div>
 
           {/* Sign Out Button */}
-          <div className="shrink-0 pt-1">
+          <div className="shrink-0 pt-1 w-full sm:w-auto flex justify-center sm:justify-end">
             <form action="/auth/signout" method="post">
               <button
                 type="submit"
@@ -303,29 +315,29 @@ export default function ContributorProfilePage() {
         </div>
 
         {/* Contribution Stats */}
-        <div className="grid grid-cols-3 gap-3 sm:gap-4">
-          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-4 text-center shadow-sm">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary mx-auto flex items-center justify-center mb-1.5">
-              <span className="material-symbols-outlined text-[18px]">mosque</span>
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-2.5 sm:p-4 text-center shadow-sm">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/10 text-primary mx-auto flex items-center justify-center mb-1">
+              <span className="material-symbols-outlined text-[16px] sm:text-[18px]">mosque</span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-on-surface">{totalSessions}</p>
-            <p className="text-[11px] sm:text-xs text-on-surface-variant font-medium mt-0.5">Total Kontribusi</p>
+            <p className="text-lg sm:text-2xl font-black text-on-surface">{totalSessions}</p>
+            <p className="text-[10px] sm:text-xs text-on-surface-variant font-medium mt-0.5 leading-tight">Total Kontribusi</p>
           </div>
 
-          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-4 text-center shadow-sm">
-            <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center mb-1.5">
-              <span className="material-symbols-outlined text-[18px]">pin_drop</span>
+          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-2.5 sm:p-4 text-center shadow-sm">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center mb-1">
+              <span className="material-symbols-outlined text-[16px] sm:text-[18px]">pin_drop</span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-emerald-800">{offlineCount}</p>
-            <p className="text-[11px] sm:text-xs text-on-surface-variant font-medium mt-0.5">Kajian Fisik/Masjid</p>
+            <p className="text-lg sm:text-2xl font-black text-emerald-800">{offlineCount}</p>
+            <p className="text-[10px] sm:text-xs text-on-surface-variant font-medium mt-0.5 leading-tight">Kajian Masjid</p>
           </div>
 
-          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-4 text-center shadow-sm">
-            <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 mx-auto flex items-center justify-center mb-1.5">
-              <span className="material-symbols-outlined text-[18px]">podcasts</span>
+          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-2.5 sm:p-4 text-center shadow-sm">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-blue-100 text-blue-700 mx-auto flex items-center justify-center mb-1">
+              <span className="material-symbols-outlined text-[16px] sm:text-[18px]">podcasts</span>
             </div>
-            <p className="text-xl sm:text-2xl font-black text-blue-800">{onlineCount}</p>
-            <p className="text-[11px] sm:text-xs text-on-surface-variant font-medium mt-0.5">Kajian Online</p>
+            <p className="text-lg sm:text-2xl font-black text-blue-800">{onlineCount}</p>
+            <p className="text-[10px] sm:text-xs text-on-surface-variant font-medium mt-0.5 leading-tight">Kajian Online</p>
           </div>
         </div>
 
@@ -467,11 +479,11 @@ export default function ContributorProfilePage() {
                     </div>
 
                     {/* Action Buttons (Edit & Delete) */}
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <div className="flex items-center gap-2 shrink-0 self-stretch sm:self-center justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-surface-container-high/40">
                       <button
                         type="button"
                         onClick={() => setEditingSession(s)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all active:scale-95 shadow-2xs"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all active:scale-95 shadow-2xs"
                       >
                         <span className="material-symbols-outlined text-[16px]">edit</span>
                         <span>Edit</span>
@@ -481,7 +493,7 @@ export default function ContributorProfilePage() {
                         type="button"
                         onClick={() => handleDelete(s.id, s.title)}
                         disabled={deletingId === s.id}
-                        className="inline-flex items-center justify-center p-1.5 rounded-xl text-xs font-semibold text-error bg-error/10 hover:bg-error/20 border border-error/20 transition-all active:scale-95 disabled:opacity-50"
+                        className="inline-flex items-center justify-center p-2 rounded-xl text-xs font-semibold text-error bg-error/10 hover:bg-error/20 border border-error/20 transition-all active:scale-95 disabled:opacity-50"
                         title="Hapus Kajian"
                       >
                         {deletingId === s.id ? (

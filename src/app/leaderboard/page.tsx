@@ -10,6 +10,7 @@ export default function LeaderboardPage() {
   const [activeTab, setActiveTab] = useState<'channels' | 'volunteers'>('channels');
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -70,75 +71,82 @@ export default function LeaderboardPage() {
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-2xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2.5 rounded-lg hover:bg-surface-container"
+            className="inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            <span>Kembali ke Peta</span>
+            <span className="hidden sm:inline">Kembali ke Peta</span>
+            <span className="sm:hidden text-[11px]">Peta</span>
           </Link>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {currentUser ? (
               <Link
                 href="/kontributor/profile"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-high hover:border-primary text-xs font-medium text-on-surface transition-all"
+                className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-full bg-surface-container border border-surface-container-high hover:border-primary text-xs font-medium text-on-surface transition-all max-w-[120px] sm:max-w-[160px]"
                 title="Buka Profil Relawan"
               >
-                {currentUserAvatar ? (
-                  <img src={currentUserAvatar} alt="" className="w-5 h-5 rounded-full object-cover" />
+                {currentUserAvatar && !avatarError ? (
+                  <img
+                    src={currentUserAvatar}
+                    alt=""
+                    className="w-5 h-5 rounded-full object-cover shrink-0"
+                    onError={() => setAvatarError(true)}
+                  />
                 ) : (
-                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold">
-                    {currentUserName.slice(0, 1).toUpperCase()}
+                  <span className="w-5 h-5 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[10px] font-bold shrink-0">
+                    {currentUserName ? currentUserName.slice(0, 1).toUpperCase() : 'U'}
                   </span>
                 )}
-                <span className="max-w-[100px] truncate">{currentUserName}</span>
+                <span className="truncate text-[11px] sm:text-xs">{currentUserName}</span>
               </Link>
             ) : null}
 
             <Link
               href="/kontributor/dashboard"
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary hover:bg-primary px-3 py-1.5 rounded-full border border-primary/30 transition-colors"
+              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-primary hover:text-on-primary hover:bg-primary px-2.5 sm:px-3 py-1.5 rounded-full border border-primary/30 transition-colors whitespace-nowrap"
             >
-              <span className="material-symbols-outlined text-[16px]">add_circle</span>
-              <span>Kirim Info Kajian</span>
+              <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
+              <span className="hidden sm:inline">Kirim Info Kajian</span>
+              <span className="sm:hidden">Kirim</span>
             </Link>
           </div>
         </div>
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-6 flex flex-col gap-6">
+      <main className="flex-1 max-w-2xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-6 flex flex-col gap-5 sm:gap-6">
         {/* Page Hero Header */}
         <div className="text-center flex flex-col items-center">
-          <div className="w-14 h-14 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center shadow-inner mb-3">
-            <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center shadow-inner mb-2.5">
+            <span className="material-symbols-outlined text-[28px] sm:text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               workspace_premium
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-on-surface tracking-tight">
+          <h1 className="text-xl sm:text-2xl font-bold text-on-surface tracking-tight">
             Papan Kontributor Dakwah
           </h1>
-          <p className="text-xs sm:text-sm text-on-surface-variant mt-1.5 max-w-md leading-relaxed">
+          <p className="text-xs sm:text-sm text-on-surface-variant mt-1 max-w-md leading-relaxed px-2">
             Apresiasi relawan dan kanal informasi yang menyiarkan jadwal majelis ilmu di seluruh Indonesia.
           </p>
         </div>
 
         {/* 2-Tab Segmented Control (Kanal & Partner pertama, Relawan Jamaah kedua) */}
-        <div className="grid grid-cols-2 p-1.5 bg-surface-container-low rounded-2xl border border-surface-container-high/70 shadow-sm max-w-md w-full mx-auto">
+        <div className="grid grid-cols-2 p-1 sm:p-1.5 bg-surface-container-low rounded-2xl border border-surface-container-high/70 shadow-sm max-w-md w-full mx-auto">
           <button
             type="button"
             onClick={() => setActiveTab('channels')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
               activeTab === 'channels'
                 ? 'bg-surface-container-lowest text-primary shadow-sm font-bold'
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">campaign</span>
+            <span className="material-symbols-outlined text-[17px] sm:text-[18px]">campaign</span>
             <span>Kanal & Partner</span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+            <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
               {data.channels.length}
             </span>
           </button>
@@ -146,16 +154,16 @@ export default function LeaderboardPage() {
           <button
             type="button"
             onClick={() => setActiveTab('volunteers')}
-            className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
               activeTab === 'volunteers'
                 ? 'bg-surface-container-lowest text-primary shadow-sm font-bold'
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
-            <span className="material-symbols-outlined text-[18px]">person</span>
+            <span className="material-symbols-outlined text-[17px] sm:text-[18px]">person</span>
             <span>Relawan Jamaah</span>
             {data.volunteers.length > 0 && (
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
+              <span className="text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.2 rounded-full bg-primary/10 text-primary font-bold">
                 {data.volunteers.length}
               </span>
             )}
@@ -195,25 +203,25 @@ export default function LeaderboardPage() {
         ) : (
           <div className="flex flex-col gap-6">
             {/* Podium Top 3 */}
-            <div className="pt-4 pb-2">
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-4 items-end">
+            <div className="pt-2 sm:pt-4 pb-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
                 {/* Juara 2 (Perak - Kiri) */}
                 {top3[0] ? (
-                  <div className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center shadow-sm">
-                    <div className="relative mb-2">
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-sm shadow-inner ring-2 ring-slate-300">
+                  <div className="flex flex-col items-center p-2.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center shadow-xs">
+                    <div className="relative mb-1.5 sm:mb-2">
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs sm:text-sm shadow-inner ring-2 ring-slate-300">
                         {getInitials(top3[0].name)}
                       </div>
-                      <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-slate-500 text-white text-xs font-black flex items-center justify-center shadow">
+                      <span className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-500 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shadow">
                         2
                       </span>
                     </div>
-                    <div className="h-9 flex items-center justify-center w-full px-1">
-                      <span className="text-xs sm:text-sm font-semibold text-on-surface leading-tight line-clamp-2" title={top3[0].name}>
+                    <div className="h-8 sm:h-9 flex items-center justify-center w-full px-0.5 sm:px-1">
+                      <span className="text-[11px] sm:text-sm font-semibold text-on-surface leading-tight line-clamp-2" title={top3[0].name}>
                         {top3[0].name}
                       </span>
                     </div>
-                    <span className="mt-1.5 px-2.5 py-0.5 rounded-full bg-slate-200 text-xs font-bold text-slate-800">
+                    <span className="mt-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-slate-200 text-[10px] sm:text-xs font-bold text-slate-800">
                       {top3[0].count} <span className="font-normal opacity-75">kajian</span>
                     </span>
                   </div>
@@ -221,48 +229,48 @@ export default function LeaderboardPage() {
 
                 {/* Juara 1 (Emas - Tengah & Lebih Tinggi) */}
                 {top3[1] ? (
-                  <div className="flex flex-col items-center p-3.5 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-100/80 to-amber-50/70 border border-amber-300 text-center shadow-lg relative scale-105 z-10">
-                    <div className="absolute -top-4 text-amber-500 flex justify-center">
-                      <span className="material-symbols-outlined text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                  <div className="flex flex-col items-center p-3 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-100/80 to-amber-50/70 border border-amber-300 text-center shadow-md relative scale-105 z-10">
+                    <div className="absolute -top-3.5 sm:-top-4 text-amber-500 flex justify-center">
+                      <span className="material-symbols-outlined text-[20px] sm:text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                         crown
                       </span>
                     </div>
-                    <div className="relative mb-2 mt-1">
-                      <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-200 text-amber-950 flex items-center justify-center font-extrabold text-base shadow-md ring-4 ring-amber-400/60">
+                    <div className="relative mb-1.5 sm:mb-2 mt-0.5 sm:mt-1">
+                      <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-full bg-gradient-to-tr from-amber-400 to-yellow-200 text-amber-950 flex items-center justify-center font-extrabold text-sm sm:text-base shadow-md ring-3 sm:ring-4 ring-amber-400/60">
                         {getInitials(top3[1].name)}
                       </div>
-                      <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-black flex items-center justify-center shadow">
+                      <span className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-500 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shadow">
                         1
                       </span>
                     </div>
-                    <div className="h-9 flex items-center justify-center w-full px-1">
-                      <span className="text-xs sm:text-sm font-bold text-on-surface leading-tight line-clamp-2" title={top3[1].name}>
+                    <div className="h-8 sm:h-9 flex items-center justify-center w-full px-0.5 sm:px-1">
+                      <span className="text-[11px] sm:text-sm font-bold text-on-surface leading-tight line-clamp-2" title={top3[1].name}>
                         {top3[1].name}
                       </span>
                     </div>
-                    <span className="mt-1.5 px-3 py-0.5 rounded-full bg-amber-400/40 text-xs sm:text-sm font-black text-amber-950 border border-amber-300">
-                      {top3[1].count} <span className="font-normal text-xs opacity-75">kajian</span>
+                    <span className="mt-1 px-2.5 sm:px-3 py-0.5 rounded-full bg-amber-400/40 text-[10px] sm:text-sm font-black text-amber-950 border border-amber-300">
+                      {top3[1].count} <span className="font-normal text-[9px] sm:text-xs opacity-75">kajian</span>
                     </span>
                   </div>
                 ) : <div />}
 
                 {/* Juara 3 (Perunggu - Kanan) */}
                 {top3[2] ? (
-                  <div className="flex flex-col items-center p-3 sm:p-4 rounded-2xl bg-amber-50/50 border border-amber-200 text-center shadow-sm">
-                    <div className="relative mb-2">
-                      <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-sm shadow-inner ring-2 ring-amber-700/30">
+                  <div className="flex flex-col items-center p-2.5 sm:p-4 rounded-2xl bg-amber-50/50 border border-amber-200 text-center shadow-xs">
+                    <div className="relative mb-1.5 sm:mb-2">
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs sm:text-sm shadow-inner ring-2 ring-amber-700/30">
                         {getInitials(top3[2].name)}
                       </div>
-                      <span className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-700 text-white text-xs font-black flex items-center justify-center shadow">
+                      <span className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-700 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shadow">
                         3
                       </span>
                     </div>
-                    <div className="h-9 flex items-center justify-center w-full px-1">
-                      <span className="text-xs sm:text-sm font-semibold text-on-surface leading-tight line-clamp-2" title={top3[2].name}>
+                    <div className="h-8 sm:h-9 flex items-center justify-center w-full px-0.5 sm:px-1">
+                      <span className="text-[11px] sm:text-sm font-semibold text-on-surface leading-tight line-clamp-2" title={top3[2].name}>
                         {top3[2].name}
                       </span>
                     </div>
-                    <span className="mt-1.5 px-2.5 py-0.5 rounded-full bg-amber-200/70 text-xs font-bold text-amber-900">
+                    <span className="mt-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-200/70 text-[10px] sm:text-xs font-bold text-amber-900">
                       {top3[2].count} <span className="font-normal opacity-75">kajian</span>
                     </span>
                   </div>
@@ -274,28 +282,28 @@ export default function LeaderboardPage() {
             {rest.length > 0 && (
               <div className="divide-y divide-surface-container-high/60 border border-surface-container-high/60 rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm">
                 {rest.map((contributor, idx) => (
-                  <div key={idx} className="flex items-center justify-between px-4 py-3 hover:bg-surface-container-low/50 transition-colors">
-                    <div className="flex items-center gap-3.5 min-w-0">
-                      <span className="w-6 text-center text-xs font-bold text-outline">
+                  <div key={idx} className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-surface-container-low/50 transition-colors">
+                    <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0">
+                      <span className="w-5 sm:w-6 text-center text-xs font-bold text-outline shrink-0">
                         #{idx + 4}
                       </span>
-                      <div className="w-9 h-9 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-semibold text-xs shrink-0">
+                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-surface-container-high text-on-surface-variant flex items-center justify-center font-semibold text-xs shrink-0">
                         {getInitials(contributor.name)}
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs sm:text-sm font-semibold text-on-surface truncate" title={contributor.name}>
                           {contributor.name}
                         </p>
-                        <span className="text-[11px] text-outline font-medium">
+                        <span className="text-[10px] sm:text-[11px] text-outline font-medium block truncate">
                           {contributor.handle || contributor.badge || 'Kontributor'}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="text-right shrink-0 pl-2">
                       <span className="text-xs sm:text-sm font-bold text-emerald-700">
                         {contributor.count}
                       </span>
-                      <span className="text-[11px] text-outline ml-1">kajian</span>
+                      <span className="text-[10px] sm:text-[11px] text-outline ml-1">kajian</span>
                     </div>
                   </div>
                 ))}

@@ -23,6 +23,27 @@ export type FilterState = {
   region: SelectedRegion | null;
 };
 
+function HeaderAvatar({ url, size = 'w-5 h-5' }: { url?: string; size?: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (url && !hasError) {
+    return (
+      <img
+        src={url}
+        alt=""
+        className={`${size} rounded-full object-cover shrink-0`}
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  return (
+    <span className="material-symbols-outlined text-[20px] text-primary shrink-0">
+      account_circle
+    </span>
+  );
+}
+
 export default function Home() {
   const [filters, setFilters] = useState<FilterState>({
     time: 'semua',
@@ -267,11 +288,7 @@ export default function Home() {
               href="/kontributor/profile"
               className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface hover:bg-surface-container-high`}
             >
-              {currentUser.user_metadata?.avatar_url ? (
-                <img src={currentUser.user_metadata.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
-              ) : (
-                <span className="material-symbols-outlined text-[20px] text-primary">account_circle</span>
-              )}
+              <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-5 h-5" />
               {!isSidebarCollapsed && (
                 <span className="truncate">
                   {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Profil'}
@@ -377,11 +394,7 @@ export default function Home() {
                 href="/kontributor/profile"
                 className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
               >
-                {currentUser.user_metadata?.avatar_url ? (
-                  <img src={currentUser.user_metadata.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
-                ) : (
-                  <span className="material-symbols-outlined text-[22px] text-primary">account_circle</span>
-                )}
+                <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-6 h-6" />
                 <span className="text-[10px] mt-0.5 font-medium tracking-tight">Profil</span>
               </Link>
             ) : (

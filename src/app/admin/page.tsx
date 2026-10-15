@@ -27,7 +27,7 @@ function SessionPosterThumbnail({ url, title }: { url?: string | null; title: st
   }
 
   return (
-    <div className="w-full md:w-36 h-36 rounded-xl overflow-hidden bg-surface-container shrink-0 border border-surface-container-high relative">
+    <div className="w-full sm:w-36 h-40 sm:h-36 rounded-xl overflow-hidden bg-surface-container shrink-0 border border-surface-container-high relative">
       <img
         src={url}
         alt={`Poster ${title}`}
@@ -185,65 +185,65 @@ export default function AdminModerationPage() {
           </div>
 
           {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
             <div
               onClick={() => setActiveTab('pending')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
                 activeTab === 'pending'
                   ? 'bg-amber-500/10 border-amber-500 shadow-sm'
                   : 'bg-surface-container-lowest border-surface-container-high/70 hover:bg-surface-container-low'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">Menunggu Kurasi</span>
-                <span className="material-symbols-outlined text-[18px] text-amber-600">hourglass_top</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-amber-700 dark:text-amber-400">Menunggu Kurasi</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-amber-600">hourglass_top</span>
               </div>
-              <p className="text-2xl font-black text-amber-800 dark:text-amber-300 mt-1">{stats.pending}</p>
+              <p className="text-xl sm:text-2xl font-black text-amber-800 dark:text-amber-300 mt-1">{stats.pending}</p>
             </div>
 
             <div
               onClick={() => setActiveTab('confirmed')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
                 activeTab === 'confirmed'
                   ? 'bg-emerald-500/10 border-emerald-500 shadow-sm'
                   : 'bg-surface-container-lowest border-surface-container-high/70 hover:bg-surface-container-low'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Disetujui (Tayang)</span>
-                <span className="material-symbols-outlined text-[18px] text-emerald-600">check_circle</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-400">Disetujui (Tayang)</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-emerald-600">check_circle</span>
               </div>
-              <p className="text-2xl font-black text-emerald-800 dark:text-emerald-300 mt-1">{stats.confirmed}</p>
+              <p className="text-xl sm:text-2xl font-black text-emerald-800 dark:text-emerald-300 mt-1">{stats.confirmed}</p>
             </div>
 
             <div
               onClick={() => setActiveTab('rejected')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
                 activeTab === 'rejected'
                   ? 'bg-red-500/10 border-red-500 shadow-sm'
                   : 'bg-surface-container-lowest border-surface-container-high/70 hover:bg-surface-container-low'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-red-700 dark:text-red-400">Ditolak</span>
-                <span className="material-symbols-outlined text-[18px] text-red-600">cancel</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-red-700 dark:text-red-400">Ditolak</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-red-600">cancel</span>
               </div>
-              <p className="text-2xl font-black text-red-800 dark:text-red-300 mt-1">{stats.rejected}</p>
+              <p className="text-xl sm:text-2xl font-black text-red-800 dark:text-red-300 mt-1">{stats.rejected}</p>
             </div>
 
             <div
               onClick={() => setActiveTab('all')}
-              className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+              className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
                 activeTab === 'all'
                   ? 'bg-primary/10 border-primary shadow-sm'
                   : 'bg-surface-container-lowest border-surface-container-high/70 hover:bg-surface-container-low'
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-on-surface-variant">Semua Kajian</span>
-                <span className="material-symbols-outlined text-[18px] text-outline">calendar_month</span>
+                <span className="text-[11px] sm:text-xs font-semibold text-on-surface-variant">Semua Kajian</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-outline">calendar_month</span>
               </div>
-              <p className="text-2xl font-black text-on-surface mt-1">{stats.total}</p>
+              <p className="text-xl sm:text-2xl font-black text-on-surface mt-1">{stats.total}</p>
             </div>
           </div>
         </div>
@@ -251,7 +251,7 @@ export default function AdminModerationPage() {
         {/* Filter Bar & Search */}
         <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
           {/* Tab Selector */}
-          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+          <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
             {(
               [
                 { key: 'pending', label: 'Menunggu Kurasi', count: stats.pending, icon: 'hourglass_top' },
@@ -330,7 +330,7 @@ export default function AdminModerationPage() {
                 return (
                   <div
                     key={session.id}
-                    className="bg-surface-container-lowest border border-surface-container-high/80 rounded-2xl p-5 shadow-xs hover:border-purple-300 transition-all flex flex-col md:flex-row gap-5"
+                    className="bg-surface-container-lowest border border-surface-container-high/80 rounded-2xl p-4 sm:p-5 shadow-xs hover:border-purple-300 transition-all flex flex-col sm:flex-row gap-4 sm:gap-5"
                   >
                     {/* Poster Thumbnail */}
                     <SessionPosterThumbnail url={session.poster_url} title={session.title} />
@@ -424,8 +424,8 @@ export default function AdminModerationPage() {
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="mt-4 pt-3 border-t border-surface-container-high/60 flex items-center justify-between gap-3 flex-wrap">
-                        <div className="flex items-center gap-2">
+                      <div className="mt-4 pt-3 border-t border-surface-container-high/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
                           {session.stream_url && session.stream_url.trim() !== '' && session.stream_url.toLowerCase() !== 'null' && (
                             <a
                               href={session.stream_url}
@@ -451,7 +451,7 @@ export default function AdminModerationPage() {
                         </div>
 
                         {/* Moderation Controls */}
-                        <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="flex items-center gap-2 flex-wrap justify-end sm:justify-start">
                           {/* Toggle Switch Publish / Unpublish */}
                           <button
                             type="button"
@@ -516,8 +516,8 @@ export default function AdminModerationPage() {
 
       {/* Modal Dialog Penolakan */}
       {rejectingSession && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-surface-container-lowest border border-surface-container-high rounded-3xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-surface-container-lowest border border-surface-container-high rounded-3xl w-full max-w-md p-5 sm:p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-red-600">
                 <span className="material-symbols-outlined text-[24px]">cancel</span>
