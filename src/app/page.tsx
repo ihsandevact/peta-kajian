@@ -121,13 +121,16 @@ export default function Home() {
         if (!hasAllFacilities) return false;
       }
 
-      // Status Filter: Terbaru, Selesai, Rutin, Online
+      // Status Filter: Berlangsung, Terbaru, Selesai, Rutin, Online
       const hasDate = !!s.start_datetime;
       const sessionDate = hasDate ? new Date(s.start_datetime!) : null;
       const now = new Date();
-      const isPast = hasDate && sessionDate! < now;
+      // Kajian sedang berlangsung jika waktu sekarang antara start_datetime s/d +2 jam
+      const isLive = hasDate && sessionDate! <= now && now.getTime() <= sessionDate!.getTime() + 2 * 60 * 60 * 1000;
+      const isPast = hasDate && now.getTime() > sessionDate!.getTime() + 2 * 60 * 60 * 1000;
       const isRutin = s.is_recurring;
       
+      if (filters.time === 'berlangsung' && !isLive) return false;
       if (filters.time === 'terbaru' && (isPast && !isRutin)) return false;
       if (filters.time === 'selesai' && (!isPast || isRutin)) return false;
       if (filters.time === 'rutin' && !isRutin) return false;
@@ -137,7 +140,7 @@ export default function Home() {
     });
   }, [sessions, filters]);
 
-  // SMART SORTING: Upcoming/Rutin di atas, Selesai di bawah
+  // SMART SORTING: Live -> Upcoming/Rutin di atas, Selesai di bawah
   const sortedSessions = useMemo(() => {
     return [...filteredSessions].sort((a, b) => {
       // Sorting Jarak (Terdekat) — kajian tanpa lokasi fisik ditaruh paling bawah
@@ -159,6 +162,12 @@ export default function Home() {
       const dateA = hasDateA ? new Date(a.start_datetime!) : null;
       const dateB = hasDateB ? new Date(b.start_datetime!) : null;
       
+      // 1. Prioritas Tertinggi: Sedang Berlangsung (Live)
+      const isLiveA = hasDateA && dateA! <= now && now.getTime() <= dateA!.getTime() + 2 * 60 * 60 * 1000;
+      const isLiveB = hasDateB && dateB! <= now && now.getTime() <= dateB!.getTime() + 2 * 60 * 60 * 1000;
+      if (isLiveA && !isLiveB) return -1;
+      if (!isLiveA && isLiveB) return 1;
+
       const aIsFuture = (hasDateA && dateA! >= now) || a.is_recurring;
       const bIsFuture = (hasDateB && dateB! >= now) || b.is_recurring;
 

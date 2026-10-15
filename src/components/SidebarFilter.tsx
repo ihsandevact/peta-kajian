@@ -169,11 +169,12 @@ export default function SidebarFilter({
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
           <Pill active={filters.time === 'semua'} label="Semua" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
+          <Pill active={filters.time === 'berlangsung'} label="🔴 Berlangsung" onClick={() => setFilters(p => ({ ...p, time: 'berlangsung' }))} />
           <Pill active={filters.time === 'terdekat'} label="Terdekat" onClick={() => setFilters(p => ({ ...p, time: 'terdekat' }))} />
           <Pill active={filters.time === 'terbaru'} label="Terbaru" onClick={() => setFilters(p => ({ ...p, time: 'terbaru' }))} />
-          <Pill active={filters.time === 'selesai'} label="Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
           <Pill active={filters.time === 'rutin'} label="Rutin" onClick={() => setFilters(p => ({ ...p, time: 'rutin' }))} />
           <Pill active={filters.time === 'online'} label="Online" onClick={() => setFilters(p => ({ ...p, time: 'online' }))} />
+          <Pill active={filters.time === 'selesai'} label="Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
           <Pill active={!filters.audience.includes('ikhwan')} label="Khusus Akhwat" onClick={() => setFilters(p => ({ ...p, audience: p.audience.includes('ikhwan') ? ['akhwat'] : ['umum', 'ikhwan', 'akhwat'] }))} />
         </div>
       </div>
@@ -201,7 +202,8 @@ export default function SidebarFilter({
             const timeStr = dateObj ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
             
             const now = new Date();
-            const isPast = hasDate && dateObj! < now;
+            const isLive = hasDate && dateObj! <= now && now.getTime() <= dateObj!.getTime() + 2 * 60 * 60 * 1000;
+            const isPast = hasDate && now.getTime() > dateObj!.getTime() + 2 * 60 * 60 * 1000;
             const isRutin = session.is_recurring;
             
             const isAkhwatOnly = session.audience_type === 'akhwat';
@@ -232,7 +234,12 @@ export default function SidebarFilter({
                       {hasDate ? `${dateStr} • ${timeStr} WIB` : (session.recurring_pattern || 'Kajian Rutin')}
                     </span>
                     
-                    {isRutin ? (
+                    {isLive ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white uppercase tracking-wide shadow-xs animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                        Sedang Berlangsung
+                      </span>
+                    ) : isRutin ? (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] uppercase tracking-wide border border-[#bae6fd]">Rutin</span>
                     ) : isPast ? (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide">Selesai</span>
@@ -269,17 +276,25 @@ export default function SidebarFilter({
                   </div>
                 )}
                 <div className="mt-2 pt-1.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {hasPhysicalLocation(session) && (
                       <a href={`https://maps.google.com/?q=${session.venues?.lat},${session.venues?.lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors">
-                        <span>Rute Google Maps</span>
+                        <span>Rute Maps</span>
                         <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                       </a>
                     )}
                     {session.stream_url && (
-                      <a href={session.stream_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] font-medium text-[#dc2626] hover:text-[#991b1b] transition-colors">
-                        <span className="material-symbols-outlined text-[14px]">play_circle</span>
+                      <a 
+                        href={session.stream_url} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        onClick={e => e.stopPropagation()} 
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95"
+                        title="Buka Link Live Streaming di Tab Baru"
+                      >
+                        <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                         <span>Tonton Live</span>
+                        <span className="material-symbols-outlined text-[12px] opacity-60">open_in_new</span>
                       </a>
                     )}
                   </div>

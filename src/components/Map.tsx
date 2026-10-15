@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import type { SelectedRegion } from '@/utils/regions';
 import VenueCard from './VenueCard';
+import OnlineStreamingOverlay from './OnlineStreamingOverlay';
 
 setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
 
@@ -134,6 +135,14 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
           </Popup>
         )}
       </Map>
+
+      {/* Floating Studio Overlay untuk Kajian Online tanpa Titik Peta */}
+      {selectedSession && !selectedHasLocation && (
+        <OnlineStreamingOverlay
+          session={selectedSession}
+          onClose={() => onSelectSession(null)}
+        />
+      )}
     </div>
   );
 }
