@@ -34,17 +34,32 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
   const mappableSessions = React.useMemo(() => sessions.filter(hasPhysicalLocation), [sessions]);
   const selectedHasLocation = !!selectedSession && hasPhysicalLocation(selectedSession);
 
+  // Fungsi helper untuk terbang ke kajian dengan offset adaptif
+  const flyToSession = React.useCallback((session: StudySession) => {
+    if (!hasPhysicalLocation(session) || !mapRef.current) return;
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+    // Di desktop, offset Y positif (misal: 150px - 210px) menempatkan marker lebih ke bawah,
+    // sehingga card popup yang berada di atas marker memiliki ruang lega di bagian atas dan tidak terpotong.
+    // Di mobile, offset Y negatif (-50px) menaikkan sedikit posisi agar tidak tertutup bottom sheet.
+    const desktopOffsetY = typeof window !== 'undefined'
+      ? Math.min(210, Math.max(150, Math.round(window.innerHeight * 0.24)))
+      : 160;
+
+    mapRef.current.flyTo({
+      center: [getLng(session), getLat(session)],
+      offset: isDesktop ? [0, desktopOffsetY] : [0, -50],
+      zoom: 14,
+      duration: 1200,
+      essential: true
+    });
+  }, []);
+
   // Terbang ke kajian terpilih saat diklik
   React.useEffect(() => {
-    if (selectedSession && hasPhysicalLocation(selectedSession) && mapRef.current) {
-      mapRef.current.flyTo({
-        center: [getLng(selectedSession), getLat(selectedSession)],
-        zoom: 14,
-        duration: 1500,
-        essential: true
-      });
+    if (selectedSession && hasPhysicalLocation(selectedSession)) {
+      flyToSession(selectedSession);
     }
-  }, [selectedSession]);
+  }, [selectedSession, flyToSession]);
 
   // Terbang ke wilayah/kota yang dipilih dari filter
   React.useEffect(() => {
@@ -93,6 +108,7 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
               onClick={e => {
                 e.originalEvent.stopPropagation();
                 onSelectSession(session);
+                flyToSession(session);
               }}
             >
               {isSelected ? (
@@ -127,9 +143,9 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
             closeButton={false}
             closeOnClick={false}
             className="z-50"
-            offset={20}
+            offset={14}
           >
-            <div className="-m-3 pb-3">
+            <div className="-m-3 pb-2">
               <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />
             </div>
           </Popup>
