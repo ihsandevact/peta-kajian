@@ -79,8 +79,8 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
   }
 
   return (
-    <div className="relative font-geist pointer-events-auto filter drop-shadow-xl">
-      <div className="w-[305px] sm:w-[320px] max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
+    <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
+      <div className="w-full max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
         {/* Gambar Poster Header - Kompak agar tidak memicu scroll */}
         {hasPoster && (
           <div className="w-full h-[88px] sm:h-[94px] bg-surface-container shrink-0 relative overflow-hidden">

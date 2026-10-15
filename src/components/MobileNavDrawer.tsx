@@ -64,11 +64,13 @@ export default function MobileNavDrawer({
           ? { href: '/kontributor/dashboard', label: 'Kirim Info Kajian', icon: 'add_circle', desc: 'Bagikan info kajian baru' }
           : { href: '/kontributor/profile', label: 'Ajukan Jadi Kontributor', icon: 'volunteer_activism', desc: 'Daftar sebagai relawan dakwah' },
         { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
+        { href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
         { href: '/kontributor/profile', label: isContributorOrAdmin ? 'Profil Relawan' : 'Profil Saya', icon: 'account_circle', desc: 'Kelola akun & permohonan Anda' },
       ]
     : [
         { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
         { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
+        { href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
       ];
 
   const adminNavLinks = [

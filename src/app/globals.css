@@ -44,13 +44,17 @@
   }
 }
 
+.maplibregl-popup {
+  max-width: none !important;
+}
 .maplibregl-popup-content {
   background: transparent !important;
   box-shadow: none !important;
   padding: 0 !important;
+  max-width: none !important;
 }
 .maplibregl-popup-tip {
-  display: none !important; /* Kita sembunyikan tip aslinya, atau biarkan. Di HTML ref tidak ada tip menyatu */
+  display: none !important;
 }
 
 @custom-variant dark (&:is(.dark *));

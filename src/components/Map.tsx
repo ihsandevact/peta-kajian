@@ -148,11 +148,10 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
             closeButton={false}
             closeOnClick={false}
             className="z-50"
-            offset={24}
+            offset={20}
+            maxWidth="none"
           >
-            <div className="-m-3 pb-2">
-              <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />
-            </div>
+            <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />
           </Popup>
         )}
       </Map>

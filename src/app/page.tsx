@@ -310,6 +310,19 @@ export default function Home() {
                 </span>
               )}
             </Link>
+
+            <Link 
+              href="/faq"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
+            >
+              <span className="material-symbols-outlined text-[20px] text-primary">help</span>
+              {!isSidebarCollapsed && <span>Pusat Bantuan & FAQ</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Pusat Bantuan & FAQ
+                </span>
+              )}
+            </Link>
           </nav>
         </div>
         

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import Link from 'next/link';
 import type { FilterState } from '@/app/page';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import SkeletonCard from './SkeletonCard';
@@ -116,9 +117,19 @@ export default function SidebarFilter({
             <h1 className="font-semibold text-base text-on-surface tracking-tight">Peta Kajian</h1>
             <span className="w-2 h-2 rounded-full bg-primary-container inline-block ml-1.5 align-middle"></span>
           </div>
-          <span className="text-[10px] uppercase tracking-wider text-outline px-2 py-0.5 rounded bg-surface-container-low">
-            Indonesia
-          </span>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/faq"
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:bg-primary/10 px-2.5 py-0.5 rounded-full transition-colors border border-primary/20"
+              title="Pusat Bantuan & Tanya Jawab"
+            >
+              <span className="material-symbols-outlined text-[13px]">help</span>
+              <span>FAQ</span>
+            </Link>
+            <span className="text-[10px] uppercase tracking-wider text-outline px-2 py-0.5 rounded bg-surface-container-low">
+              Indonesia
+            </span>
+          </div>
         </div>
         
         {/* Search Input */}
