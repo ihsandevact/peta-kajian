@@ -16,16 +16,26 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9
 
 import RecurringRuleSelector from '@/components/RecurringRuleSelector'
 import { RecurringRule } from '@/utils/recurring'
-import { checkIsAdmin } from '@/lib/services/admin'
+import { checkIsAdmin, getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin'
 import MobileNavDrawer from '@/components/MobileNavDrawer'
+import RequestContributorModal from '@/components/RequestContributorModal'
 
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [roleInfo, setRoleInfo] = useState<UserRoleInfo | null>(null)
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  const displayName =
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split('@')[0] ||
+    'Relawan Dakwah'
+  const avatarUrl = user?.user_metadata?.avatar_url
 
   // Form Controlled States
   const [title, setTitle] = useState('')
@@ -219,43 +229,52 @@ export default function DashboardPage() {
     const supabase = createClient()
 
     async function checkAuth() {
+      let currentUser: any = null
       const { data: { user } } = await supabase.auth.getUser()
-      if (!mounted) return
       if (user) {
-        setUser(user)
-        checkIsAdmin(user).then((admin) => {
-          if (mounted) setIsAdmin(admin)
-        })
-        setLoading(false)
-        return
+        currentUser = user
+      } else {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.user) {
+          currentUser = session.user
+        }
       }
 
-      // Fallback to getSession
-      const { data: { session } } = await supabase.auth.getSession()
       if (!mounted) return
-      if (session?.user) {
-        setUser(session.user)
-        checkIsAdmin(session.user).then((admin) => {
-          if (mounted) setIsAdmin(admin)
-        })
+      if (!currentUser) {
+        router.push('/kontributor/login')
         setLoading(false)
         return
       }
 
-      router.push('/kontributor/login')
-      setLoading(false)
+      setUser(currentUser)
+      const [adminCheck, rInfo] = await Promise.all([
+        checkIsAdmin(currentUser),
+        getUserRoleAndStatus(currentUser),
+      ])
+
+      if (mounted) {
+        setIsAdmin(adminCheck)
+        setRoleInfo(rInfo)
+        setLoading(false)
+      }
     }
 
     checkAuth()
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (!mounted) return
       if (session?.user) {
         setUser(session.user)
-        checkIsAdmin(session.user).then((admin) => {
-          if (mounted) setIsAdmin(admin)
-        })
-        setLoading(false)
+        const [adminCheck, rInfo] = await Promise.all([
+          checkIsAdmin(session.user),
+          getUserRoleAndStatus(session.user),
+        ])
+        if (mounted) {
+          setIsAdmin(adminCheck)
+          setRoleInfo(rInfo)
+          setLoading(false)
+        }
       }
     })
 
@@ -314,10 +333,97 @@ export default function DashboardPage() {
     )
   }
 
-  if (!user) return null
+  if (!isAdmin && roleInfo?.role === 'user') {
+    return (
+      <div className="min-h-screen bg-surface p-3 sm:p-6 md:p-8 font-geist text-on-surface flex flex-col justify-between">
+        <header className="max-w-4xl mx-auto w-full flex items-center justify-between gap-4 mb-6">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container"
+          >
+            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+            <span>Kembali ke Peta</span>
+          </Link>
+          <Link
+            href="/kontributor/profile"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-3 rounded-full hover:bg-surface-container border border-surface-container-high"
+          >
+            <span className="material-symbols-outlined text-[18px]">account_circle</span>
+            <span>Profil Saya</span>
+          </Link>
+        </header>
 
-  const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Relawan'
-  const avatarUrl = user.user_metadata?.avatar_url
+        <div className="max-w-lg mx-auto w-full bg-surface-container-lowest border border-surface-container-high rounded-3xl p-6 sm:p-8 shadow-sm text-center my-auto">
+          <div className="w-16 h-16 rounded-3xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
+            <span className="material-symbols-outlined text-[32px]">volunteer_activism</span>
+          </div>
+
+          <h2 className="text-xl font-bold text-on-surface mb-2">Fitur Khusus Kontributor Dakwah</h2>
+          <p className="text-xs text-on-surface-variant leading-relaxed mb-6">
+            Akun Anda saat ini terdaftar sebagai <strong>Jamaah (User Biasa)</strong>. Untuk dapat menambahkan jadwal kajian baru ke peta, silakan ajukan diri Anda sebagai <strong>Relawan Kontributor Dakwah</strong>.
+          </p>
+
+          {roleInfo.requestStatus === 'pending' ? (
+            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-left mb-6">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-800 dark:text-amber-300 mb-1">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>Permohonan Anda Sedang Ditinjau Admin</span>
+              </div>
+              <p className="text-[11px] text-amber-900/80 dark:text-amber-200/80 leading-relaxed">
+                {roleInfo.communityName ? `Masjid/Majelis: ${roleInfo.communityName}. ` : ''}Admin akan segera memverifikasi akun Anda. Begitu disetujui, Anda dapat langsung mengirim kajian di halaman ini.
+              </p>
+            </div>
+          ) : roleInfo.requestStatus === 'rejected' ? (
+            <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/25 text-left mb-6">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-800 dark:text-rose-300 mb-1">
+                <span className="material-symbols-outlined text-[16px] text-rose-600">info</span>
+                <span>Permohonan Belum Disetujui</span>
+              </div>
+              <p className="text-[11px] text-rose-900/80 dark:text-rose-200/80 leading-relaxed mb-3">
+                {roleInfo.requestNote ? `Catatan Admin: ${roleInfo.requestNote}` : 'Anda dapat memperbarui data komunitas dan mengajukan kembali.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsRequestModalOpen(true)}
+                className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl transition-all shadow-xs"
+              >
+                Ajukan Ulang Permohonan
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsRequestModalOpen(true)}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-2xl transition-all shadow-sm active:scale-98 flex items-center justify-center gap-2 cursor-pointer mb-3"
+            >
+              <span className="material-symbols-outlined text-[18px]">how_to_reg</span>
+              <span>Ajukan Menjadi Kontributor Dakwah</span>
+            </button>
+          )}
+
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-outline hover:text-on-surface transition-colors mt-2"
+          >
+            <span>Eksplorasi Peta Kajian</span>
+            <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+          </Link>
+        </div>
+
+        <RequestContributorModal
+          isOpen={isRequestModalOpen}
+          onClose={() => setIsRequestModalOpen(false)}
+          onSuccess={async () => {
+            if (user) {
+              const rInfo = await getUserRoleAndStatus(user);
+              setRoleInfo(rInfo);
+            }
+          }}
+          userEmail={user.email}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-surface p-3 sm:p-6 md:p-8 font-geist text-on-surface">
@@ -399,6 +505,7 @@ export default function DashboardPage() {
           name: displayName,
           email: user?.email,
           avatarUrl: avatarUrl,
+          role: roleInfo?.role,
         }}
         isAdmin={isAdmin}
       />

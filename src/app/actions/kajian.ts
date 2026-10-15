@@ -7,7 +7,12 @@ import { ADMIN_EMAILS } from '@/lib/services/admin'
 function cleanNullableString(val: unknown): string | null {
   if (typeof val !== 'string') return null;
   const trimmed = val.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+  if (
+    !trimmed ||
+    trimmed.toLowerCase() === 'null' ||
+    trimmed.toLowerCase() === 'undefined' ||
+    trimmed.toLowerCase() === '$undefined'
+  ) {
     return null;
   }
   return trimmed;
@@ -16,10 +21,44 @@ function cleanNullableString(val: unknown): string | null {
 export async function submitKajian(formData: FormData) {
   const supabase = await createClient()
 
-  // 1. Verifikasi Autentikasi
+  // 1. Verifikasi Autentikasi & Izin Role
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return { success: false, error: 'Anda harus login untuk mempublikasikan kajian.' }
+  }
+
+  // Verifikasi role kontributor atau admin
+  const isAdminByEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
+  let userRole = isAdminByEmail ? 'admin' : 'user'
+  let isUserTrusted = !!isAdminByEmail
+
+  try {
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role, is_trusted')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (roleData) {
+      userRole = isAdminByEmail ? 'admin' : (roleData.role || 'user')
+      if (roleData.is_trusted) isUserTrusted = true
+    } else {
+      // Cek apakah user pernah punya riwayat session (legacy contributor)
+      const { count } = await supabase
+        .from('study_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('created_by', user.id)
+      if (count && count > 0) {
+        userRole = 'kontributor'
+      }
+    }
+  } catch {}
+
+  if (userRole === 'user' && !isAdminByEmail) {
+    return {
+      success: false,
+      error: 'Akses terbatas. Anda harus berstatus sebagai Relawan Kontributor Dakwah terverifikasi untuk mempublikasikan kajian. Silakan ajukan permohonan di profil Anda.'
+    }
   }
 
   try {
@@ -136,26 +175,8 @@ export async function submitKajian(formData: FormData) {
     }
 
     // 5. Cek apakah pengguna adalah Admin atau Trusted Contributor
-    const isAdminByEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
-    let isAutoPublish = !!isAdminByEmail
-
-    if (!isAutoPublish) {
-      try {
-        const { data: roleData } = await supabase
-          .from('user_roles')
-          .select('role, is_trusted')
-          .eq('user_id', user.id)
-          .maybeSingle()
-
-        if (roleData?.role === 'admin' || roleData?.is_trusted === true) {
-          isAutoPublish = true
-        }
-      } catch {
-        // Fallback
-      }
-    }
-
-    const initialStatus = isAutoPublish ? 'confirmed' : 'pending'
+    const isAutoPublish = isUserTrusted || userRole === 'admin';
+    const initialStatus = isAutoPublish ? 'confirmed' : 'pending';
     const contributorName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Relawan Dakwah'
 
     const { error: sessionError } = await supabase
@@ -398,3 +419,64 @@ export async function deleteKajian(sessionId: string) {
     return { success: false, error: 'Terjadi kesalahan sistem saat menghapus kajian.' }
   }
 }
+
+/**
+ * Mengajukan permohonan hak akses Relawan Kontributor Dakwah
+ */
+export async function requestContributorAccess(payload: {
+  communityName?: string;
+  whatsappNumber?: string;
+  note?: string;
+}) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { success: false, error: 'Anda harus login terlebih dahulu.' };
+  }
+
+  try {
+    const commName = cleanNullableString(payload.communityName);
+    const waNumber = cleanNullableString(payload.whatsappNumber);
+    const reqNote = cleanNullableString(payload.note);
+
+    const { data: existingRole } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const targetRole = (existingRole?.role && existingRole.role !== 'user')
+      ? existingRole.role
+      : 'user';
+
+    const updatePayload: Record<string, any> = {
+      user_id: user.id,
+      role: targetRole,
+      request_status: 'pending',
+      community_name: commName,
+      whatsapp_number: waNumber,
+      request_note: reqNote,
+      requested_at: new Date().toISOString(),
+    };
+    if (user.email) {
+      updatePayload.email = user.email;
+    }
+
+    const { error } = await supabase
+      .from('user_roles')
+      .upsert(updatePayload, { onConflict: 'user_id' });
+
+    if (error) {
+      console.error('Request contributor access error:', error);
+      return { success: false, error: error.message || 'Gagal mengirim permohonan kontributor. Silakan coba lagi.' };
+    }
+
+    revalidatePath('/kontributor/profile');
+    revalidatePath('/admin/users');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Terjadi kesalahan sistem.' };
+  }
+}
+

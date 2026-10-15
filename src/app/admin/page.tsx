@@ -7,6 +7,7 @@ import { fetchSessionsByStatus, fetchAdminStats } from '@/lib/services/admin';
 import { approveSession, rejectSession, togglePublishSession } from '@/app/actions/admin';
 import type { StudySession } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import { useAttendance } from '@/utils/attendance';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -43,7 +44,12 @@ export default function AdminModerationPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'rejected' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
-  const [stats, setStats] = useState({ pending: 0, confirmed: 0, rejected: 0, total: 0 });
+  const [stats, setStats] = useState({ pending: 0, confirmed: 0, rejected: 0, total: 0, totalAttendees: 0 });
+  const { getExtraCount } = useAttendance();
+
+  const effectiveTotalAttendees = useMemo(() => {
+    return sessions.reduce((acc, s) => acc + Math.max(0, (s.attendees_count || 0) + getExtraCount(s.id)), 0);
+  }, [sessions, getExtraCount]);
 
   // Moderation state
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -185,7 +191,7 @@ export default function AdminModerationPage() {
           </div>
 
           {/* Quick Stats Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 sm:gap-3">
             <div
               onClick={() => setActiveTab('pending')}
               className={`p-3 sm:p-4 rounded-2xl border transition-all cursor-pointer ${
@@ -244,6 +250,16 @@ export default function AdminModerationPage() {
                 <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-outline">calendar_month</span>
               </div>
               <p className="text-xl sm:text-2xl font-black text-on-surface mt-1">{stats.total}</p>
+            </div>
+
+            <div
+              className="p-3 sm:p-4 rounded-2xl border transition-all bg-surface-container-lowest border-surface-container-high/70"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] sm:text-xs font-semibold text-teal-700 dark:text-teal-400">Total Jamaah RSVP</span>
+                <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-teal-600">groups</span>
+              </div>
+              <p className="text-xl sm:text-2xl font-black text-teal-800 dark:text-teal-300 mt-1">{effectiveTotalAttendees}</p>
             </div>
           </div>
         </div>
@@ -384,6 +400,11 @@ export default function AdminModerationPage() {
                               Online
                             </span>
                           )}
+
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-md">
+                            <span className="material-symbols-outlined text-[12px] text-teal-600">groups</span>
+                            <span>{Math.max(0, (session.attendees_count || 0) + getExtraCount(session.id))} Hadir</span>
+                          </span>
                         </div>
 
                         {/* Title & Info */}

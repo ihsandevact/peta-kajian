@@ -55,12 +55,21 @@ export default function MobileNavDrawer({
     };
   }, [isOpen]);
 
-  const mainNavLinks = [
-    { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
-    { href: '/kontributor/dashboard', label: 'Kirim Info Kajian', icon: 'add_circle', desc: 'Bagikan info kajian baru' },
-    { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
-    { href: '/kontributor/profile', label: 'Profil Relawan', icon: 'account_circle', desc: 'Riwayat & kelola kiriman Anda' },
-  ];
+  const isContributorOrAdmin = isAdmin || currentUser?.role === 'kontributor';
+
+  const mainNavLinks = currentUser
+    ? [
+        { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
+        isContributorOrAdmin
+          ? { href: '/kontributor/dashboard', label: 'Kirim Info Kajian', icon: 'add_circle', desc: 'Bagikan info kajian baru' }
+          : { href: '/kontributor/profile', label: 'Ajukan Jadi Kontributor', icon: 'volunteer_activism', desc: 'Daftar sebagai relawan dakwah' },
+        { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
+        { href: '/kontributor/profile', label: isContributorOrAdmin ? 'Profil Relawan' : 'Profil Saya', icon: 'account_circle', desc: 'Kelola akun & permohonan Anda' },
+      ]
+    : [
+        { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
+        { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
+      ];
 
   const adminNavLinks = [
     { href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', desc: 'Tinjau & setujui kiriman kajian' },
@@ -134,10 +143,15 @@ export default function MobileNavDrawer({
                     <span className="material-symbols-outlined text-[10px]">shield_person</span>
                     Admin
                   </span>
-                ) : (
+                ) : currentUser?.role === 'kontributor' ? (
                   <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
                     <span className="material-symbols-outlined text-[10px]">verified</span>
                     Relawan
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-blue-700 dark:text-blue-300 bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[10px]">person</span>
+                    Jamaah
                   </span>
                 )}
               </div>
@@ -231,11 +245,11 @@ export default function MobileNavDrawer({
             </form>
           ) : (
             <Link
-              href="/kontributor/login"
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors shadow-2xs"
+              href="/login"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors shadow-2xs"
             >
               <span className="material-symbols-outlined text-[16px]">login</span>
-              <span>Masuk Relawan</span>
+              <span>Masuk / Login</span>
             </Link>
           )}
         </div>

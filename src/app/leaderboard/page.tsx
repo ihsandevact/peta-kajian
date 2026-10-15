@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { fetchContributorLeaderboard, type ContributorEntry, type LeaderboardGroup } from '@/lib/services/kajian';
-import { checkIsAdmin } from '@/lib/services/admin';
+import { checkIsAdmin, getUserRoleAndStatus, type AppUserRole } from '@/lib/services/admin';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
 
 export default function LeaderboardPage() {
@@ -13,6 +13,7 @@ export default function LeaderboardPage() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState<AppUserRole>('user');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
@@ -28,11 +29,13 @@ export default function LeaderboardPage() {
       if (data?.user) {
         setCurrentUser(data.user);
         checkIsAdmin(data.user).then(setIsAdmin).catch(() => setIsAdmin(false));
+        getUserRoleAndStatus(data.user).then((info) => setUserRole(info.role)).catch(() => setUserRole('user'));
       } else {
         supabase.auth.getSession().then(({ data: sess }) => {
           if (sess?.session?.user) {
             setCurrentUser(sess.session.user);
             checkIsAdmin(sess.session.user).then(setIsAdmin).catch(() => setIsAdmin(false));
+            getUserRoleAndStatus(sess.session.user).then((info) => setUserRole(info.role)).catch(() => setUserRole('user'));
           }
         });
       }
@@ -40,6 +43,13 @@ export default function LeaderboardPage() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setCurrentUser(session?.user || null);
+      if (session?.user) {
+        checkIsAdmin(session.user).then(setIsAdmin).catch(() => setIsAdmin(false));
+        getUserRoleAndStatus(session.user).then((info) => setUserRole(info.role)).catch(() => setUserRole('user'));
+      } else {
+        setIsAdmin(false);
+        setUserRole('user');
+      }
     });
 
     return () => {
@@ -111,13 +121,33 @@ export default function LeaderboardPage() {
               </Link>
             ) : null}
 
-            <Link
-              href="/kontributor/dashboard"
-              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-primary hover:text-on-primary hover:bg-primary px-2.5 sm:px-3 py-1.5 rounded-full border border-primary/30 transition-colors whitespace-nowrap"
-            >
-              <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
-              <span>Kirim Info Kajian</span>
-            </Link>
+            {currentUser ? (
+              isAdmin || userRole === 'kontributor' ? (
+                <Link
+                  href="/kontributor/dashboard"
+                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-primary hover:text-on-primary hover:bg-primary px-2.5 sm:px-3 py-1.5 rounded-full border border-primary/30 transition-colors whitespace-nowrap"
+                >
+                  <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
+                  <span>Kirim Info Kajian</span>
+                </Link>
+              ) : (
+                <Link
+                  href="/kontributor/profile"
+                  className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:text-white hover:bg-emerald-600 px-2.5 sm:px-3 py-1.5 rounded-full border border-emerald-500/30 transition-colors whitespace-nowrap"
+                >
+                  <span className="material-symbols-outlined text-[15px] sm:text-[16px]">volunteer_activism</span>
+                  <span>Ajukan Jadi Relawan</span>
+                </Link>
+              )
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-primary hover:text-on-primary hover:bg-primary px-2.5 sm:px-3 py-1.5 rounded-full border border-primary/30 transition-colors whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-[15px] sm:text-[16px]">login</span>
+                <span>Masuk / Login</span>
+              </Link>
+            )}
           </div>
 
           {/* Mobile Single Hamburger Button */}
@@ -142,6 +172,7 @@ export default function LeaderboardPage() {
                 name: currentUserName,
                 email: currentUser.email,
                 avatarUrl: currentUserAvatar,
+                role: userRole,
               }
             : null
         }

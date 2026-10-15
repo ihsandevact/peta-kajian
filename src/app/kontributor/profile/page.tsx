@@ -8,8 +8,11 @@ import type { StudySession } from '@/lib/services/kajian';
 import dynamic from 'next/dynamic';
 import { deleteKajian } from '@/app/actions/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
-import { checkIsAdmin } from '@/lib/services/admin';
+import { checkIsAdmin, getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
+import { useAttendance } from '@/utils/attendance';
+import { useBookmarks } from '@/utils/bookmarks';
+import RequestContributorModal from '@/components/RequestContributorModal';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -19,6 +22,8 @@ export default function ContributorProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [roleInfo, setRoleInfo] = useState<UserRoleInfo | null>(null);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [sessions, setSessions] = useState<StudySession[]>([]);
@@ -28,6 +33,9 @@ export default function ContributorProfilePage() {
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { bookmarks } = useBookmarks();
+  const { attending, getExtraCount } = useAttendance();
 
   const fetchUserSessions = useCallback(async (userId: string, contributorName?: string) => {
     const supabase = createClient();
@@ -76,7 +84,7 @@ export default function ContributorProfilePage() {
       if (!mounted) return;
 
       if (!currentUser) {
-        router.push('/kontributor/login');
+        router.push('/login?next=/kontributor/profile');
         return;
       }
 
@@ -86,8 +94,14 @@ export default function ContributorProfilePage() {
         currentUser.email?.split('@')[0] ||
         '';
 
-      const adminCheck = await checkIsAdmin(currentUser);
-      if (mounted) setIsAdmin(adminCheck);
+      const [adminCheck, rInfo] = await Promise.all([
+        checkIsAdmin(currentUser),
+        getUserRoleAndStatus(currentUser),
+      ]);
+      if (mounted) {
+        setIsAdmin(adminCheck);
+        setRoleInfo(rInfo);
+      }
 
       setUser(currentUser);
       await fetchUserSessions(currentUser.id, name);
@@ -101,7 +115,7 @@ export default function ContributorProfilePage() {
       if (session?.user) {
         setUser(session.user);
       } else if (!loading) {
-        router.push('/kontributor/login');
+        router.push('/login?next=/kontributor/profile');
       }
     });
 
@@ -165,6 +179,11 @@ export default function ContributorProfilePage() {
   const totalSessions = sessions.length;
   const onlineCount = sessions.filter((s) => s.is_online).length;
   const offlineCount = totalSessions - onlineCount;
+  const totalAttendeesCount = sessions.reduce(
+    (acc, s) => acc + Math.max(0, (s.attendees_count || 0) + getExtraCount(s.id)),
+    0
+  );
+  const isContributorOrAdmin = isAdmin || roleInfo?.role === 'kontributor';
 
   return (
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
@@ -198,13 +217,29 @@ export default function ContributorProfilePage() {
               <span className="material-symbols-outlined text-[15px] sm:text-[16px]">map</span>
               <span>Peta</span>
             </Link>
-            <Link
-              href="/kontributor/dashboard"
-              className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white bg-primary hover:bg-primary/90 px-3 sm:px-3.5 py-1.5 rounded-full shadow-sm transition-colors whitespace-nowrap"
-            >
-              <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
-              <span>Kirim Kajian</span>
-            </Link>
+            {isAdmin || roleInfo?.role === 'kontributor' ? (
+              <Link
+                href="/kontributor/dashboard"
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white bg-primary hover:bg-primary/90 px-3 sm:px-3.5 py-1.5 rounded-full shadow-sm transition-colors whitespace-nowrap"
+              >
+                <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
+                <span>Kirim Kajian</span>
+              </Link>
+            ) : roleInfo?.requestStatus === 'pending' ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-500/15 border border-amber-500/30 px-3 py-1.5 rounded-full whitespace-nowrap">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>Menunggu Review</span>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsRequestModalOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3 sm:px-3.5 py-1.5 rounded-full shadow-sm transition-colors whitespace-nowrap cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[15px] sm:text-[16px]">volunteer_activism</span>
+                <span>Ajukan Kontributor</span>
+              </button>
+            )}
           </div>
 
           {/* Mobile Single Hamburger Button */}
@@ -227,6 +262,7 @@ export default function ContributorProfilePage() {
           name: user?.user_metadata?.full_name,
           email: user?.email,
           avatarUrl: avatarUrl,
+          role: roleInfo?.role,
         }}
         isAdmin={isAdmin}
       />
@@ -269,12 +305,12 @@ export default function ContributorProfilePage() {
             )}
             <span
               className={`absolute bottom-0 right-0 w-7 h-7 sm:w-8 sm:h-8 aspect-square rounded-full flex items-center justify-center shadow-md border-2 border-surface-container-lowest shrink-0 ${
-                isAdmin ? 'bg-amber-600 text-white' : 'bg-emerald-600 text-white'
+                isAdmin ? 'bg-amber-600 text-white' : roleInfo?.role === 'kontributor' ? 'bg-emerald-600 text-white' : 'bg-blue-600 text-white'
               }`}
-              title={isAdmin ? 'Administrator' : 'Relawan Terverifikasi'}
+              title={isAdmin ? 'Administrator' : roleInfo?.role === 'kontributor' ? 'Relawan Terverifikasi' : 'Jamaah (User)'}
             >
               <span className="material-symbols-outlined text-[15px] sm:text-[17px] leading-none select-none font-bold">
-                {isAdmin ? 'shield_person' : 'check'}
+                {isAdmin ? 'shield_person' : roleInfo?.role === 'kontributor' ? 'check' : 'person'}
               </span>
             </span>
           </div>
@@ -290,10 +326,15 @@ export default function ContributorProfilePage() {
                   <span className="material-symbols-outlined text-[13px] text-amber-700">shield_person</span>
                   Administrator
                 </span>
-              ) : (
+              ) : roleInfo?.role === 'kontributor' ? (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
                   <span className="material-symbols-outlined text-[12px]">verified_user</span>
                   Relawan Terverifikasi
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
+                  <span className="material-symbols-outlined text-[13px] text-blue-600">person</span>
+                  Jamaah (User)
                 </span>
               )}
             </div>
@@ -337,8 +378,149 @@ export default function ContributorProfilePage() {
           </div>
         </div>
 
-        {/* Contribution Stats */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+        {/* Banner Status Permohonan / Ajakan Menjadi Kontributor Dakwah (Khusus Role 'user') */}
+        {!isAdmin && roleInfo?.role !== 'kontributor' && (
+          <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+            {roleInfo?.requestStatus === 'pending' ? (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900 dark:text-amber-200">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[20px]">hourglass_top</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Permohonan Relawan Sedang Ditinjau Admin</p>
+                    <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                      {roleInfo.communityName ? `Masjid/Majelis: ${roleInfo.communityName}` : 'Permohonan Anda telah diterima.'} Admin akan segera memverifikasi akun Anda agar dapat mempublikasikan jadwal kajian.
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-800 bg-amber-100 dark:bg-amber-950/60 dark:text-amber-300 px-3 py-1 rounded-full uppercase tracking-wider shrink-0 self-start sm:self-center">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                  Menunggu Kurasi
+                </span>
+              </div>
+            ) : roleInfo?.requestStatus === 'rejected' ? (
+              <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-900 dark:text-rose-200">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-700 dark:text-rose-300 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[20px]">info</span>
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm">Permohonan Relawan Belum Disetujui</p>
+                    <p className="text-[11px] text-rose-800/80 dark:text-rose-300/80 mt-0.5">
+                      {roleInfo.requestNote ? `Catatan Admin: ${roleInfo.requestNote}` : 'Anda dapat memperbarui data komunitas dan mengajukan kembali permohonan kontributor.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shrink-0 shadow-2xs active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[16px]">refresh</span>
+                  <span>Ajukan Ulang</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-5 rounded-3xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-primary/10 border border-emerald-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs shadow-xs">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                    <span className="material-symbols-outlined text-[22px]">volunteer_activism</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-on-surface">Mari Bergabung Menjadi Relawan Dakwah</p>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed max-w-xl">
+                      Ingin mempublikasikan jadwal kajian dari masjid atau majelis taklim di daerah Anda ke peta seluruh Indonesia? Ajukan diri sekarang agar akun Anda diverifikasi oleh Admin.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-all shadow-sm shrink-0 active:scale-95 cursor-pointer whitespace-nowrap"
+                >
+                  <span className="material-symbols-outlined text-[16px]">how_to_reg</span>
+                  <span>Ajukan Jadi Kontributor</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Aktivitas Jamaah (Jadwal Tersimpan & RSVP Kehadiran) - Khusus Role 'user' */}
+        {!isContributorOrAdmin && (
+          <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-[22px]">event_upcoming</span>
+                <span>Aktivitas & Jadwal Saya</span>
+              </h2>
+              <Link
+                href="/"
+                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+              >
+                <span>Buka di Peta</span>
+                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              {/* Card Bookmark */}
+              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[24px]">bookmark</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-on-surface">Jadwal Tersimpan</h3>
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      Kajian yang Anda simpan untuk dihadiri
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-2xl font-black text-primary">{bookmarks.length}</span>
+                  <span className="block text-[10px] text-outline font-medium">Kajian</span>
+                </div>
+              </div>
+
+              {/* Card RSVP / Hadir */}
+              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[24px]">how_to_reg</span>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-on-surface">Kehadiran Saya</h3>
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      Kajian yang Anda tandai &quot;Saya Hadir&quot;
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-2xl font-black text-emerald-600">{attending.length}</span>
+                  <span className="block text-[10px] text-outline font-medium">Kajian</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Info Panduan Jamaah */}
+            <div className="p-4 rounded-2xl bg-surface-container-low/60 border border-surface-container-high/60 text-xs text-on-surface-variant flex items-start gap-3">
+              <span className="material-symbols-outlined text-outline text-[20px] shrink-0 mt-0.5">lightbulb</span>
+              <p className="leading-relaxed">
+                Anda dapat menjelajahi peta untuk mencari majelis ilmu di sekitar Anda, menyimpan kajian pilihan, dan menekan tombol <strong>&quot;Saya Hadir&quot;</strong> agar penyelenggara dapat mengestimasi jumlah jamaah.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Khusus Kontributor & Admin: Statistik & Riwayat Publikasi */}
+        {isContributorOrAdmin && (
+          <>
+            {/* Contribution Stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
           <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-2.5 sm:p-4 text-center shadow-sm">
             <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-primary/10 text-primary mx-auto flex items-center justify-center mb-1">
               <span className="material-symbols-outlined text-[16px] sm:text-[18px]">mosque</span>
@@ -362,6 +544,14 @@ export default function ContributorProfilePage() {
             <p className="text-lg sm:text-2xl font-black text-blue-800">{onlineCount}</p>
             <p className="text-[10px] sm:text-xs text-on-surface-variant font-medium mt-0.5 leading-tight">Kajian Online</p>
           </div>
+
+          <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-2xl p-2.5 sm:p-4 text-center shadow-sm">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-amber-100 text-amber-700 mx-auto flex items-center justify-center mb-1">
+              <span className="material-symbols-outlined text-[16px] sm:text-[18px]">groups</span>
+            </div>
+            <p className="text-lg sm:text-2xl font-black text-amber-800">{totalAttendeesCount}</p>
+            <p className="text-[10px] sm:text-xs text-on-surface-variant font-medium mt-0.5 leading-tight">Jamaah Hadir</p>
+          </div>
         </div>
 
         {/* List of Submitted Kajian */}
@@ -374,11 +564,19 @@ export default function ContributorProfilePage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => fetchUserSessions(user.id, displayName)}
-                className="p-1 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface transition-colors flex items-center justify-center"
+                onClick={async () => {
+                  if (!user) return;
+                  setIsRefreshing(true);
+                  await fetchUserSessions(user.id, displayName);
+                  setIsRefreshing(false);
+                }}
+                disabled={isRefreshing}
+                className="p-1 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface transition-colors flex items-center justify-center disabled:opacity-50"
                 title="Segarkan Riwayat"
               >
-                <span className="material-symbols-outlined text-[18px]">refresh</span>
+                <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? 'animate-spin text-primary' : ''}`}>
+                  refresh
+                </span>
               </button>
               <span className="text-xs text-outline font-medium">
                 {sessions.length} jadwal
@@ -397,13 +595,24 @@ export default function ContributorProfilePage() {
                   Mari menjadi bagian dari syiar dakwah dengan mengirimkan informasi jadwal kajian dari masjid di sekitar Anda.
                 </p>
               </div>
-              <Link
-                href="/kontributor/dashboard"
-                className="mt-1 px-5 py-2.5 bg-primary text-white text-xs font-semibold rounded-xl shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1.5"
-              >
-                <span className="material-symbols-outlined text-[16px]">add_circle</span>
-                Kirim Kajian Pertama Saya
-              </Link>
+              {!isAdmin && roleInfo?.role !== 'kontributor' ? (
+                <button
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="mt-1 px-5 py-2.5 bg-emerald-600 text-white text-xs font-semibold rounded-xl shadow-sm hover:bg-emerald-700 transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[16px]">volunteer_activism</span>
+                  <span>Ajukan Jadi Kontributor Dakwah</span>
+                </button>
+              ) : (
+                <Link
+                  href="/kontributor/dashboard"
+                  className="mt-1 px-5 py-2.5 bg-primary text-white text-xs font-semibold rounded-xl shadow-sm hover:bg-primary/90 transition-all flex items-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                  <span>Kirim Kajian Pertama Saya</span>
+                </Link>
+              )}
             </div>
           ) : (
             <div className="divide-y divide-surface-container-high/60 border border-surface-container-high/60 rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm">
@@ -413,6 +622,7 @@ export default function ContributorProfilePage() {
 
                 const isStatusCanceled = s.status === 'canceled';
                 const isStatusPostponed = s.status === 'postponed';
+                const attendeesCount = Math.max(0, (s.attendees_count || 0) + getExtraCount(s.id));
 
                 return (
                   <div key={s.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-surface-container-low/40 transition-colors">
@@ -464,6 +674,11 @@ export default function ContributorProfilePage() {
                             Tayang di Peta
                           </span>
                         )}
+
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 px-2 py-0.5 rounded-md">
+                          <span className="material-symbols-outlined text-[13px] text-teal-600">groups</span>
+                          <span>{attendeesCount} Jamaah Hadir</span>
+                        </span>
                       </div>
 
                       <h3 className="text-sm sm:text-base font-bold text-on-surface line-clamp-1">
@@ -532,6 +747,8 @@ export default function ContributorProfilePage() {
             </div>
           )}
         </div>
+          </>
+        )}
       </main>
 
       {/* Edit Session Modal */}
@@ -540,6 +757,20 @@ export default function ContributorProfilePage() {
         isOpen={!!editingSession}
         onClose={() => setEditingSession(null)}
         onSuccess={handleEditSuccess}
+      />
+
+      {/* Modal Pengajuan Relawan Kontributor Dakwah */}
+      <RequestContributorModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        onSuccess={async () => {
+          setToastMessage('Permohonan relawan kontributor berhasil dikirim! Menunggu verifikasi dari Admin.');
+          if (user) {
+            const rInfo = await getUserRoleAndStatus(user);
+            setRoleInfo(rInfo);
+          }
+        }}
+        userEmail={email}
       />
     </div>
   );

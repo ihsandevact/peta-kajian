@@ -7,7 +7,12 @@ import { ADMIN_EMAILS } from '@/lib/services/admin';
 function cleanNullableString(val: unknown): string | null {
   if (typeof val !== 'string') return null;
   const trimmed = val.trim();
-  if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+  if (
+    !trimmed ||
+    trimmed.toLowerCase() === 'null' ||
+    trimmed.toLowerCase() === 'undefined' ||
+    trimmed.toLowerCase() === '$undefined'
+  ) {
     return null;
   }
   return trimmed;
@@ -257,18 +262,26 @@ export async function toggleUserTrusted(targetUserId: string, isTrusted: boolean
 }
 
 /**
- * Toggle Role Pengguna (Admin vs Kontributor)
+ * Toggle Role Pengguna ('admin' | 'kontributor' | 'user')
  */
-export async function toggleUserRole(targetUserId: string, newRole: 'admin' | 'kontributor') {
+export async function toggleUserRole(targetUserId: string, newRole: 'admin' | 'kontributor' | 'user') {
   try {
-    const { supabase } = await verifyAdminAuth();
+    const { supabase, user } = await verifyAdminAuth();
+
+    const updatePayload: Record<string, any> = {
+      user_id: targetUserId,
+      role: newRole,
+    };
+
+    if (newRole === 'kontributor') {
+      updatePayload.request_status = 'approved';
+      updatePayload.reviewed_at = new Date().toISOString();
+      updatePayload.reviewed_by = user.id;
+    }
 
     const { error } = await supabase
       .from('user_roles')
-      .upsert({
-        user_id: targetUserId,
-        role: newRole,
-      });
+      .upsert(updatePayload);
 
     if (error) {
       console.error('Toggle role error:', error);
@@ -276,8 +289,49 @@ export async function toggleUserRole(targetUserId: string, newRole: 'admin' | 'k
     }
 
     revalidatePath('/admin');
+    revalidatePath('/admin/users');
+    revalidatePath('/kontributor/profile');
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || 'Terjadi kesalahan sistem.' };
   }
 }
+
+/**
+ * Menyetujui permohonan pengguna menjadi Kontributor Dakwah
+ */
+export async function approveContributorRequest(targetUserId: string) {
+  return toggleUserRole(targetUserId, 'kontributor');
+}
+
+/**
+ * Menolak permohonan kontributor dakwah
+ */
+export async function rejectContributorRequest(targetUserId: string, reason?: string) {
+  try {
+    const { supabase, user } = await verifyAdminAuth();
+
+    const { error } = await supabase
+      .from('user_roles')
+      .update({
+        request_status: 'rejected',
+        request_note: reason || null,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: user.id,
+      })
+      .eq('user_id', targetUserId);
+
+    if (error) {
+      console.error('Reject contributor error:', error);
+      return { success: false, error: 'Gagal menolak permohonan kontributor.' };
+    }
+
+    revalidatePath('/admin');
+    revalidatePath('/admin/users');
+    revalidatePath('/kontributor/profile');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Terjadi kesalahan sistem.' };
+  }
+}
+

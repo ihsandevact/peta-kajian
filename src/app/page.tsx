@@ -10,6 +10,7 @@ import { createClient } from '@/utils/supabase/client';
 import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
+import { getUserRoleAndStatus } from '@/lib/services/admin';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -64,24 +65,40 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
 
-  // Periksa status login pengguna
+  // Periksa status login dan role pengguna
   useEffect(() => {
     const supabase = createClient();
+
+    async function initUser(u: any) {
+      setCurrentUser(u);
+      if (u) {
+        try {
+          const rInfo = await getUserRoleAndStatus(u);
+          setCurrentUserRole(rInfo.role);
+        } catch {
+          setCurrentUserRole('user');
+        }
+      } else {
+        setCurrentUserRole(null);
+      }
+    }
+
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
-        setCurrentUser(data.user);
+        initUser(data.user);
       } else {
         supabase.auth.getSession().then(({ data: sess }) => {
           if (sess?.session?.user) {
-            setCurrentUser(sess.session.user);
+            initUser(sess.session.user);
           }
         });
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user || null);
+      initUser(session?.user || null);
     });
 
     return () => {
@@ -297,43 +314,63 @@ export default function Home() {
         </div>
         
         <div className={`flex flex-col gap-1.5 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          <Link href="/kontributor/dashboard" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}>
-            <span className="material-symbols-outlined text-[20px]">add_circle</span>
-            {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
-            {isSidebarCollapsed && (
-              <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                Kirim Info Kajian
-              </span>
-            )}
-          </Link>
-
           {currentUser ? (
-            <Link
-              href="/kontributor/profile"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface hover:bg-surface-container-high`}
-            >
-              <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-5 h-5" />
-              {!isSidebarCollapsed && (
-                <span className="truncate">
-                  {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Profil'}
-                </span>
+            <>
+              {currentUserRole === 'admin' || currentUserRole === 'kontributor' ? (
+                <Link
+                  href="/kontributor/dashboard"
+                  className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
+                >
+                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
+                  {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
+                  {isSidebarCollapsed && (
+                    <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                      Kirim Info Kajian
+                    </span>
+                  )}
+                </Link>
+              ) : (
+                <Link
+                  href="/kontributor/profile"
+                  className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10`}
+                >
+                  <span className="material-symbols-outlined text-[20px] text-emerald-600">volunteer_activism</span>
+                  {!isSidebarCollapsed && <span>Ajukan Jadi Relawan</span>}
+                  {isSidebarCollapsed && (
+                    <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                      Ajukan Jadi Relawan
+                    </span>
+                  )}
+                </Link>
               )}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Profil Relawan
-                </span>
-              )}
-            </Link>
+
+              <Link
+                href="/kontributor/profile"
+                className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface hover:bg-surface-container-high`}
+              >
+                <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-5 h-5" />
+                {!isSidebarCollapsed && (
+                  <span className="truncate">
+                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Profil Saya'}
+                  </span>
+                )}
+                {isSidebarCollapsed && (
+                  <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                    Profil Saya
+                  </span>
+                )}
+              </Link>
+            </>
           ) : (
             <Link
-              href="/kontributor/login"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
+              href="/login"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-semibold ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary/10 text-primary hover:bg-primary/20`}
             >
               <span className="material-symbols-outlined text-[20px]">login</span>
-              {!isSidebarCollapsed && <span>Masuk Relawan</span>}
+              {!isSidebarCollapsed && <span>Masuk / Login</span>}
               {isSidebarCollapsed && (
                 <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Masuk Relawan
+                  Masuk / Login
                 </span>
               )}
             </Link>
@@ -406,28 +443,41 @@ export default function Home() {
               <span className="material-symbols-outlined text-[22px] text-amber-500">workspace_premium</span>
               <span className="text-[10px] mt-0.5 font-medium tracking-tight">Peringkat</span>
             </Link>
-            <Link 
-              href="/kontributor/dashboard" 
-              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-            >
-              <span className="material-symbols-outlined text-[22px]">add_circle</span>
-              <span className="text-[10px] mt-0.5 font-medium tracking-tight">Kirim</span>
-            </Link>
             {currentUser ? (
-              <Link
-                href="/kontributor/profile"
-                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-              >
-                <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-6 h-6" />
-                <span className="text-[10px] mt-0.5 font-medium tracking-tight">Profil</span>
-              </Link>
+              <>
+                {currentUserRole === 'admin' || currentUserRole === 'kontributor' ? (
+                  <Link 
+                    href="/kontributor/dashboard" 
+                    className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[22px]">add_circle</span>
+                    <span className="text-[10px] mt-0.5 font-medium tracking-tight">Kirim</span>
+                  </Link>
+                ) : (
+                  <Link 
+                    href="/kontributor/profile" 
+                    className="flex flex-col items-center justify-center min-w-[56px] h-12 text-emerald-600 hover:text-emerald-700 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[22px]">volunteer_activism</span>
+                    <span className="text-[10px] mt-0.5 font-medium tracking-tight">Relawan</span>
+                  </Link>
+                )}
+
+                <Link
+                  href="/kontributor/profile"
+                  className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+                >
+                  <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-6 h-6" />
+                  <span className="text-[10px] mt-0.5 font-medium tracking-tight">Profil</span>
+                </Link>
+              </>
             ) : (
               <Link
-                href="/kontributor/login"
-                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+                href="/login"
+                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary hover:text-primary transition-colors font-semibold"
               >
                 <span className="material-symbols-outlined text-[22px]">login</span>
-                <span className="text-[10px] mt-0.5 font-medium tracking-tight">Masuk</span>
+                <span className="text-[10px] mt-0.5 tracking-tight">Masuk</span>
               </Link>
             )}
           </div>

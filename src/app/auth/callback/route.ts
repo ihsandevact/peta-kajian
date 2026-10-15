@@ -5,7 +5,7 @@ import { cookies } from 'next/headers'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/kontributor/dashboard'
+  const next = searchParams.get('next') ?? '/'
 
   if (code) {
     const supabase = await createClient()
@@ -36,5 +36,5 @@ export async function GET(request: Request) {
   }
 
   // Jika gagal, kembalikan ke halaman login
-  return NextResponse.redirect(`${origin}/kontributor/login?error=auth_failed`)
+  return NextResponse.redirect(`${origin}/login?error=auth_failed`)
 }

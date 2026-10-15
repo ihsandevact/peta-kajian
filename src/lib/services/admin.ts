@@ -38,35 +38,53 @@ export async function checkIsAdmin(user: { id?: string; email?: string } | null)
   return false;
 }
 
+export type AppUserRole = 'admin' | 'kontributor' | 'user';
+export type ContributorRequestStatus = 'none' | 'pending' | 'approved' | 'rejected';
+
+export interface UserRoleInfo {
+  role: AppUserRole;
+  isTrusted: boolean;
+  requestStatus: ContributorRequestStatus;
+  communityName?: string | null;
+  whatsappNumber?: string | null;
+  requestNote?: string | null;
+  requestedAt?: string | null;
+}
+
 /**
  * Mendapatkan role dan status kepercayaan (isTrusted) user
  */
-export async function getUserRoleAndStatus(user: { id: string; email?: string }): Promise<{
-  role: 'admin' | 'kontributor';
-  isTrusted: boolean;
-}> {
-  const isAdminByEmail = user.email ? ADMIN_EMAILS.includes(user.email.toLowerCase().trim()) : false;
+export async function getUserRoleAndStatus(user: { id: string; email?: string } | string): Promise<UserRoleInfo> {
+  const userId = typeof user === 'string' ? user : user.id;
+  const userEmail = typeof user === 'string' ? undefined : user.email;
+  const isAdminByEmail = userEmail ? ADMIN_EMAILS.includes(userEmail.toLowerCase().trim()) : false;
 
   try {
     const { data } = await supabase
       .from('user_roles')
-      .select('role, is_trusted')
-      .eq('user_id', user.id)
+      .select('role, is_trusted, request_status, community_name, whatsapp_number, request_note, requested_at')
+      .eq('user_id', userId)
       .maybeSingle();
 
     if (data) {
       return {
-        role: isAdminByEmail ? 'admin' : (data.role as 'admin' | 'kontributor') || 'kontributor',
+        role: isAdminByEmail ? 'admin' : (data.role as AppUserRole) || 'user',
         isTrusted: isAdminByEmail ? true : !!data.is_trusted,
+        requestStatus: (data.request_status as ContributorRequestStatus) || 'none',
+        communityName: data.community_name || null,
+        whatsappNumber: data.whatsapp_number || null,
+        requestNote: data.request_note || null,
+        requestedAt: data.requested_at || null,
       };
     }
   } catch {
-    // Fallback
+    // Fallback jika belum termigrasi
   }
 
   return {
-    role: isAdminByEmail ? 'admin' : 'kontributor',
+    role: isAdminByEmail ? 'admin' : 'user',
     isTrusted: isAdminByEmail,
+    requestStatus: 'none',
   };
 }
 
@@ -108,24 +126,27 @@ export async function fetchAdminStats(): Promise<{
   confirmed: number;
   rejected: number;
   total: number;
+  totalAttendees: number;
 }> {
   try {
     const { data } = await supabase
       .from('study_sessions')
-      .select('status');
+      .select('status, attendees_count');
 
     if (!data) {
-      return { pending: 0, confirmed: 0, rejected: 0, total: 0 };
+      return { pending: 0, confirmed: 0, rejected: 0, total: 0, totalAttendees: 0 };
     }
 
     let pending = 0;
     let confirmed = 0;
     let rejected = 0;
+    let totalAttendees = 0;
 
     data.forEach((row) => {
       if (row.status === 'pending') pending++;
       else if (row.status === 'confirmed') confirmed++;
       else if (row.status === 'rejected') rejected++;
+      totalAttendees += (row.attendees_count || 0);
     });
 
     return {
@@ -133,8 +154,9 @@ export async function fetchAdminStats(): Promise<{
       confirmed,
       rejected,
       total: data.length,
+      totalAttendees,
     };
   } catch {
-    return { pending: 0, confirmed: 0, rejected: 0, total: 0 };
+    return { pending: 0, confirmed: 0, rejected: 0, total: 0, totalAttendees: 0 };
   }
 }

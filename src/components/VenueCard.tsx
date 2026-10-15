@@ -21,7 +21,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
   const attending = isAttending(session.id);
   const totalAttendees = Math.max(
     0,
-    (session.attendees_count || 0) + getExtraCount(session.id) + (attending && !session.attendees_count ? 1 : 0)
+    (session.attendees_count || 0) + getExtraCount(session.id)
   );
 
   const handleShare = (e?: React.MouseEvent) => {

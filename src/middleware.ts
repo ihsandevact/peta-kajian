@@ -10,8 +10,8 @@ export async function middleware(request: NextRequest) {
   if (isAdminPath) {
     if (!user) {
       const url = request.nextUrl.clone()
-      url.pathname = '/kontributor/login'
-      url.searchParams.set('redirect', '/admin')
+      url.pathname = '/login'
+      url.searchParams.set('next', '/admin')
       const redirectResponse = NextResponse.redirect(url)
       supabaseResponse.cookies.getAll().forEach((cookie) => {
         redirectResponse.cookies.set(cookie.name, cookie.value, cookie)
@@ -37,7 +37,8 @@ export async function middleware(request: NextRequest) {
   if (isProtectedPath && !user) {
     // Redirect to login page if no user
     const url = request.nextUrl.clone()
-    url.pathname = '/kontributor/login'
+    url.pathname = '/login'
+    url.searchParams.set('next', request.nextUrl.pathname)
     const redirectResponse = NextResponse.redirect(url)
     // Salin cookie yang mungkin telah diperbarui Supabase
     supabaseResponse.cookies.getAll().forEach((cookie) => {
@@ -46,10 +47,10 @@ export async function middleware(request: NextRequest) {
     return redirectResponse
   }
 
-  // Redirect to dashboard if logged-in user visits login page
-  if (request.nextUrl.pathname === '/kontributor/login' && user) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/kontributor/dashboard'
+  // Redirect if logged-in user visits login page
+  if ((request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/kontributor/login') && user) {
+    const targetNext = request.nextUrl.searchParams.get('next') || '/'
+    const url = new URL(targetNext, request.nextUrl.origin)
     const redirectResponse = NextResponse.redirect(url)
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value, cookie)
