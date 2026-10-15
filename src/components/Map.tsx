@@ -41,12 +41,12 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
     if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 768;
       if (isDesktop) {
-        // Desktop: offset Y positif (150px - 210px) agar card tidak kepotong atas
-        offsetY = Math.min(210, Math.max(150, Math.round(window.innerHeight * 0.24)));
+        // Desktop: offset Y positif (140px - 190px) agar card kompak pas di tengah
+        offsetY = Math.min(190, Math.max(140, Math.round(window.innerHeight * 0.22)));
       } else {
-        // Mobile: offset Y positif (85px - 125px) agar card & poster di atas marker
+        // Mobile: offset Y positif (80px - 115px) agar card & poster di atas marker
         // tidak terpotong di tepi atas layar dan pas di ruang terbuka atas bottom sheet
-        offsetY = Math.min(125, Math.max(85, Math.round(window.innerHeight * 0.12)));
+        offsetY = Math.min(115, Math.max(80, Math.round(window.innerHeight * 0.11)));
       }
     }
 
@@ -148,7 +148,7 @@ export default function AppMap({ sessions, selectedSession, onSelectSession, fly
             closeButton={false}
             closeOnClick={false}
             className="z-50"
-            offset={14}
+            offset={24}
           >
             <div className="-m-3 pb-2">
               <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />

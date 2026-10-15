@@ -9,6 +9,7 @@ import { calculateDistance } from '@/utils/distance';
 import { createClient } from '@/utils/supabase/client';
 import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import { useBookmarks } from '@/utils/bookmarks';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -45,6 +46,8 @@ function HeaderAvatar({ url, size = 'w-5 h-5' }: { url?: string; size?: string }
 }
 
 export default function Home() {
+  const { bookmarks } = useBookmarks();
+
   const [filters, setFilters] = useState<FilterState>({
     time: 'semua',
     audience: ['umum', 'ikhwan', 'akhwat'],
@@ -143,11 +146,12 @@ export default function Home() {
         if (!hasAllFacilities) return false;
       }
 
-      // Status Filter: Berlangsung, Terbaru, Selesai, Rutin, Online
+      // Status Filter: Berlangsung, Tersimpan, Terbaru, Selesai, Rutin, Online
       const now = new Date();
       const info = getEffectiveSessionInfo(s, now);
       const isRutin = !!s.is_recurring;
       
+      if (filters.time === 'tersimpan' && !bookmarks.includes(s.id)) return false;
       if (filters.time === 'berlangsung' && !info.isLive) return false;
       if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
       if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
@@ -156,7 +160,7 @@ export default function Home() {
       
       return true;
     });
-  }, [sessions, filters]);
+  }, [sessions, filters, bookmarks]);
 
   // SMART SORTING: Live -> Upcoming/Rutin di atas, Selesai di bawah
   const sortedSessions = useMemo(() => {
@@ -206,10 +210,30 @@ export default function Home() {
     });
   }, [filteredSessions, filters.time, userLocation]);
 
+  // Deep-linking: auto-select session from ?session=<id> in URL
+  useEffect(() => {
+    if (sessions.length > 0 && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session');
+      if (sessionId) {
+        const found = sessions.find(s => s.id === sessionId);
+        if (found) {
+          setSelectedSession(found);
+          setIsSheetExpanded(false);
+        }
+      }
+    }
+  }, [sessions]);
+
   // OBSERVER: Auto-Focus dinamis setiap kali daftar filter/sorting berubah
   useEffect(() => {
     if (sortedSessions.length > 0) {
-      setSelectedSession(sortedSessions[0]);
+      setSelectedSession(prev => {
+        if (prev && sortedSessions.some(s => s.id === prev.id)) {
+          return prev;
+        }
+        return sortedSessions[0];
+      });
     } else {
       setSelectedSession(null);
     }

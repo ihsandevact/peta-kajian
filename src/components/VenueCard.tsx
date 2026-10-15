@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import { useBookmarks } from '@/utils/bookmarks';
+import { useAttendance } from '@/utils/attendance';
+import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 
 interface VenueCardProps {
   session: StudySession;
@@ -9,6 +12,22 @@ interface VenueCardProps {
 
 export default function VenueCard({ session, onClose }: VenueCardProps) {
   const [imgError, setImgError] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
+  const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
+
+  const bookmarked = isBookmarked(session.id);
+  const attending = isAttending(session.id);
+  const totalAttendees = Math.max(
+    0,
+    (session.attendees_count || 0) + getExtraCount(session.id) + (attending && !session.attendees_count ? 1 : 0)
+  );
+
+  const handleShare = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    shareSessionNative(session, () => setIsShareModalOpen(true));
+  };
 
   useEffect(() => {
     setImgError(false);
@@ -61,10 +80,10 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
 
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl">
-      <div className="w-[290px] sm:w-[310px] max-h-[min(520px,calc(100vh-90px))] overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
-        {/* Gambar Poster Header */}
+      <div className="w-[305px] sm:w-[320px] max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
+        {/* Gambar Poster Header - Kompak agar tidak memicu scroll */}
         {hasPoster && (
-          <div className="w-full h-[135px] sm:h-[145px] bg-surface-container shrink-0 relative overflow-hidden">
+          <div className="w-full h-[88px] sm:h-[94px] bg-surface-container shrink-0 relative overflow-hidden">
             <img
               src={session.poster_url}
               alt={`Poster ${session.title}`}
@@ -74,41 +93,96 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             {/* Vignette Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
-            {/* Tombol Close Absolute (Jika ada gambar) */}
-            {onClose && (
+            {/* Tombol Aksi Absolute Floating (Jika ada gambar) */}
+            <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
               <button
                 type="button"
-                onClick={onClose}
-                className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 z-10 transition-all shadow-md active:scale-95 cursor-pointer"
-                title="Tutup"
+                onClick={() => toggleBookmark(session.id)}
+                className={`w-7 h-7 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
+                  bookmarked
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-black/50 text-white hover:bg-black/75'
+                }`}
+                title={bookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
               >
-                <span className="material-symbols-outlined text-[16px]">close</span>
+                <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: bookmarked ? "'FILL' 1" : "'FILL' 0" }}>
+                  bookmark
+                </span>
               </button>
-            )}
+
+              <button
+                type="button"
+                onClick={handleShare}
+                className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
+                title="Bagikan Info Kajian"
+              >
+                <span className="material-symbols-outlined text-[14px]">share</span>
+              </button>
+
+              {onClose && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
+                  title="Tutup"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        <div className="p-3 sm:p-3.5">
-          {/* Header Badges & Inline Close Button */}
-          <div className="flex items-center justify-between pb-2 border-b border-surface-container-high/60 mb-2">
+        <div className="p-2.5 sm:p-3">
+          {/* Header Badges & Action Buttons (Inline jika tidak ada poster) */}
+          <div className="flex items-center justify-between pb-1.5 border-b border-surface-container-high/60 mb-1.5">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
               Kajian Aktif
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-surface-container px-2 py-0.5 rounded-full border border-surface-container-high">
                 {session.audience_type}
               </span>
-              {/* Tombol Close Inline (Jika TIDAK ADA gambar) */}
-              {!hasPoster && onClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer"
-                  title="Tutup"
-                >
-                  <span className="material-symbols-outlined text-[14px]">close</span>
-                </button>
+
+              {/* Aksi Tambahan jika TIDAK ADA poster */}
+              {!hasPoster && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => toggleBookmark(session.id)}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                      bookmarked
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-highest'
+                    }`}
+                    title={bookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian'}
+                  >
+                    <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: bookmarked ? "'FILL' 1" : "'FILL' 0" }}>
+                      bookmark
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer"
+                    title="Bagikan Kajian"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">share</span>
+                  </button>
+
+                  {onClose && (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer"
+                      title="Tutup"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">close</span>
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -130,7 +204,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           )}
 
           {/* Informasi Detail Box */}
-          <div className="mt-2.5 flex flex-col gap-1.5 p-2 sm:p-2.5 rounded-xl bg-surface-container-low/60 border border-surface-container-high/50 text-xs">
+          <div className="mt-2 flex flex-col gap-1 p-2 sm:p-2.5 rounded-xl bg-surface-container-low/60 border border-surface-container-high/50 text-xs">
             {/* Baris Waktu */}
             <div className="flex items-start gap-2 text-on-surface-variant">
               <span className="material-symbols-outlined text-[15px] text-outline mt-0.5 shrink-0">
@@ -163,17 +237,48 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             )}
           </div>
 
+          {/* Kehadiran Jamaah (RSVP) */}
+          <div className="mt-2 p-1.5 px-2.5 rounded-xl bg-surface-container/60 border border-surface-container-high/60 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant min-w-0">
+              <span className="material-symbols-outlined text-[16px] text-primary shrink-0">groups</span>
+              <span className="truncate whitespace-nowrap">
+                <strong className="text-on-surface font-semibold">{totalAttendees}</strong> Jamaah hadir
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => toggleAttendance(session.id)}
+              className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all active:scale-95 cursor-pointer flex items-center gap-1 border ${
+                attending
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                  : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border-primary/30'
+              }`}
+            >
+              {attending ? (
+                <>
+                  <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                  <span>Saya Hadir</span>
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[13px]">how_to_reg</span>
+                  <span>Insya Allah Hadir</span>
+                </>
+              )}
+            </button>
+          </div>
+
           {/* Aksi Bawah */}
-          <div className="mt-2.5 pt-2.5 border-t border-surface-container-high/60 flex flex-col gap-2">
+          <div className="mt-2 pt-2 border-t border-surface-container-high/60 flex flex-col gap-1.5">
           {/* Skenario 1: Hybrid (Ada Rute Maps DAN Ada Tonton Live) */}
           {hasRoute && hasLive ? (
             <>
-              <div className="grid grid-cols-2 gap-2 w-full">
+              <div className="grid grid-cols-2 gap-1.5 w-full">
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
                 >
                   <span className="material-symbols-outlined text-[15px]">directions_car</span>
                   <span>Rute Maps</span>
@@ -183,9 +288,9 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                   href={session.stream_url!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-2 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
                 >
-                  <span className="material-symbols-outlined text-[16px] text-red-600">play_circle</span>
+                  <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                   <span>Tonton Live</span>
                 </a>
               </div>
@@ -195,21 +300,21 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                   href={gCalUrl.toString()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
                 >
-                  <span className="material-symbols-outlined text-[16px]">event_available</span>
+                  <span className="material-symbols-outlined text-[15px]">event_available</span>
                   <span>Simpan ke Kalender</span>
                 </a>
               )}
             </>
           ) : hasRoute && hasCalendar ? (
             /* Skenario 2: Offline di Masjid (Ada Rute + Kalender, Tanpa Stream) */
-            <div className="grid grid-cols-2 gap-2 w-full">
+            <div className="grid grid-cols-2 gap-1.5 w-full">
               <a
                 href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
               >
                 <span className="material-symbols-outlined text-[15px]">directions_car</span>
                 <span>Rute Maps</span>
@@ -219,22 +324,22 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 href={gCalUrl.toString()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
               >
-                <span className="material-symbols-outlined text-[16px]">event_available</span>
+                <span className="material-symbols-outlined text-[15px]">event_available</span>
                 <span>Simpan Kalender</span>
               </a>
             </div>
           ) : hasLive && hasCalendar ? (
             /* Skenario 3: Murni Online Streaming (Ada Live + Kalender, Tanpa Masjid Fisik) */
-            <div className="grid grid-cols-2 gap-2 w-full">
+            <div className="grid grid-cols-2 gap-1.5 w-full">
               <a
                 href={session.stream_url!}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-2 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
               >
-                <span className="material-symbols-outlined text-[16px] text-red-600">play_circle</span>
+                <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                 <span>Tonton Live</span>
               </a>
 
@@ -242,21 +347,21 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 href={gCalUrl.toString()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
               >
-                <span className="material-symbols-outlined text-[16px]">event_available</span>
+                <span className="material-symbols-outlined text-[15px]">event_available</span>
                 <span>Simpan Kalender</span>
               </a>
             </div>
           ) : (
             /* Skenario 4: Sisa tombol tunggal jika yang lain tidak tersedia */
-            <div className="flex flex-col gap-2 w-full">
+            <div className="flex flex-col gap-1.5 w-full">
               {hasRoute && (
                 <a
                   href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
                 >
                   <span className="material-symbols-outlined text-[15px]">directions_car</span>
                   <span>Petunjuk Rute Maps</span>
@@ -267,9 +372,9 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                   href={session.stream_url!}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
                 >
-                  <span className="material-symbols-outlined text-[16px] text-red-600">play_circle</span>
+                  <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                   <span>Tonton Siaran Live</span>
                 </a>
               )}
@@ -278,9 +383,9 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                   href={gCalUrl.toString()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
                 >
-                  <span className="material-symbols-outlined text-[16px]">event_available</span>
+                  <span className="material-symbols-outlined text-[15px]">event_available</span>
                   <span>Simpan ke Google Calendar</span>
                 </a>
               )}
@@ -290,8 +395,26 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
       </div>
     </div>
 
-      {/* Segitiga Penunjuk (Pointer Tip) */}
-      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 bg-surface-container-lowest rotate-45 transform origin-center border-r border-b border-surface-container-high/80 shadow-xs pointer-events-none z-10"></div>
+      {/* Segitiga Penunjuk (Pointer Tip) - Berada tepat di bawah kartu tanpa overlap konten */}
+      <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px pointer-events-none z-10 flex flex-col items-center">
+        <svg
+          width="18"
+          height="9"
+          viewBox="0 0 18 9"
+          className="text-surface-container-lowest fill-current"
+          style={{ filter: 'drop-shadow(0 2px 2px rgba(0,0,0,0.08))' }}
+        >
+          <path d="M0 0 L9 9 L18 0 Z" />
+          <path d="M0 0 L9 9 L18 0" fill="none" stroke="currentColor" className="stroke-surface-container-high/80" strokeWidth="1" />
+        </svg>
+      </div>
+
+      {/* Share Modal Dialog */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        session={session}
+      />
     </div>
   );
 }

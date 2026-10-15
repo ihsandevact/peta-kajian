@@ -34,6 +34,7 @@ export interface StudySession {
   stream_url?: string | null;
   created_by?: string | null;
   contributor_name?: string | null;
+  attendees_count?: number;
   venues?: Venue | null; // Joined data (null untuk kajian online murni)
 }
 

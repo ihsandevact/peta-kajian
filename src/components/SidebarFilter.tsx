@@ -6,6 +6,8 @@ import { calculateDistance } from '@/utils/distance';
 import RegionPickerModal from './RegionPickerModal';
 import type { SelectedRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import { useBookmarks } from '@/utils/bookmarks';
+import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -32,6 +34,9 @@ export default function SidebarFilter({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
   const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
+  const [sharingSession, setSharingSession] = useState<StudySession | null>(null);
+
+  const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -170,6 +175,11 @@ export default function SidebarFilter({
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
           <Pill active={filters.time === 'semua'} label="Semua" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
+          <Pill
+            active={filters.time === 'tersimpan'}
+            label={bookmarks.length > 0 ? `📌 Tersimpan (${bookmarks.length})` : '📌 Tersimpan'}
+            onClick={() => setFilters(p => ({ ...p, time: 'tersimpan' }))}
+          />
           <Pill active={filters.time === 'berlangsung'} label="🔴 Berlangsung" onClick={() => setFilters(p => ({ ...p, time: 'berlangsung' }))} />
           <Pill active={filters.time === 'terdekat'} label="Terdekat" onClick={() => setFilters(p => ({ ...p, time: 'terdekat' }))} />
           <Pill active={filters.time === 'terbaru'} label="Terbaru" onClick={() => setFilters(p => ({ ...p, time: 'terbaru' }))} />
@@ -192,8 +202,18 @@ export default function SidebarFilter({
         {isLoading ? (
           Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
         ) : sessions.length === 0 ? (
-          <div className="p-8 text-center text-outline text-sm">
-            Tidak ada kajian yang sesuai pencarian.
+          <div className="p-8 text-center text-outline text-sm flex flex-col items-center justify-center gap-2">
+            {filters.time === 'tersimpan' ? (
+              <>
+                <span className="material-symbols-outlined text-[36px] text-amber-500/80">bookmark_border</span>
+                <p className="font-semibold text-on-surface">Belum Ada Kajian Tersimpan</p>
+                <p className="text-xs text-on-surface-variant max-w-[240px]">
+                  Tandai kajian favorit dengan ikon simpan untuk menyusun jadwal kajian pribadi Anda.
+                </p>
+              </>
+            ) : (
+              'Tidak ada kajian yang sesuai pencarian.'
+            )}
           </div>
         ) : (
           sessions.slice(0, visibleCount).map((session, index) => {
@@ -256,9 +276,31 @@ export default function SidebarFilter({
                       </span>
                     )}
                   </div>
-                  {distanceLabel && (
-                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0 mt-0.5">{distanceLabel}</span>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                    {distanceLabel && (
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">{distanceLabel}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleBookmark(session.id);
+                      }}
+                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                        isBookmarked(session.id)
+                          ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 shadow-2xs'
+                          : 'text-outline hover:text-on-surface hover:bg-surface-container-high'
+                      }`}
+                      title={isBookmarked(session.id) ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
+                    >
+                      <span
+                        className="material-symbols-outlined text-[15px]"
+                        style={{ fontVariationSettings: isBookmarked(session.id) ? "'FILL' 1" : "'FILL' 0" }}
+                      >
+                        bookmark
+                      </span>
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-1">
                   <h2 className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">{session.title}</h2>
@@ -297,6 +339,18 @@ export default function SidebarFilter({
                         <span className="material-symbols-outlined text-[12px] opacity-60">open_in_new</span>
                       </a>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        shareSessionNative(session, () => setSharingSession(session));
+                      }}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
+                      title="Bagikan Info Kajian"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">share</span>
+                      <span>Bagikan</span>
+                    </button>
                   </div>
                   {session.book_title && session.book_title !== 'null' && (
                     <span className="text-[11px] text-outline truncate max-w-[120px]" title={session.book_title}>
@@ -324,6 +378,15 @@ export default function SidebarFilter({
         onSelectRegion={(r) => setFilters((p) => ({ ...p, region: r }))}
         sessions={allSessions || sessions}
       />
+
+      {/* Modal Bagikan Kajian */}
+      {sharingSession && (
+        <ShareModal
+          isOpen={!!sharingSession}
+          onClose={() => setSharingSession(null)}
+          session={sharingSession}
+        />
+      )}
     </div>
   );
 }
