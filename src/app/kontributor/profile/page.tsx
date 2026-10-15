@@ -9,6 +9,7 @@ import dynamic from 'next/dynamic';
 import { deleteKajian } from '@/app/actions/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { checkIsAdmin } from '@/lib/services/admin';
+import MobileNavDrawer from '@/components/MobileNavDrawer';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -19,6 +20,7 @@ export default function ContributorProfilePage() {
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -167,7 +169,7 @@ export default function ContributorProfilePage() {
   return (
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
       {/* Top Navigation */}
-      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60">
+      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
         <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           <Link
             href="/leaderboard"
@@ -178,15 +180,15 @@ export default function ContributorProfilePage() {
             <span className="sm:hidden text-[11px]">Peringkat</span>
           </Link>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Desktop Actions */}
+          <div className="hidden sm:flex items-center gap-1.5 sm:gap-2 shrink-0">
             {isAdmin && (
               <Link
                 href="/admin"
                 className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/40 hover:bg-amber-200 border border-amber-300 dark:border-amber-800 px-2 sm:px-3 py-1.5 rounded-full transition-colors shadow-2xs"
               >
                 <span className="material-symbols-outlined text-[15px] sm:text-[16px]">admin_panel_settings</span>
-                <span className="hidden sm:inline">Portal Admin</span>
-                <span className="sm:hidden">Admin</span>
+                <span>Portal Admin</span>
               </Link>
             )}
             <Link
@@ -201,12 +203,33 @@ export default function ContributorProfilePage() {
               className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-white bg-primary hover:bg-primary/90 px-3 sm:px-3.5 py-1.5 rounded-full shadow-sm transition-colors whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
-              <span className="hidden sm:inline">Kirim Kajian</span>
-              <span className="sm:hidden">Kirim</span>
+              <span>Kirim Kajian</span>
             </Link>
           </div>
+
+          {/* Mobile Single Hamburger Button */}
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="sm:hidden w-8 h-8 rounded-lg bg-surface-container border border-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95"
+            aria-label="Buka Menu Navigasi"
+          >
+            <span className="material-symbols-outlined text-[20px]">menu</span>
+          </button>
         </div>
       </header>
+
+      {/* Slide-over Mobile Sidebar Drawer */}
+      <MobileNavDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        currentUser={{
+          name: user?.user_metadata?.full_name,
+          email: user?.email,
+          avatarUrl: avatarUrl,
+        }}
+        isAdmin={isAdmin}
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-8 flex flex-col gap-5 sm:gap-6">

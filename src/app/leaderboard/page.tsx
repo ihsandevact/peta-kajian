@@ -4,12 +4,16 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { fetchContributorLeaderboard, type ContributorEntry, type LeaderboardGroup } from '@/lib/services/kajian';
+import { checkIsAdmin } from '@/lib/services/admin';
+import MobileNavDrawer from '@/components/MobileNavDrawer';
 
 export default function LeaderboardPage() {
   const [data, setData] = useState<LeaderboardGroup>({ volunteers: [], channels: [] });
   const [activeTab, setActiveTab] = useState<'channels' | 'volunteers'>('channels');
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
@@ -23,10 +27,12 @@ export default function LeaderboardPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
         setCurrentUser(data.user);
+        checkIsAdmin(data.user).then(setIsAdmin).catch(() => setIsAdmin(false));
       } else {
         supabase.auth.getSession().then(({ data: sess }) => {
           if (sess?.session?.user) {
             setCurrentUser(sess.session.user);
+            checkIsAdmin(sess.session.user).then(setIsAdmin).catch(() => setIsAdmin(false));
           }
         });
       }
@@ -70,7 +76,7 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
       {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60">
+      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
         <div className="max-w-2xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           <Link
             href="/"
@@ -81,7 +87,8 @@ export default function LeaderboardPage() {
             <span className="sm:hidden text-[11px]">Peta</span>
           </Link>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Desktop Right Actions */}
+          <div className="hidden sm:flex items-center gap-1.5 sm:gap-2 shrink-0">
             {currentUser ? (
               <Link
                 href="/kontributor/profile"
@@ -109,12 +116,37 @@ export default function LeaderboardPage() {
               className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-primary hover:text-on-primary hover:bg-primary px-2.5 sm:px-3 py-1.5 rounded-full border border-primary/30 transition-colors whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-[15px] sm:text-[16px]">add_circle</span>
-              <span className="hidden sm:inline">Kirim Info Kajian</span>
-              <span className="sm:hidden">Kirim</span>
+              <span>Kirim Info Kajian</span>
             </Link>
           </div>
+
+          {/* Mobile Single Hamburger Button */}
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="sm:hidden w-8 h-8 rounded-lg bg-surface-container border border-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95"
+            aria-label="Buka Menu Navigasi"
+          >
+            <span className="material-symbols-outlined text-[20px]">menu</span>
+          </button>
         </div>
       </header>
+
+      {/* Slide-over Mobile Sidebar Drawer */}
+      <MobileNavDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        currentUser={
+          currentUser
+            ? {
+                name: currentUserName,
+                email: currentUser.email,
+                avatarUrl: currentUserAvatar,
+              }
+            : null
+        }
+        isAdmin={isAdmin}
+      />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-6 flex flex-col gap-5 sm:gap-6">

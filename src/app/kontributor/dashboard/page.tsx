@@ -17,12 +17,14 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9
 import RecurringRuleSelector from '@/components/RecurringRuleSelector'
 import { RecurringRule } from '@/utils/recurring'
 import { checkIsAdmin } from '@/lib/services/admin'
+import MobileNavDrawer from '@/components/MobileNavDrawer'
 
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [avatarError, setAvatarError] = useState(false)
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // Form Controlled States
@@ -321,13 +323,27 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-surface p-3 sm:p-6 md:p-8 font-geist text-on-surface">
       {/* Top Header */}
       <header className="max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 sm:mb-8">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-on-surface">Dasbor Kontributor</h1>
-          <p className="text-xs sm:text-sm text-on-surface-variant">
-            Ahlan wa sahlan, <span className="font-semibold text-primary">{displayName}</span>
-          </p>
+        <div className="flex items-center justify-between w-full sm:w-auto">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-on-surface">Dasbor Kontributor</h1>
+            <p className="text-xs sm:text-sm text-on-surface-variant">
+              Ahlan wa sahlan, <span className="font-semibold text-primary">{displayName}</span>
+            </p>
+          </div>
+
+          {/* Mobile Single Hamburger Button */}
+          <button
+            type="button"
+            onClick={() => setIsDrawerOpen(true)}
+            className="sm:hidden w-9 h-9 rounded-xl bg-surface-container border border-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95 shrink-0 ml-3"
+            aria-label="Buka Menu Navigasi"
+          >
+            <span className="material-symbols-outlined text-[22px]">menu</span>
+          </button>
         </div>
-        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+
+        {/* Desktop Navigation Pills */}
+        <div className="hidden sm:flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
           {isAdmin && (
             <Link
               href="/admin"
@@ -368,12 +384,24 @@ export default function DashboardPage() {
             <span>Peta</span>
           </Link>
           <form action="/auth/signout" method="post">
-            <button className="px-3 py-1.5 bg-error/10 text-error rounded-full text-xs font-medium hover:bg-error/20 transition-colors">
+            <button className="px-3 py-1.5 bg-error/10 text-error rounded-full text-xs font-medium hover:bg-error/20 transition-colors cursor-pointer">
               Keluar
             </button>
           </form>
         </div>
       </header>
+
+      {/* Slide-over Mobile Sidebar Drawer */}
+      <MobileNavDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        currentUser={{
+          name: displayName,
+          email: user?.email,
+          avatarUrl: avatarUrl,
+        }}
+        isAdmin={isAdmin}
+      />
 
       <main className="max-w-4xl mx-auto flex flex-col gap-6">
         {/* ========================================================================= */}
