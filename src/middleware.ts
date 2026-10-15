@@ -5,6 +5,30 @@ export async function middleware(request: NextRequest) {
   // Update session & get response object + user
   const { supabaseResponse, user } = await updateSession(request)
 
+  // Protect /admin routes (Admin only)
+  const isAdminPath = request.nextUrl.pathname.startsWith('/admin')
+  if (isAdminPath) {
+    if (!user) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/kontributor/login'
+      url.searchParams.set('redirect', '/admin')
+      const redirectResponse = NextResponse.redirect(url)
+      supabaseResponse.cookies.getAll().forEach((cookie) => {
+        redirectResponse.cookies.set(cookie.name, cookie.value, cookie)
+      })
+      return redirectResponse
+    }
+
+    const ADMIN_EMAILS = ['dev.ihsan.act@gmail.com']
+    const isAdminEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
+
+    if (!isAdminEmail) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/kontributor/dashboard'
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Protect /kontributor/dashboard and /kontributor/profile routes
   const isProtectedPath =
     request.nextUrl.pathname.startsWith('/kontributor/dashboard') ||

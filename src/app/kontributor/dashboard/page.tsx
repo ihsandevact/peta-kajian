@@ -15,10 +15,12 @@ const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9
 
 import RecurringRuleSelector from '@/components/RecurringRuleSelector'
 import { RecurringRule } from '@/utils/recurring'
+import { checkIsAdmin } from '@/lib/services/admin'
 
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringRule, setRecurringRule] = useState<RecurringRule>({
@@ -84,6 +86,9 @@ export default function DashboardPage() {
       if (!mounted) return
       if (user) {
         setUser(user)
+        checkIsAdmin(user).then((admin) => {
+          if (mounted) setIsAdmin(admin)
+        })
         setLoading(false)
         return
       }
@@ -93,6 +98,9 @@ export default function DashboardPage() {
       if (!mounted) return
       if (session?.user) {
         setUser(session.user)
+        checkIsAdmin(session.user).then((admin) => {
+          if (mounted) setIsAdmin(admin)
+        })
         setLoading(false)
         return
       }
@@ -107,6 +115,9 @@ export default function DashboardPage() {
       if (!mounted) return
       if (session?.user) {
         setUser(session.user)
+        checkIsAdmin(session.user).then((admin) => {
+          if (mounted) setIsAdmin(admin)
+        })
         setLoading(false)
       }
     })
@@ -124,11 +135,21 @@ export default function DashboardPage() {
     setIsSubmitting(false)
     
     if (res.success) {
-      setMessage({ type: 'success', text: 'Alhamdulillah, kajian berhasil dipublikasikan dan telah ditayangkan di Peta!' })
+      if (res.isPending) {
+        setMessage({
+          type: 'success',
+          text: 'Alhamdulillah, kajian berhasil dikirim dan saat ini masuk antrean kurasi Admin sebelum tayang di peta publik.',
+        })
+      } else {
+        setMessage({
+          type: 'success',
+          text: 'Alhamdulillah, kajian berhasil dipublikasikan dan langsung tayang di Peta!',
+        })
+      }
       formRef.current?.reset()
       setIsRecurring(false)
-      // Hilangkan pesan setelah 5 detik
-      setTimeout(() => setMessage(null), 5000)
+      // Hilangkan pesan setelah 7 detik
+      setTimeout(() => setMessage(null), 7000)
     } else {
       setMessage({ type: 'error', text: res.error || 'Terjadi kesalahan saat memublikasikan.' })
     }
@@ -156,6 +177,15 @@ export default function DashboardPage() {
           <p className="text-sm text-on-surface-variant">Ahlan wa sahlan, <span className="font-semibold text-primary">{displayName}</span></p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          {isAdmin && (
+            <Link 
+              href="/admin" 
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 hover:bg-amber-500/20 rounded-full text-xs font-semibold transition-colors shadow-xs"
+            >
+              <span className="material-symbols-outlined text-[18px] text-amber-600">admin_panel_settings</span>
+              <span>Portal Admin</span>
+            </Link>
+          )}
           <Link 
             href="/kontributor/profile" 
             className="flex items-center gap-2 px-3 py-1.5 bg-surface-container border border-surface-container-high hover:border-primary text-on-surface rounded-full text-xs font-medium transition-all"
@@ -193,7 +223,7 @@ export default function DashboardPage() {
         <div className="bg-surface-container-lowest border border-surface-container-high rounded-2xl p-6 shadow-sm">
           <h2 className="text-lg font-semibold mb-4 text-on-surface">Form Input Kajian Manual</h2>
           <p className="text-sm text-on-surface-variant mb-6">
-            Kajian yang diinput melalui formulir ini akan langsung berstatus <span className="font-mono bg-surface-container px-1 py-0.5 rounded">confirmed</span> dan otomatis tampil di Peta publik.
+            Kajian yang diinput oleh relawan akan dikurasi oleh tim Admin sebelum terbit di peta publik demi menjaga validitas data dan informasi dakwah.
           </p>
 
           {message && (

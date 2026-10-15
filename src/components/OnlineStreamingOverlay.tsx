@@ -28,7 +28,12 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
 
   const isLive = info.isLive;
 
-  const hasPoster = session.poster_url && !imgError;
+  const hasPoster = Boolean(
+    session.poster_url &&
+    session.poster_url.trim() !== '' &&
+    session.poster_url.toLowerCase() !== 'null' &&
+    !imgError
+  );
 
   // Deteksi Platform Siaran
   const streamUrl = session.stream_url || '';

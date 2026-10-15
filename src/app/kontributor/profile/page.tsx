@@ -8,6 +8,7 @@ import type { StudySession } from '@/lib/services/kajian';
 import dynamic from 'next/dynamic';
 import { deleteKajian } from '@/app/actions/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import { checkIsAdmin } from '@/lib/services/admin';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -16,6 +17,7 @@ const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), 
 export default function ContributorProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -80,6 +82,9 @@ export default function ContributorProfilePage() {
         currentUser.user_metadata?.name ||
         currentUser.email?.split('@')[0] ||
         '';
+
+      const adminCheck = await checkIsAdmin(currentUser);
+      if (mounted) setIsAdmin(adminCheck);
 
       setUser(currentUser);
       await fetchUserSessions(currentUser.id, name);
@@ -172,6 +177,15 @@ export default function ContributorProfilePage() {
           </Link>
 
           <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/40 hover:bg-amber-200 border border-amber-300 dark:border-amber-800 px-3 py-1.5 rounded-full transition-colors shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[16px]">admin_panel_settings</span>
+                <span>Portal Admin</span>
+              </Link>
+            )}
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary px-3 py-1.5 rounded-full hover:bg-surface-container transition-colors"
@@ -236,10 +250,17 @@ export default function ContributorProfilePage() {
               <h1 className="text-xl sm:text-2xl font-bold text-on-surface truncate">
                 {displayName}
               </h1>
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                <span className="material-symbols-outlined text-[12px]">verified_user</span>
-                Relawan Terverifikasi
-              </span>
+              {isAdmin ? (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300">
+                  <span className="material-symbols-outlined text-[13px] text-amber-700">shield_person</span>
+                  Administrator
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <span className="material-symbols-outlined text-[12px]">verified_user</span>
+                  Relawan Terverifikasi
+                </span>
+              )}
             </div>
 
             <p className="text-xs sm:text-sm text-on-surface-variant break-all mb-1">
@@ -384,7 +405,17 @@ export default function ContributorProfilePage() {
                           </span>
                         )}
 
-                        {isStatusCanceled ? (
+                        {s.status === 'pending' ? (
+                          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            Menunggu Review Admin
+                          </span>
+                        ) : s.status === 'rejected' ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-50 border border-rose-300 px-2 py-0.5 rounded-md">
+                            <span className="material-symbols-outlined text-[13px] text-rose-600">cancel</span>
+                            Ditolak Admin
+                          </span>
+                        ) : isStatusCanceled ? (
                           <span className="text-[11px] font-bold text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded-md">
                             Dibatalkan
                           </span>
@@ -413,13 +444,26 @@ export default function ContributorProfilePage() {
                           <span className="material-symbols-outlined text-[15px] text-outline">schedule</span>
                           <span>{info.dateLabel}</span>
                         </span>
-                        {s.book_title && (
+                        {s.book_title && s.book_title.trim() !== '' && s.book_title.toLowerCase() !== 'null' && (
                           <span className="flex items-center gap-1 text-outline">
                             <span className="material-symbols-outlined text-[15px]">menu_book</span>
                             <span>{s.book_title}</span>
                           </span>
                         )}
                       </div>
+
+                      {s.status === 'rejected' && s.rejection_reason && (
+                        <div className="mt-2.5 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-800 dark:text-rose-300 text-xs flex items-start gap-2">
+                          <span className="material-symbols-outlined text-[16px] text-rose-600 shrink-0 mt-0.5">info</span>
+                          <div>
+                            <span className="font-semibold">Catatan Review Admin: </span>
+                            <span>{s.rejection_reason}</span>
+                            <p className="text-[11px] text-rose-700/80 dark:text-rose-400/80 mt-0.5">
+                              Silakan klik tombol <b>Edit</b> untuk merevisi data kajian Anda.
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Buttons (Edit & Delete) */}

@@ -34,7 +34,7 @@ export default function EditSessionModal({
   const [speakerName, setSpeakerName] = useState('');
   const [bookTitle, setBookTitle] = useState('');
   const [audience, setAudience] = useState<'umum' | 'ikhwan' | 'akhwat'>('umum');
-  const [status, setStatus] = useState<'confirmed' | 'canceled' | 'postponed'>('confirmed');
+  const [status, setStatus] = useState<'confirmed' | 'pending' | 'rejected' | 'canceled' | 'postponed'>('confirmed');
   const [startDatetime, setStartDatetime] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
@@ -67,11 +67,11 @@ export default function EditSessionModal({
 
     setTitle(session.title || '');
     setSpeakerName(session.speaker_name || '');
-    setBookTitle(session.book_title || '');
+    setBookTitle(session.book_title && session.book_title.toLowerCase() !== 'null' ? session.book_title : '');
     setAudience(session.audience_type || 'umum');
     setStatus(session.status || 'confirmed');
-    setPosterUrl(session.poster_url || '');
-    setStreamUrl(session.stream_url || '');
+    setPosterUrl(session.poster_url && session.poster_url.toLowerCase() !== 'null' ? session.poster_url : '');
+    setStreamUrl(session.stream_url && session.stream_url.toLowerCase() !== 'null' ? session.stream_url : '');
 
     // Determine Mode
     if (session.is_online && session.venues) {

@@ -30,7 +30,12 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
     ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
     : '';
 
-  const hasPoster = session.poster_url && !imgError;
+  const hasPoster = Boolean(
+    session.poster_url &&
+    session.poster_url.trim() !== '' &&
+    session.poster_url.toLowerCase() !== 'null' &&
+    !imgError
+  );
 
   // --- GOOGLE CALENDAR GENERATOR ---
   const gCalUrl = new URL('https://calendar.google.com/calendar/render');

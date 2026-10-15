@@ -2,6 +2,16 @@
 
 import { createClient } from '@/utils/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { ADMIN_EMAILS } from '@/lib/services/admin'
+
+function cleanNullableString(val: unknown): string | null {
+  if (typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+    return null;
+  }
+  return trimmed;
+}
 
 export async function submitKajian(formData: FormData) {
   const supabase = await createClient()
@@ -16,11 +26,11 @@ export async function submitKajian(formData: FormData) {
     // 2. Ekstrak Data Formulir
     const title = (formData.get('title') as string || '').trim()
     const speaker_name = (formData.get('speaker_name') as string || '').trim()
-    const book_title = (formData.get('book_title') as string || '').trim() || null
+    const book_title = cleanNullableString(formData.get('book_title'))
     const start_datetime_raw = formData.get('start_datetime') as string
     const start_datetime = start_datetime_raw ? start_datetime_raw : null
     const venue_name = (formData.get('venue_name') as string || '').trim()
-    const poster_url = (formData.get('poster_url') as string || '').trim() || null
+    const poster_url = cleanNullableString(formData.get('poster_url'))
     const audience_type = formData.get('audience') as string
     const is_recurring = formData.get('is_recurring') === 'on' || formData.get('is_recurring') === 'true'
     const recurring_pattern = is_recurring ? (formData.get('recurring_pattern') as string || null) : null
@@ -41,7 +51,7 @@ export async function submitKajian(formData: FormData) {
       modeRaw === 'online' || modeRaw === 'hybrid' ? modeRaw : 'offline'
     const needsVenue = mode !== 'online'
     const is_online = mode !== 'offline'
-    const stream_url = is_online ? ((formData.get('stream_url') as string || '').trim() || null) : null
+    const stream_url = is_online ? cleanNullableString(formData.get('stream_url')) : null
 
     if (!title || !speaker_name) {
       return { success: false, error: 'Harap isi semua kolom yang wajib.' }
@@ -125,7 +135,27 @@ export async function submitKajian(formData: FormData) {
       }
     }
 
-    // 5. Simpan Sesi Kajian
+    // 5. Cek apakah pengguna adalah Admin atau Trusted Contributor
+    const isAdminByEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
+    let isAutoPublish = !!isAdminByEmail
+
+    if (!isAutoPublish) {
+      try {
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role, is_trusted')
+          .eq('user_id', user.id)
+          .maybeSingle()
+
+        if (roleData?.role === 'admin' || roleData?.is_trusted === true) {
+          isAutoPublish = true
+        }
+      } catch {
+        // Fallback
+      }
+    }
+
+    const initialStatus = isAutoPublish ? 'confirmed' : 'pending'
     const contributorName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Relawan Dakwah'
 
     const { error: sessionError } = await supabase
@@ -144,7 +174,7 @@ export async function submitKajian(formData: FormData) {
         poster_url,
         is_online,
         stream_url,
-        status: 'confirmed',
+        status: initialStatus,
         created_by: user.id,
         contributor_name: contributorName
       })
@@ -154,11 +184,12 @@ export async function submitKajian(formData: FormData) {
       return { success: false, error: 'Gagal menyimpan data kajian ke database.' }
     }
 
-    // 6. Segarkan Cache Halaman Utama dan Profil
+    // 6. Segarkan Cache Halaman Utama, Admin, dan Profil
     revalidatePath('/')
+    revalidatePath('/admin')
     revalidatePath('/kontributor/profile')
 
-    return { success: true }
+    return { success: true, isPending: !isAutoPublish }
   } catch (err: any) {
     console.error('Submit Kajian Error:', err)
     return { success: false, error: 'Terjadi kesalahan sistem internal.' }
@@ -198,15 +229,17 @@ export async function updateKajian(formData: FormData) {
     // 3. Ekstrak Data Formulir
     const title = (formData.get('title') as string || '').trim()
     const speaker_name = (formData.get('speaker_name') as string || '').trim()
-    const book_title = (formData.get('book_title') as string || '').trim() || null
+    const book_title = cleanNullableString(formData.get('book_title'))
     const start_datetime_raw = formData.get('start_datetime') as string
     const start_datetime = start_datetime_raw ? start_datetime_raw : null
     const venue_name = (formData.get('venue_name') as string || '').trim()
-    const poster_url = (formData.get('poster_url') as string || '').trim() || null
+    const poster_url = cleanNullableString(formData.get('poster_url'))
     const audience_type = formData.get('audience') as string
     const is_recurring = formData.get('is_recurring') === 'on' || formData.get('is_recurring') === 'true'
     const recurring_pattern = is_recurring ? (formData.get('recurring_pattern') as string || null) : null
-    const status = (formData.get('status') as string || 'confirmed') as 'confirmed' | 'canceled' | 'postponed'
+    const rawStatus = (formData.get('status') as string || 'confirmed') as 'confirmed' | 'pending' | 'rejected' | 'canceled' | 'postponed'
+    // Jika kajian sebelumnya ditolak dan diedit ulang oleh relawan, kembalikan ke status 'pending' untuk direview kembali oleh admin
+    const status = rawStatus === 'rejected' ? 'pending' : rawStatus
 
     let recurring_rule: any = null
     const recurring_rule_raw = formData.get('recurring_rule') as string
@@ -224,7 +257,7 @@ export async function updateKajian(formData: FormData) {
       modeRaw === 'online' || modeRaw === 'hybrid' ? modeRaw : 'offline'
     const needsVenue = mode !== 'online'
     const is_online = mode !== 'offline'
-    const stream_url = is_online ? ((formData.get('stream_url') as string || '').trim() || null) : null
+    const stream_url = is_online ? cleanNullableString(formData.get('stream_url')) : null
 
     if (!title || !speaker_name) {
       return { success: false, error: 'Harap isi semua kolom yang wajib.' }

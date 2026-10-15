@@ -26,7 +26,10 @@ export interface StudySession {
   recurring_rule?: any;
   start_datetime?: string;
   poster_url?: string;
-  status: 'confirmed' | 'canceled' | 'postponed';
+  status: 'confirmed' | 'pending' | 'rejected' | 'canceled' | 'postponed';
+  rejection_reason?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
   is_online?: boolean;
   stream_url?: string | null;
   created_by?: string | null;
