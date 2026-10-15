@@ -13,11 +13,20 @@ setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs')
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'
 
+import RecurringRuleSelector from '@/components/RecurringRuleSelector'
+import { RecurringRule } from '@/utils/recurring'
+
 export default function DashboardPage() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isRecurring, setIsRecurring] = useState(false)
+  const [recurringRule, setRecurringRule] = useState<RecurringRule>({
+    dayOfWeek: 0,
+    time: '05:00',
+    timeCategory: 'subuh',
+    weeks: [1, 2, 3, 4, 5],
+  })
   const [mode, setMode] = useState<'offline' | 'online' | 'hybrid'>('offline')
   const needsVenue = mode !== 'online'
   const needsStream = mode !== 'offline'
@@ -362,26 +371,12 @@ export default function DashboardPage() {
               </label>
             </div>
 
-            <div className="flex flex-col gap-3 mt-2 p-4 rounded-xl bg-surface-container-low border border-surface-container-high">
-              <label className="flex items-center gap-2 cursor-pointer w-max">
-                <input 
-                  type="checkbox" 
-                  name="is_recurring" 
-                  checked={isRecurring}
-                  onChange={(e) => setIsRecurring(e.target.checked)}
-                  className="w-4 h-4 rounded text-primary" 
-                />
-                <span className="text-sm font-semibold text-on-surface">Tandai sebagai Kajian Rutin</span>
-              </label>
-              
-              {isRecurring && (
-                <label className="flex flex-col gap-1.5 mt-1 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <span className="text-sm font-medium text-on-surface">Pola Waktu Rutin</span>
-                  <input type="text" name="recurring_pattern" className="w-full bg-surface border border-surface-container-highest rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary" placeholder="Contoh: Setiap Rabu pekan ke-1 dan ke-2 di awal bulan" />
-                  <span className="text-[11px] text-outline">Tuliskan pola unik rutinitasnya agar jamaah tahu kapan tepatnya kajian ini diadakan.</span>
-                </label>
-              )}
-            </div>
+            <RecurringRuleSelector
+              isRecurring={isRecurring}
+              setIsRecurring={setIsRecurring}
+              rule={recurringRule}
+              setRule={setRecurringRule}
+            />
 
             <div className="mt-6 flex justify-end">
               <button type="submit" disabled={isSubmitting} className="px-6 py-2.5 bg-primary text-on-primary font-medium rounded-full hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2">

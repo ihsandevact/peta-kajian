@@ -23,11 +23,14 @@ export interface StudySession {
   audience_type: 'umum' | 'ikhwan' | 'akhwat';
   is_recurring: boolean;
   recurring_pattern?: string;
+  recurring_rule?: any;
   start_datetime?: string;
   poster_url?: string;
   status: 'confirmed' | 'canceled' | 'postponed';
   is_online?: boolean;
   stream_url?: string | null;
+  created_by?: string | null;
+  contributor_name?: string | null;
   venues?: Venue | null; // Joined data (null untuk kajian online murni)
 }
 

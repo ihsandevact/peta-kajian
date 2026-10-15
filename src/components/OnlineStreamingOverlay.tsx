@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import type { StudySession } from '@/lib/services/kajian';
 
+import { getEffectiveSessionInfo } from '@/utils/recurring';
+
 interface OnlineStreamingOverlayProps {
   session: StudySession;
   onClose: () => void;
@@ -11,8 +13,10 @@ interface OnlineStreamingOverlayProps {
 export default function OnlineStreamingOverlay({ session, onClose }: OnlineStreamingOverlayProps) {
   const [imgError, setImgError] = useState(false);
 
-  const hasDate = !!session.start_datetime;
-  const dateObj = hasDate ? new Date(session.start_datetime!) : null;
+  const now = new Date();
+  const info = getEffectiveSessionInfo(session, now);
+  const dateObj = info.effectiveDate;
+  const hasDate = !!dateObj;
 
   const dateStr = dateObj
     ? dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -22,11 +26,7 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
     ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB'
     : '';
 
-  const now = new Date();
-  const isLive =
-    hasDate &&
-    dateObj! <= now &&
-    now.getTime() <= dateObj!.getTime() + 2 * 60 * 60 * 1000;
+  const isLive = info.isLive;
 
   const hasPoster = session.poster_url && !imgError;
 

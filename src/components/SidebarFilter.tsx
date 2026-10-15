@@ -5,6 +5,7 @@ import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
 import RegionPickerModal from './RegionPickerModal';
 import type { SelectedRegion } from '@/utils/regions';
+import { getEffectiveSessionInfo } from '@/utils/recurring';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -196,14 +197,10 @@ export default function SidebarFilter({
           </div>
         ) : (
           sessions.slice(0, visibleCount).map((session, index) => {
-            const hasDate = !!session.start_datetime;
-            const dateObj = hasDate ? new Date(session.start_datetime!) : null;
-            const dateStr = dateObj ? dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
-            const timeStr = dateObj ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '';
-            
             const now = new Date();
-            const isLive = hasDate && dateObj! <= now && now.getTime() <= dateObj!.getTime() + 2 * 60 * 60 * 1000;
-            const isPast = hasDate && now.getTime() > dateObj!.getTime() + 2 * 60 * 60 * 1000;
+            const info = getEffectiveSessionInfo(session, now);
+            const isLive = info.isLive;
+            const isPast = info.isPast;
             const isRutin = session.is_recurring;
             
             const isAkhwatOnly = session.audience_type === 'akhwat';
@@ -231,7 +228,7 @@ export default function SidebarFilter({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className={`text-[12px] font-bold ${isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
-                      {hasDate ? `${dateStr} • ${timeStr} WIB` : (session.recurring_pattern || 'Kajian Rutin')}
+                      {info.dateLabel}
                     </span>
                     
                     {isLive ? (
@@ -240,7 +237,10 @@ export default function SidebarFilter({
                         Sedang Berlangsung
                       </span>
                     ) : isRutin ? (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] uppercase tracking-wide border border-[#bae6fd]">Rutin</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] uppercase tracking-wide border border-[#bae6fd]">
+                        <span className="material-symbols-outlined text-[12px]">event_repeat</span>
+                        Rutin
+                      </span>
                     ) : isPast ? (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide">Selesai</span>
                     ) : (

@@ -14,16 +14,26 @@ export async function submitKajian(formData: FormData) {
 
   try {
     // 2. Ekstrak Data Formulir
-    const title = formData.get('title') as string
-    const speaker_name = formData.get('speaker_name') as string
-    const book_title = formData.get('book_title') as string || null
+    const title = (formData.get('title') as string || '').trim()
+    const speaker_name = (formData.get('speaker_name') as string || '').trim()
+    const book_title = (formData.get('book_title') as string || '').trim() || null
     const start_datetime_raw = formData.get('start_datetime') as string
     const start_datetime = start_datetime_raw ? start_datetime_raw : null
     const venue_name = (formData.get('venue_name') as string || '').trim()
-    const poster_url = formData.get('poster_url') as string || null
+    const poster_url = (formData.get('poster_url') as string || '').trim() || null
     const audience_type = formData.get('audience') as string
-    const is_recurring = formData.get('is_recurring') === 'on'
+    const is_recurring = formData.get('is_recurring') === 'on' || formData.get('is_recurring') === 'true'
     const recurring_pattern = is_recurring ? (formData.get('recurring_pattern') as string || null) : null
+
+    let recurring_rule: any = null
+    const recurring_rule_raw = formData.get('recurring_rule') as string
+    if (is_recurring && recurring_rule_raw) {
+      try {
+        recurring_rule = JSON.parse(recurring_rule_raw)
+      } catch {
+        recurring_rule = null
+      }
+    }
 
     // Mode kajian: offline | online | hybrid
     const modeRaw = formData.get('mode') as string
@@ -130,6 +140,7 @@ export async function submitKajian(formData: FormData) {
         start_datetime,
         is_recurring,
         recurring_pattern,
+        recurring_rule,
         poster_url,
         is_online,
         stream_url,
@@ -143,12 +154,214 @@ export async function submitKajian(formData: FormData) {
       return { success: false, error: 'Gagal menyimpan data kajian ke database.' }
     }
 
-    // 6. Segarkan Cache Halaman Utama agar kajian langsung muncul di Peta!
+    // 6. Segarkan Cache Halaman Utama dan Profil
     revalidatePath('/')
+    revalidatePath('/kontributor/profile')
 
     return { success: true }
   } catch (err: any) {
     console.error('Submit Kajian Error:', err)
     return { success: false, error: 'Terjadi kesalahan sistem internal.' }
+  }
+}
+
+export async function updateKajian(formData: FormData) {
+  const supabase = await createClient()
+
+  // 1. Verifikasi Autentikasi
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Anda harus login untuk mengedit kajian.' }
+  }
+
+  const sessionId = formData.get('session_id') as string
+  if (!sessionId) {
+    return { success: false, error: 'ID kajian tidak ditemukan.' }
+  }
+
+  try {
+    // 2. Verifikasi Kepemilikan (hanya pembuat yang boleh edit)
+    const { data: existingSession, error: checkError } = await supabase
+      .from('study_sessions')
+      .select('id, created_by, venue_id')
+      .eq('id', sessionId)
+      .single()
+
+    if (checkError || !existingSession) {
+      return { success: false, error: 'Data kajian tidak ditemukan.' }
+    }
+
+    if (existingSession.created_by && existingSession.created_by !== user.id) {
+      return { success: false, error: 'Anda tidak memiliki izin untuk mengedit kajian ini.' }
+    }
+
+    // 3. Ekstrak Data Formulir
+    const title = (formData.get('title') as string || '').trim()
+    const speaker_name = (formData.get('speaker_name') as string || '').trim()
+    const book_title = (formData.get('book_title') as string || '').trim() || null
+    const start_datetime_raw = formData.get('start_datetime') as string
+    const start_datetime = start_datetime_raw ? start_datetime_raw : null
+    const venue_name = (formData.get('venue_name') as string || '').trim()
+    const poster_url = (formData.get('poster_url') as string || '').trim() || null
+    const audience_type = formData.get('audience') as string
+    const is_recurring = formData.get('is_recurring') === 'on' || formData.get('is_recurring') === 'true'
+    const recurring_pattern = is_recurring ? (formData.get('recurring_pattern') as string || null) : null
+    const status = (formData.get('status') as string || 'confirmed') as 'confirmed' | 'canceled' | 'postponed'
+
+    let recurring_rule: any = null
+    const recurring_rule_raw = formData.get('recurring_rule') as string
+    if (is_recurring && recurring_rule_raw) {
+      try {
+        recurring_rule = JSON.parse(recurring_rule_raw)
+      } catch {
+        recurring_rule = null
+      }
+    }
+
+    // Mode kajian: offline | online | hybrid
+    const modeRaw = formData.get('mode') as string
+    const mode: 'offline' | 'online' | 'hybrid' =
+      modeRaw === 'online' || modeRaw === 'hybrid' ? modeRaw : 'offline'
+    const needsVenue = mode !== 'online'
+    const is_online = mode !== 'offline'
+    const stream_url = is_online ? ((formData.get('stream_url') as string || '').trim() || null) : null
+
+    if (!title || !speaker_name) {
+      return { success: false, error: 'Harap isi semua kolom yang wajib.' }
+    }
+
+    if (needsVenue && !venue_name) {
+      return { success: false, error: 'Nama masjid / lokasi wajib diisi untuk kajian offline atau hybrid.' }
+    }
+
+    if (is_online) {
+      if (!stream_url) {
+        return { success: false, error: 'Link live streaming wajib diisi untuk kajian online atau hybrid.' }
+      }
+      try {
+        const u = new URL(stream_url)
+        if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error()
+      } catch {
+        return { success: false, error: 'Link live streaming tidak valid (harus diawali https://).' }
+      }
+    }
+    
+    if (!is_recurring && !start_datetime) {
+      return { success: false, error: 'Waktu pelaksanaan wajib diisi untuk kajian non-rutin.' }
+    }
+
+    // 4. Venue handling
+    let venueId: string | null = null
+
+    if (needsVenue) {
+      const latStr = formData.get('lat') as string
+      const lngStr = formData.get('lng') as string
+      
+      const lat = parseFloat(latStr)
+      const lng = parseFloat(lngStr)
+
+      if (!isNaN(lat) && !isNaN(lng)) {
+        if (existingSession.venue_id) {
+          // Update existing venue
+          await supabase
+            .from('venues')
+            .update({
+              name: venue_name,
+              address: venue_name,
+              location: `POINT(${lng} ${lat})`
+            })
+            .eq('id', existingSession.venue_id)
+          venueId = existingSession.venue_id
+        } else {
+          // Create new venue
+          venueId = crypto.randomUUID()
+          await supabase
+            .from('venues')
+            .insert({
+              id: venueId,
+              name: venue_name,
+              address: venue_name,
+              location: `POINT(${lng} ${lat})`,
+              facilities: {}
+            })
+        }
+      } else {
+        venueId = existingSession.venue_id
+      }
+    }
+
+    // 5. Update study session record
+    const { error: updateError } = await supabase
+      .from('study_sessions')
+      .update({
+        venue_id: venueId,
+        title,
+        speaker_name,
+        book_title,
+        audience_type,
+        start_datetime,
+        is_recurring,
+        recurring_pattern,
+        recurring_rule,
+        poster_url,
+        is_online,
+        stream_url,
+        status,
+      })
+      .eq('id', sessionId)
+
+    if (updateError) {
+      console.error('Update Kajian Error:', updateError)
+      return { success: false, error: 'Gagal memperbarui data kajian di database.' }
+    }
+
+    revalidatePath('/')
+    revalidatePath('/kontributor/profile')
+    return { success: true }
+  } catch (err: any) {
+    console.error('Update Kajian Exception:', err)
+    return { success: false, error: 'Terjadi kesalahan sistem saat memperbarui kajian.' }
+  }
+}
+
+export async function deleteKajian(sessionId: string) {
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'Anda harus login untuk menghapus kajian.' }
+  }
+
+  try {
+    const { data: session, error: checkError } = await supabase
+      .from('study_sessions')
+      .select('id, created_by')
+      .eq('id', sessionId)
+      .single()
+
+    if (checkError || !session) {
+      return { success: false, error: 'Kajian tidak ditemukan.' }
+    }
+
+    if (session.created_by && session.created_by !== user.id) {
+      return { success: false, error: 'Anda tidak memiliki hak untuk menghapus kajian ini.' }
+    }
+
+    const { error: deleteError } = await supabase
+      .from('study_sessions')
+      .delete()
+      .eq('id', sessionId)
+
+    if (deleteError) {
+      console.error('Delete Kajian Error:', deleteError)
+      return { success: false, error: 'Gagal menghapus kajian dari database.' }
+    }
+
+    revalidatePath('/')
+    revalidatePath('/kontributor/profile')
+    return { success: true }
+  } catch (err: any) {
+    console.error('Delete Kajian Exception:', err)
+    return { success: false, error: 'Terjadi kesalahan sistem saat menghapus kajian.' }
   }
 }

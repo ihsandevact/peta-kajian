@@ -1,10 +1,17 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import type { StudySession } from '@/lib/services/kajian';
+import dynamic from 'next/dynamic';
+import { deleteKajian } from '@/app/actions/kajian';
+import { getEffectiveSessionInfo } from '@/utils/recurring';
+
+const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
+  ssr: false,
+});
 
 export default function ContributorProfilePage() {
   const router = useRouter();
@@ -12,12 +19,44 @@ export default function ContributorProfilePage() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Edit & Delete states
+  const [editingSession, setEditingSession] = useState<StudySession | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const fetchUserSessions = useCallback(async (userId: string, contributorName?: string) => {
+    const supabase = createClient();
+    try {
+      let query = supabase
+        .from('study_sessions')
+        .select(`
+          *,
+          venues (*)
+        `);
+
+      if (contributorName) {
+        query = query.or(`created_by.eq.${userId},contributor_name.eq.${contributorName}`);
+      } else {
+        query = query.eq('created_by', userId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setSessions(data as StudySession[]);
+      } else if (error) {
+        console.error('Error fetching contributor sessions:', error);
+      }
+    } catch (e) {
+      console.error('Error fetching contributor sessions:', e);
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     const supabase = createClient();
 
     async function loadProfile() {
-      // 1. Dapatkan user aktif
       let currentUser: any = null;
       const { data: userData } = await supabase.auth.getUser();
       if (userData?.user) {
@@ -36,27 +75,15 @@ export default function ContributorProfilePage() {
         return;
       }
 
+      const name =
+        currentUser.user_metadata?.full_name ||
+        currentUser.user_metadata?.name ||
+        currentUser.email?.split('@')[0] ||
+        '';
+
       setUser(currentUser);
-
-      // 2. Ambil riwayat kajian yang diinput oleh user ini
-      try {
-        const { data: userSessions, error } = await supabase
-          .from('study_sessions')
-          .select(`
-            *,
-            venues (*)
-          `)
-          .eq('created_by', currentUser.id)
-          .order('created_at', { ascending: false });
-
-        if (!error && userSessions) {
-          setSessions(userSessions as StudySession[]);
-        }
-      } catch (e) {
-        console.error('Error fetching contributor sessions:', e);
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      await fetchUserSessions(currentUser.id, name);
+      if (mounted) setLoading(false);
     }
 
     loadProfile();
@@ -74,7 +101,32 @@ export default function ContributorProfilePage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [router, loading]);
+  }, [router, loading, fetchUserSessions]);
+
+  const handleDelete = async (sessionId: string, title: string) => {
+    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus kajian "${title}"?`);
+    if (!confirmDelete) return;
+
+    setDeletingId(sessionId);
+    try {
+      const res = await deleteKajian(sessionId);
+      if (res.success) {
+        setToastMessage(`Kajian "${title}" berhasil dihapus.`);
+        if (user) await fetchUserSessions(user.id, displayName);
+      } else {
+        alert(res.error || 'Gagal menghapus kajian.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Terjadi kesalahan saat menghapus kajian.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleEditSuccess = async () => {
+    setToastMessage('Data kajian berhasil diperbarui!');
+    if (user) await fetchUserSessions(user.id, displayName);
+  };
 
   if (loading) {
     return (
@@ -140,9 +192,24 @@ export default function ContributorProfilePage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 sm:py-8 flex flex-col gap-6">
+        {/* Toast Notifikasi */}
+        {toastMessage && (
+          <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px]">check_circle</span>
+              <span>{toastMessage}</span>
+            </div>
+            <button
+              onClick={() => setToastMessage(null)}
+              className="text-emerald-800 dark:text-emerald-300 hover:opacity-75"
+            >
+              <span className="material-symbols-outlined text-[16px]">close</span>
+            </button>
+          </div>
+        )}
+
         {/* User Profile Card */}
         <div className="bg-surface-container-lowest border border-surface-container-high/70 rounded-3xl p-6 sm:p-8 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-5 sm:gap-6 text-center sm:text-left relative overflow-hidden">
-          {/* Subtle Accent Glow */}
           <div className="absolute top-0 right-0 w-48 h-48 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
           {/* Avatar */}
@@ -175,9 +242,16 @@ export default function ContributorProfilePage() {
               </span>
             </div>
 
-            <p className="text-xs sm:text-sm text-on-surface-variant break-all mb-3">
+            <p className="text-xs sm:text-sm text-on-surface-variant break-all mb-1">
               {email}
             </p>
+
+            <div className="flex items-center justify-center sm:justify-start gap-1.5 text-[11px] text-outline font-mono mb-3 flex-wrap">
+              <span>User ID:</span>
+              <span className="bg-surface-container px-2 py-0.5 rounded font-medium text-on-surface select-all cursor-pointer border border-surface-container-high" title="User ID akun aktif Anda">
+                {user.id}
+              </span>
+            </div>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-xs text-outline">
               {joinedDate && (
@@ -234,37 +308,6 @@ export default function ContributorProfilePage() {
           </div>
         </div>
 
-        {/* Quick Action Shortcuts */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Link
-            href="/kontributor/dashboard"
-            className="flex items-center gap-3.5 p-4 rounded-2xl bg-primary text-white shadow-sm hover:bg-primary/95 transition-all active:scale-[0.98]"
-          >
-            <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[22px]">add_circle</span>
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold truncate">Kirim Info Kajian Baru</h3>
-              <p className="text-xs text-white/80 truncate">Input jadwal kajian yang akan tayang di peta</p>
-            </div>
-            <span className="material-symbols-outlined text-[18px] ml-auto shrink-0 opacity-80">arrow_forward</span>
-          </Link>
-
-          <Link
-            href="/leaderboard"
-            className="flex items-center gap-3.5 p-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/70 text-on-surface shadow-sm hover:border-amber-400 hover:bg-amber-50/30 transition-all active:scale-[0.98]"
-          >
-            <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-600 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>trophy</span>
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-bold truncate">Peringkat Kontributor</h3>
-              <p className="text-xs text-on-surface-variant truncate">Lihat posisi antum di papan amal kebaikan</p>
-            </div>
-            <span className="material-symbols-outlined text-[18px] ml-auto shrink-0 text-outline">arrow_forward</span>
-          </Link>
-        </div>
-
         {/* List of Submitted Kajian */}
         <div className="flex flex-col gap-3.5">
           <div className="flex items-center justify-between">
@@ -272,9 +315,19 @@ export default function ContributorProfilePage() {
               <span className="material-symbols-outlined text-primary text-[20px]">history_edu</span>
               Riwayat Kajian yang Saya Kirim
             </h2>
-            <span className="text-xs text-outline font-medium">
-              {sessions.length} jadwal
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => fetchUserSessions(user.id, displayName)}
+                className="p-1 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface transition-colors flex items-center justify-center"
+                title="Segarkan Riwayat"
+              >
+                <span className="material-symbols-outlined text-[18px]">refresh</span>
+              </button>
+              <span className="text-xs text-outline font-medium">
+                {sessions.length} jadwal
+              </span>
+            </div>
           </div>
 
           {sessions.length === 0 ? (
@@ -300,35 +353,51 @@ export default function ContributorProfilePage() {
             <div className="divide-y divide-surface-container-high/60 border border-surface-container-high/60 rounded-2xl overflow-hidden bg-surface-container-lowest shadow-sm">
               {sessions.map((s) => {
                 const venueName = s.venues?.name || (s.is_online ? 'Kajian Online / Live Streaming' : 'Lokasi Terdaftar');
-                const venueAddress = s.venues?.address;
-                const dateDisplay = s.start_datetime
-                  ? new Date(s.start_datetime).toLocaleDateString('id-ID', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    }) + ' WIB'
-                  : s.recurring_pattern || 'Jadwal Rutin';
+                const info = getEffectiveSessionInfo(s);
+
+                const isStatusCanceled = s.status === 'canceled';
+                const isStatusPostponed = s.status === 'postponed';
 
                 return (
-                  <div key={s.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-surface-container-low/40 transition-colors">
+                  <div key={s.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-surface-container-low/40 transition-colors">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-xs font-bold text-primary px-2 py-0.5 rounded-md bg-primary/10">
                           {s.speaker_name}
                         </span>
+
+                        {s.is_recurring ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-800 bg-sky-100 border border-sky-300 px-2 py-0.5 rounded-md">
+                            <span className="material-symbols-outlined text-[13px]">event_repeat</span>
+                            Rutin Pekanan
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-medium text-slate-700 bg-slate-100 border border-slate-300 px-2 py-0.5 rounded-md">
+                            Tematik
+                          </span>
+                        )}
+
                         {s.is_online && (
                           <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
                             Online
                           </span>
                         )}
-                        <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                          Tayang di Peta
-                        </span>
+
+                        {isStatusCanceled ? (
+                          <span className="text-[11px] font-bold text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded-md">
+                            Dibatalkan
+                          </span>
+                        ) : isStatusPostponed ? (
+                          <span className="text-[11px] font-bold text-amber-700 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                            Ditunda
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                            Tayang di Peta
+                          </span>
+                        )}
                       </div>
 
                       <h3 className="text-sm sm:text-base font-bold text-on-surface line-clamp-1">
@@ -342,22 +411,42 @@ export default function ContributorProfilePage() {
                         </span>
                         <span className="flex items-center gap-1">
                           <span className="material-symbols-outlined text-[15px] text-outline">schedule</span>
-                          <span>{dateDisplay}</span>
+                          <span>{info.dateLabel}</span>
                         </span>
+                        {s.book_title && (
+                          <span className="flex items-center gap-1 text-outline">
+                            <span className="material-symbols-outlined text-[15px]">menu_book</span>
+                            <span>{s.book_title}</span>
+                          </span>
+                        )}
                       </div>
                     </div>
 
-                    {s.is_online && s.stream_url && (
-                      <a
-                        href={s.stream_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors shrink-0"
+                    {/* Action Buttons (Edit & Delete) */}
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      <button
+                        type="button"
+                        onClick={() => setEditingSession(s)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all active:scale-95 shadow-2xs"
                       >
-                        <span className="material-symbols-outlined text-[15px]">open_in_new</span>
-                        Tautan Streaming
-                      </a>
-                    )}
+                        <span className="material-symbols-outlined text-[16px]">edit</span>
+                        <span>Edit</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(s.id, s.title)}
+                        disabled={deletingId === s.id}
+                        className="inline-flex items-center justify-center p-1.5 rounded-xl text-xs font-semibold text-error bg-error/10 hover:bg-error/20 border border-error/20 transition-all active:scale-95 disabled:opacity-50"
+                        title="Hapus Kajian"
+                      >
+                        {deletingId === s.id ? (
+                          <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                        ) : (
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -365,6 +454,14 @@ export default function ContributorProfilePage() {
           )}
         </div>
       </main>
+
+      {/* Edit Session Modal */}
+      <EditSessionModal
+        session={editingSession}
+        isOpen={!!editingSession}
+        onClose={() => setEditingSession(null)}
+        onSuccess={handleEditSuccess}
+      />
     </div>
   );
 }

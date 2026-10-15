@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 
+import { getEffectiveSessionInfo } from '@/utils/recurring';
+
 interface VenueCardProps {
   session: StudySession;
   onClose?: () => void;
@@ -13,8 +15,10 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
     setImgError(false);
   }, [session.id, session.poster_url]);
   
-  const hasDate = !!session.start_datetime;
-  const dateObj = hasDate ? new Date(session.start_datetime!) : null;
+  const now = new Date();
+  const info = getEffectiveSessionInfo(session, now);
+  const dateObj = info.effectiveDate;
+  const hasDate = !!dateObj;
   
   // Format Tanggal
   const dateStr = dateObj 
@@ -30,12 +34,12 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
 
   // --- GOOGLE CALENDAR GENERATOR ---
   const gCalUrl = new URL('https://calendar.google.com/calendar/render');
-  if (hasDate) {
-    const endDateObj = new Date(dateObj!.getTime() + 2 * 60 * 60 * 1000);
+  if (hasDate && dateObj) {
+    const endDateObj = new Date(dateObj.getTime() + 2 * 60 * 60 * 1000);
     const formatGoogleDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, '');
     gCalUrl.searchParams.append('action', 'TEMPLATE');
     gCalUrl.searchParams.append('text', session.title);
-    gCalUrl.searchParams.append('dates', `${formatGoogleDate(dateObj!)}/${formatGoogleDate(endDateObj)}`);
+    gCalUrl.searchParams.append('dates', `${formatGoogleDate(dateObj)}/${formatGoogleDate(endDateObj)}`);
     gCalUrl.searchParams.append('details', `Pemateri: ${session.speaker_name}\nKitab: ${session.book_title && session.book_title !== 'null' ? session.book_title : '-'}\n\nDitemukan via Peta Kajian Seluruh Indonesia.`);
     gCalUrl.searchParams.append('location', `${session.venues?.name || ''}, ${session.venues?.address || ''}`);
   }

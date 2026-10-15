@@ -8,6 +8,7 @@ import { fetchActiveSessions, hasPhysicalLocation, type StudySession } from '@/l
 import { calculateDistance } from '@/utils/distance';
 import { createClient } from '@/utils/supabase/client';
 import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
+import { getEffectiveSessionInfo } from '@/utils/recurring';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -122,17 +123,13 @@ export default function Home() {
       }
 
       // Status Filter: Berlangsung, Terbaru, Selesai, Rutin, Online
-      const hasDate = !!s.start_datetime;
-      const sessionDate = hasDate ? new Date(s.start_datetime!) : null;
       const now = new Date();
-      // Kajian sedang berlangsung jika waktu sekarang antara start_datetime s/d +2 jam
-      const isLive = hasDate && sessionDate! <= now && now.getTime() <= sessionDate!.getTime() + 2 * 60 * 60 * 1000;
-      const isPast = hasDate && now.getTime() > sessionDate!.getTime() + 2 * 60 * 60 * 1000;
-      const isRutin = s.is_recurring;
+      const info = getEffectiveSessionInfo(s, now);
+      const isRutin = !!s.is_recurring;
       
-      if (filters.time === 'berlangsung' && !isLive) return false;
-      if (filters.time === 'terbaru' && (isPast && !isRutin)) return false;
-      if (filters.time === 'selesai' && (!isPast || isRutin)) return false;
+      if (filters.time === 'berlangsung' && !info.isLive) return false;
+      if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
+      if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
       if (filters.time === 'rutin' && !isRutin) return false;
       if (filters.time === 'online' && !s.is_online) return false;
       
@@ -155,30 +152,34 @@ export default function Home() {
         return distA - distB;
       }
 
-      // Default Sorting (Waktu)
+      // Default Sorting (Waktu menggunakan effectiveDate)
       const now = new Date();
-      const hasDateA = !!a.start_datetime;
-      const hasDateB = !!b.start_datetime;
-      const dateA = hasDateA ? new Date(a.start_datetime!) : null;
-      const dateB = hasDateB ? new Date(b.start_datetime!) : null;
+      const infoA = getEffectiveSessionInfo(a, now);
+      const infoB = getEffectiveSessionInfo(b, now);
       
       // 1. Prioritas Tertinggi: Sedang Berlangsung (Live)
-      const isLiveA = hasDateA && dateA! <= now && now.getTime() <= dateA!.getTime() + 2 * 60 * 60 * 1000;
-      const isLiveB = hasDateB && dateB! <= now && now.getTime() <= dateB!.getTime() + 2 * 60 * 60 * 1000;
-      if (isLiveA && !isLiveB) return -1;
-      if (!isLiveA && isLiveB) return 1;
+      if (infoA.isLive && !infoB.isLive) return -1;
+      if (!infoA.isLive && infoB.isLive) return 1;
 
-      const aIsFuture = (hasDateA && dateA! >= now) || a.is_recurring;
-      const bIsFuture = (hasDateB && dateB! >= now) || b.is_recurring;
+      // 2. Upcoming / Future vs Selesai / Past
+      const aIsFuture = !infoA.isPast;
+      const bIsFuture = !infoB.isPast;
 
       if (aIsFuture && !bIsFuture) return -1;
       if (!aIsFuture && bIsFuture) return 1;
 
+      // 3. Kronologis waktu sesi
       if (aIsFuture && bIsFuture) {
-        if (hasDateA && hasDateB) return dateA!.getTime() - dateB!.getTime();
+        if (infoA.effectiveDate && infoB.effectiveDate) {
+          return infoA.effectiveDate.getTime() - infoB.effectiveDate.getTime();
+        }
+        if (infoA.effectiveDate && !infoB.effectiveDate) return -1;
+        if (!infoA.effectiveDate && infoB.effectiveDate) return 1;
         return 0;
       } else {
-        if (hasDateA && hasDateB) return dateB!.getTime() - dateA!.getTime();
+        if (infoA.effectiveDate && infoB.effectiveDate) {
+          return infoB.effectiveDate.getTime() - infoA.effectiveDate.getTime();
+        }
         return 0;
       }
     });
