@@ -43,24 +43,44 @@ export function hasPhysicalLocation(s: StudySession): boolean {
   return !!(s.venues?.lat && s.venues?.lng);
 }
 
+export interface FetchSessionsOptions {
+  requireLocation?: boolean; // Default true: hanya sesi dengan titik fisik di peta (offline / hybrid)
+}
+
 // Untuk sementara kita menggunakan query biasa
 // Nanti bisa diganti dengan rpc calls untuk query ST_DWithin (radius)
-export async function fetchActiveSessions(): Promise<StudySession[]> {
-  const { data, error } = await supabase
+export async function fetchActiveSessions(
+  options: FetchSessionsOptions = { requireLocation: true }
+): Promise<StudySession[]> {
+  const requireLocation = options.requireLocation ?? true;
+
+  let query = supabase
     .from('study_sessions')
     .select(`
       *,
-      venues (*)
+      venues${requireLocation ? '!inner' : ''} (*)
     `)
     .eq('status', 'confirmed')
     .order('start_datetime', { ascending: true });
+
+  if (requireLocation) {
+    query = query.not('venue_id', 'is', null);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error('Error fetching sessions:', error);
     return [];
   }
 
-  return data as StudySession[];
+  const sessions = (data as StudySession[]) || [];
+
+  if (requireLocation) {
+    return sessions.filter(hasPhysicalLocation);
+  }
+
+  return sessions;
 }
 
 export async function fetchSessionById(id: string): Promise<StudySession | null> {

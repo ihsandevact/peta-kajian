@@ -195,7 +195,7 @@ export default function SidebarFilter({
           <Pill active={filters.time === 'terdekat'} label="Terdekat" onClick={() => setFilters(p => ({ ...p, time: 'terdekat' }))} />
           <Pill active={filters.time === 'terbaru'} label="Terbaru" onClick={() => setFilters(p => ({ ...p, time: 'terbaru' }))} />
           <Pill active={filters.time === 'rutin'} label="Rutin" onClick={() => setFilters(p => ({ ...p, time: 'rutin' }))} />
-          <Pill active={filters.time === 'online'} label="Online" onClick={() => setFilters(p => ({ ...p, time: 'online' }))} />
+          <Pill active={filters.time === 'online'} label="Online (Hybrid)" onClick={() => setFilters(p => ({ ...p, time: 'online' }))} />
           <Pill active={filters.time === 'selesai'} label="Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
           <Pill active={!filters.audience.includes('ikhwan')} label="Khusus Akhwat" onClick={() => setFilters(p => ({ ...p, audience: p.audience.includes('ikhwan') ? ['akhwat'] : ['umum', 'ikhwan', 'akhwat'] }))} />
         </div>

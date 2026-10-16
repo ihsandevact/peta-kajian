@@ -170,8 +170,9 @@ export default function HomeClient() {
 
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
-      // Kajian tanpa lokasi fisik hanya valid jika online
-      if (!hasPhysicalLocation(s) && !s.is_online) return false;
+      // Hanya tampilkan kajian yang memiliki lokasi fisik di peta (offline atau hybrid)
+      // Kajian online murni difokuskan di halaman /live
+      if (!hasPhysicalLocation(s)) return false;
       
       // Filter Wilayah / Provinsi / Kota
       if (filters.region && !sessionMatchesRegion(s, filters.region)) {
@@ -209,7 +210,7 @@ export default function HomeClient() {
       if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
       if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
       if (filters.time === 'rutin' && !isRutin) return false;
-      if (filters.time === 'online' && !s.is_online) return false;
+      if (filters.time === 'online' && !s.is_online && !s.stream_url) return false;
       
       return true;
     });
