@@ -6,11 +6,11 @@ import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin, getUserRoleAndStatus, type AppUserRole } from '@/lib/services/admin';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
 
-type FAQCategory = 'all' | 'jamaah' | 'relawan' | 'telegram' | 'akun';
+type FAQCategory = 'all' | 'jamaah' | 'live' | 'relawan' | 'telegram' | 'akun';
 
 interface FAQItem {
   id: string;
-  category: 'jamaah' | 'relawan' | 'telegram' | 'akun';
+  category: 'jamaah' | 'live' | 'relawan' | 'telegram' | 'akun';
   question: string;
   categoryLabel: string;
   icon: string;
@@ -137,16 +137,44 @@ export default function FAQPage() {
         question: 'Apa perbedaan pin dan tanda kajian di peta?',
         answer: (
           <div className="space-y-2.5">
-            <p>Di peta, Anda akan menemukan beberapa jenis penanda:</p>
+            <p>Di peta utama, Anda akan menemukan beberapa jenis penanda:</p>
             <ul className="list-disc list-inside space-y-1.5 pl-1 text-on-surface-variant">
               <li>
                 <strong className="text-emerald-700 dark:text-emerald-300">Pin Hijau (Kajian Masjid / Offline)</strong>: Kajian diadakan langsung di lokasi fisik masjid atau gedung pertemuan. Mengklik pin akan membuka kartu info lengkap beserta tombol <strong>Rute Google Maps</strong> langsung ke lokasi.
               </li>
               <li>
-                <strong className="text-sky-700 dark:text-sky-300">Badge Live (Kajian Online / Streaming)</strong>: Kajian disiarkan via YouTube, Zoom, atau Instagram Live. Anda dapat mengklik tombol <em>&quot;Tonton Live Streaming&quot;</em> langsung dari popup kajian.
+                <strong className="text-primary font-bold">Kajian Hybrid (Pin Masjid + Badge Live)</strong>: Kajian diadakan di masjid fisik yang dapat dihadiri langsung, sekaligus menyertakan tautan siaran langsung online (YouTube Live) bagi jemaah yang menyimak dari rumah atau luar kota.
               </li>
               <li>
-                <strong className="text-primary font-bold">Kajian Hybrid</strong>: Kajian diadakan di masjid fisik sekaligus menyediakan tautan siaran langsung online bagi jamaah yang berada di luar kota.
+                <strong className="text-rose-600 dark:text-rose-400 font-bold">Pill Floating Live (Kajian Online Murni)</strong>: Untuk siaran langsung yang tidak memiliki lokasi fisik masjid, sistem menampilkannya melalui tombol floating <em>&quot;🔴 Tonton Live&quot;</em> di atas peta dan terpusat di halaman <Link href="/live" className="text-primary font-semibold hover:underline">/live</Link>.
+              </li>
+            </ul>
+          </div>
+        ),
+      },
+      {
+        id: 'pengingat-kajian-notifikasi',
+        category: 'jamaah',
+        categoryLabel: 'Umum & Jamaah',
+        icon: 'notifications_active',
+        question: 'Apakah saya bisa mendapatkan pengingat sebelum kajian dimulai?',
+        answer: (
+          <div className="space-y-2.5">
+            <p>
+              <strong>Bisa.</strong> Peta Kajian dilengkapi fitur pengingat otomatis (Web Push Notification) yang dapat Anda aktifkan dengan mudah:
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 pl-1 text-on-surface-variant">
+              <li>
+                Buka kartu detail kajian yang ingin Anda hadiri di peta atau daftar kajian.
+              </li>
+              <li>
+                Tekan tombol <strong>Lonceng Pengingat</strong> (&quot;Ingatkan Saya&quot;).
+              </li>
+              <li>
+                Beri izin notifikasi pada peramban (browser) saat muncul permintaan izin (klik <em>Allow / Izinkan</em>).
+              </li>
+              <li>
+                Sistem kami akan otomatis mengirimkan notifikasi pengingat ke perangkat Anda <strong>1 jam sebelum jadwal kajian dimulai</strong>.
               </li>
             </ul>
           </div>
@@ -202,6 +230,50 @@ export default function FAQPage() {
               <li><strong>Telegram</strong></li>
               <li><strong>Salin Link Langsung (*Deep Link*)</strong> yang akan langsung membuka popup kajian terkait di peta saat dibuka oleh penerima.</li>
             </ul>
+          </div>
+        ),
+      },
+
+      // Kategori: Live Streaming & YouTube
+      {
+        id: 'cara-menonton-live-streaming',
+        category: 'live',
+        categoryLabel: 'Live Streaming',
+        icon: 'sensors',
+        question: 'Bagaimana cara menonton kajian sunnah yang sedang berlangsung secara langsung (Live)?',
+        answer: (
+          <div className="space-y-2.5">
+            <p>
+              Anda dapat menyimak kajian yang sedang mengudara secara langsung melalui beberapa cara praktis:
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 pl-1 text-on-surface-variant">
+              <li>
+                Buka menu <Link href="/live" className="text-primary font-semibold hover:underline">🔴 Live Streaming (/live)</Link> melalui sidebar, drawer, atau header aplikasi untuk mengakses pemutar video interaktif serta daftar kanal dakwah yang sedang aktif siaran.
+              </li>
+              <li>
+                Tekan tombol floating pill <strong>&quot;🔴 Tonton Live&quot;</strong> yang otomatis muncul di atas peta utama setiap kali terdeteksi ada channel kajian yang sedang mengudara.
+              </li>
+              <li>
+                Sistem kami memantau puluhan kanal YouTube dakwah sunnah resmi secara otomatis setiap 10–15 menit, menyajikan judul tema dan pemateri secara terpadu tanpa perlu mencari satu per satu.
+              </li>
+            </ul>
+          </div>
+        ),
+      },
+      {
+        id: 'kenapa-kajian-online-tidak-di-peta',
+        category: 'live',
+        categoryLabel: 'Live Streaming',
+        icon: 'location_off',
+        question: 'Mengapa saya tidak menemukan kajian online murni (tanpa masjid) di peta utama?',
+        answer: (
+          <div className="space-y-2.5">
+            <p>
+              Peta utama Peta Kajian difokuskan secara khusus untuk membantu jemaah menemukan <strong>lokasi fisik masjid atau gedung</strong> yang dapat dihadiri langsung (baik kajian offline murni maupun kajian hybrid yang diadakan di masjid sekaligus disiarkan online).
+            </p>
+            <p>
+              Kebijakan ini dibuat agar peta tetap rapi, bersih, dan tidak memunculkan titik pin acak/fiktif di tengah laut atau lokasi koordinat semu. Seluruh siaran online murni telah dialihkan secara rapi ke halaman <Link href="/live" className="text-primary font-semibold hover:underline">Live Streaming (/live)</Link>.
+            </p>
           </div>
         ),
       },
@@ -323,16 +395,19 @@ export default function FAQPage() {
         category: 'telegram',
         categoryLabel: 'Channel Telegram & AI',
         icon: 'database',
-        question: 'Dari mana saja sumber data kajian di aplikasi ini berasal?',
+        question: 'Dari mana saja sumber data jadwal kajian dan channel YouTube berasal?',
         answer: (
           <div className="space-y-2.5">
-            <p>Data kajian di Peta Kajian berasal dari kombinasi dua sumber terpercaya:</p>
+            <p>Data di Peta Kajian dihimpun secara terpadu melalui tiga pilar:</p>
             <ul className="list-disc list-inside space-y-1.5 pl-1 text-on-surface-variant">
               <li>
                 <strong>Kiriman Relawan Terverifikasi</strong>: Pengurus DKM, panitia taklim, dan relawan dakwah lokal yang memasukkan jadwal terkonfirmasi secara langsung.
               </li>
               <li>
-                <strong>Bot AI Scraper Otomatis</strong>: Bot pintar kami memantau pengumuman resmi dari kanal-kanal Telegram dakwah publik (seperti Info Kajian Bandung, Jabodetabek, channel resmi ustadz, dll) dan mengekstrak jadwalnya secara berkala.
+                <strong>Bot AI Telegram Scraper</strong>: Bot cerdas kami menyadap poster dan pengumuman resmi dari kanal-kanal Telegram dakwah publik secara berkala, lalu mengekstrak data kajian menggunakan teknologi AI OCR.
+              </li>
+              <li>
+                <strong>Sinkronisasi Otomatis YouTube Tracker</strong>: Channel YouTube dakwah resmi dipantau status live streaming-nya secara berkala. Link siaran dari postingan daring yang belum terdaftar juga otomatis diintegrasikan ke daftar pemantauan YouTube Tracker.
               </li>
             </ul>
           </div>
@@ -407,6 +482,34 @@ export default function FAQPage() {
             </p>
             <p>
               Login menggunakan Akun Google hanya diperlukan jika Anda ingin: (1) Menyimpan kajian favorit (Bookmark), (2) Menandai RSVP &quot;Saya Hadir&quot;, (3) Mengusulkan channel Telegram baru, atau (4) Mendaftar sebagai relawan kontributor dakwah.
+            </p>
+          </div>
+        ),
+      },
+      {
+        id: 'cara-install-pwa',
+        category: 'akun',
+        categoryLabel: 'Akun & Teknis',
+        icon: 'install_mobile',
+        question: 'Apakah Peta Kajian dapat diinstal sebagai aplikasi di smartphone (PWA)?',
+        answer: (
+          <div className="space-y-2.5">
+            <p>
+              <strong>Bisa.</strong> Peta Kajian dibuat dengan standar Progressive Web App (PWA) modern, sehingga dapat diinstal layaknya aplikasi smartphone tanpa perlu mengunduh puluhan MB dari Google Play Store atau Apple App Store:
+            </p>
+            <ul className="list-disc list-inside space-y-1.5 pl-1 text-on-surface-variant">
+              <li>
+                <strong>Android (Chrome / Edge / Samsung Internet)</strong>: Buka web Peta Kajian, tekan ikon titik tiga di pojok kanan atas peramban, lalu pilih <strong>&quot;Instal Aplikasi&quot;</strong> atau <strong>&quot;Tambahkan ke Layar Utama&quot;</strong>.
+              </li>
+              <li>
+                <strong>iOS / iPhone (Safari)</strong>: Buka web Peta Kajian di Safari, tekan tombol <strong>Share</strong> (ikon kotak dengan panah ke atas) di bilah bawah, lalu pilih <strong>&quot;Add to Home Screen&quot; (Tambah ke Layar Utama)</strong>.
+              </li>
+              <li>
+                <strong>Komputer / Laptop (Chrome / Edge)</strong>: Klik ikon instal (komputer dengan panah bawah) di sebelah kanan address bar peramban.
+              </li>
+            </ul>
+            <p className="text-xs text-outline">
+              Aplikasi PWA Peta Kajian berukuran sangat ringan (&lt; 2 MB), memuat instan, mendukung offline cache untuk melihat kajian tersimpan saat sinyal lemah, dan dapat menerima notifikasi pengingat langsung ke perangkat Anda.
             </p>
           </div>
         ),
@@ -642,6 +745,19 @@ export default function FAQPage() {
             >
               <span className="material-symbols-outlined text-[15px]">mosque</span>
               <span>Umum & Jamaah</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveCategory('live')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
+                activeCategory === 'live'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[15px]">sensors</span>
+              <span>Live Streaming</span>
             </button>
 
             <button
