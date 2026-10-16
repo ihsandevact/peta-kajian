@@ -42,7 +42,7 @@ export default function AdminNav({ userEmail }: { userEmail?: string }) {
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/admin" className="flex items-center gap-2">
               <img
-                src="/logo.png?v=2"
+                src="/logo.png?v=3"
                 alt="Peta Kajian Logo"
                 className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shrink-0"
               />

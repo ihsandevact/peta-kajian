@@ -63,10 +63,36 @@ export async function shareSessionNative(
 
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
+      // Coba lampirkan file poster jika ada dan browser mendukung
+      let filesToShare: File[] | undefined;
+      const hasPoster = Boolean(
+        session.poster_url &&
+        session.poster_url.trim() !== '' &&
+        session.poster_url.toLowerCase() !== 'null'
+      );
+
+      if (hasPoster && typeof navigator.canShare === 'function') {
+        try {
+          const res = await fetch(session.poster_url!, { mode: 'cors' });
+          if (res.ok) {
+            const blob = await res.blob();
+            const file = new File([blob], 'poster-kajian.jpg', {
+              type: blob.type || 'image/jpeg',
+            });
+            if (navigator.canShare({ files: [file] })) {
+              filesToShare = [file];
+            }
+          }
+        } catch {
+          // Abaikan error CORS/fetch, fallback ke share teks dan tautan biasa
+        }
+      }
+
       await navigator.share({
         title: session.title,
         text: shareText,
         url: shareUrl,
+        ...(filesToShare ? { files: filesToShare } : {}),
       });
       return;
     } catch (err: any) {
@@ -83,16 +109,28 @@ export async function shareSessionNative(
 export default function ShareModal({ isOpen, onClose, session }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [imgError, setImgError] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [session?.id, session?.poster_url]);
 
   if (!isOpen || !session || !mounted) return null;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const shareUrl = `${origin}/?session=${session.id}`;
   const shareText = formatKajianShareText(session, shareUrl);
+
+  const hasPoster = Boolean(
+    session.poster_url &&
+    session.poster_url.trim() !== '' &&
+    session.poster_url.toLowerCase() !== 'null' &&
+    !imgError
+  );
 
   const handleCopyLink = async () => {
     try {
@@ -132,7 +170,7 @@ export default function ShareModal({ isOpen, onClose, session }: ShareModalProps
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 font-geist">
       <div
-        className="w-full max-w-sm bg-surface-container-lowest rounded-3xl border border-surface-container-high/80 shadow-2xl p-5 flex flex-col gap-4 relative animate-in zoom-in-95 duration-200"
+        className="w-full max-w-sm sm:max-w-md bg-surface-container-lowest rounded-3xl border border-surface-container-high/80 shadow-2xl p-5 flex flex-col gap-3.5 relative animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Modal */}
@@ -156,12 +194,57 @@ export default function ShareModal({ isOpen, onClose, session }: ShareModalProps
           </button>
         </div>
 
-        {/* Ringkasan Kajian */}
-        <div className="p-3 rounded-2xl bg-surface-container-low/60 border border-surface-container-high/50 flex flex-col gap-1">
-          <span className="text-[10px] font-bold text-primary uppercase tracking-wider">Kajian Terpilih</span>
-          <p className="text-xs font-bold text-on-surface line-clamp-1">{session.title}</p>
-          <p className="text-[11px] text-on-surface-variant line-clamp-1">{session.speaker_name}</p>
+        {/* Ringkasan Kajian dengan Visual Poster */}
+        <div className="p-3 rounded-2xl bg-surface-container-low/70 border border-surface-container-high/60 flex items-center gap-3">
+          {hasPoster ? (
+            <div className="relative w-16 h-20 sm:w-18 sm:h-22 rounded-xl overflow-hidden bg-neutral-950 shrink-0 border border-surface-container-high shadow-2xs">
+              <img
+                src={session.poster_url!}
+                alt={session.title}
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            </div>
+          ) : (
+            <div className="w-16 h-20 sm:w-18 sm:h-22 rounded-xl bg-primary/10 text-primary flex flex-col items-center justify-center shrink-0 border border-primary/20">
+              <img src="/logo.png?v=3" alt="Peta Kajian" className="w-8 h-8 object-contain" />
+            </div>
+          )}
+          <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+            <div>
+              <span className="inline-block text-[9px] font-bold text-primary uppercase tracking-wider bg-primary/10 px-1.5 py-0.2 rounded-md mb-1">
+                Kajian Terpilih
+              </span>
+              <h4 className="text-xs sm:text-sm font-bold text-on-surface line-clamp-2 leading-snug">
+                {session.title}
+              </h4>
+              <p className="text-[11px] text-primary font-semibold truncate mt-0.5">
+                {session.speaker_name}
+              </p>
+            </div>
+            {session.venues?.name && (
+              <p className="text-[10px] text-outline truncate flex items-center gap-1 mt-1">
+                <span className="material-symbols-outlined text-[12px] shrink-0">location_on</span>
+                <span className="truncate">{session.venues.name}</span>
+              </p>
+            )}
+          </div>
         </div>
+
+        {/* Opsi Buka Poster Ukuran Penuh jika ada */}
+        {hasPoster && (
+          <div className="flex items-center justify-between text-xs px-1 -mt-1">
+            <span className="text-[11px] text-outline">Gambar poster tersedia</span>
+            <button
+              type="button"
+              onClick={() => window.open(session.poster_url!, '_blank', 'noopener,noreferrer')}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+              <span>Buka Poster Asli</span>
+            </button>
+          </div>
+        )}
 
         {/* Tombol Opsi Bagikan */}
         <div className="grid grid-cols-3 gap-2.5">

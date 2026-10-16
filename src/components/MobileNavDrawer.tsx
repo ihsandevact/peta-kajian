@@ -103,7 +103,7 @@ export default function MobileNavDrawer({
         <div className="p-4 border-b border-surface-container-high/60 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <img
-              src="/logo.png?v=2"
+              src="/logo.png?v=3"
               alt="Peta Kajian Logo"
               className="w-10 h-10 rounded-xl object-contain shrink-0"
             />

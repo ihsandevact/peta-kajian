@@ -1,503 +1,96 @@
-'use client';
+import { Suspense } from 'react';
+import type { Metadata } from 'next';
+import { fetchSessionById } from '@/lib/services/kajian';
+import HomeClient, { type FilterState } from '@/components/HomeClient';
 
-import React, { useState, useEffect, useMemo } from 'react';
-import dynamic from 'next/dynamic';
-import Link from 'next/link';
-import SidebarFilter from '@/components/SidebarFilter';
-import { fetchActiveSessions, hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
-import { calculateDistance } from '@/utils/distance';
-import { createClient } from '@/utils/supabase/client';
-import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
-import { getEffectiveSessionInfo } from '@/utils/recurring';
-import { useBookmarks } from '@/utils/bookmarks';
-import { getUserRoleAndStatus } from '@/lib/services/admin';
+export type { FilterState };
 
-const MapComponent = dynamic(() => import('@/components/Map'), {
-  ssr: false,
-});
-
-export type FilterState = {
-  time: string;
-  audience: string[];
-  radius: number;
-  searchQuery: string;
-  facilities: string[];
-  region: SelectedRegion | null;
-};
-
-function HeaderAvatar({ url, size = 'w-5 h-5' }: { url?: string; size?: string }) {
-  const [hasError, setHasError] = useState(false);
-
-  if (url && !hasError) {
-    return (
-      <img
-        src={url}
-        alt=""
-        className={`${size} rounded-full object-cover shrink-0`}
-        onError={() => setHasError(true)}
-      />
-    );
-  }
-
-  return (
-    <span className="material-symbols-outlined text-[20px] text-primary shrink-0">
-      account_circle
-    </span>
-  );
+interface PageProps {
+  searchParams: Promise<{ session?: string }>;
 }
 
-export default function Home() {
-  const { bookmarks } = useBookmarks();
+export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+  const params = await searchParams;
+  const sessionId = params?.session;
 
-  const [filters, setFilters] = useState<FilterState>({
-    time: 'semua',
-    audience: ['umum', 'ikhwan', 'akhwat'],
-    radius: 20,
-    searchQuery: '',
-    facilities: [],
-    region: null,
-  });
+  if (sessionId) {
+    const session = await fetchSessionById(sessionId);
+    if (session) {
+      const title = `${session.title} - ${session.speaker_name}`;
+      const venueInfo = session.venues?.name
+        ? ` di ${session.venues.name}${session.venues.address ? `, ${session.venues.address}` : ''}`
+        : session.is_online
+        ? ' (Disiarkan Online)'
+        : '';
+      const description = `Kajian: ${session.title} bersama ${session.speaker_name}${venueInfo}. Temukan jadwal dan lokasi di Peta Kajian Indonesia.`;
 
-  const [sessions, setSessions] = useState<StudySession[]>([]);
-  const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
-  const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
-  const [currentUser, setCurrentUser] = useState<any>(null);
-  const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
-
-  // Periksa status login dan role pengguna
-  useEffect(() => {
-    const supabase = createClient();
-
-    async function initUser(u: any) {
-      setCurrentUser(u);
-      if (u) {
-        try {
-          const rInfo = await getUserRoleAndStatus(u);
-          setCurrentUserRole(rInfo.role);
-        } catch {
-          setCurrentUserRole('user');
-        }
-      } else {
-        setCurrentUserRole(null);
-      }
-    }
-
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        initUser(data.user);
-      } else {
-        supabase.auth.getSession().then(({ data: sess }) => {
-          if (sess?.session?.user) {
-            initUser(sess.session.user);
-          }
-        });
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      initUser(session?.user || null);
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Minta lokasi pengguna saat aplikasi dimuat
-  useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
-        },
-        (error) => {
-          console.error('Error getting location', error);
-          // Silent fail agar tidak mengganggu pengguna yang menolak akses GPS
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
+      const hasPoster = Boolean(
+        session.poster_url &&
+        session.poster_url.trim() !== '' &&
+        session.poster_url.toLowerCase() !== 'null'
       );
+
+      const imageUrl = hasPoster ? session.poster_url! : '/logo.png?v=3';
+
+      return {
+        title: `${title} | Peta Kajian Indonesia`,
+        description,
+        openGraph: {
+          title,
+          description,
+          type: 'article',
+          images: [
+            {
+              url: imageUrl,
+              alt: session.title,
+            },
+          ],
+        },
+        twitter: {
+          card: 'summary_large_image',
+          title,
+          description,
+          images: [imageUrl],
+        },
+      };
     }
-  }, []);
+  }
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
-      const data = await fetchActiveSessions();
-      setSessions(data);
-      setIsLoading(false);
-    }
-    loadData();
-  }, []);
+  return {
+    title: 'Peta Kajian Indonesia',
+    description: 'Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.',
+    openGraph: {
+      title: 'Peta Kajian Indonesia',
+      description: 'Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.',
+      images: [
+        {
+          url: '/logo.png?v=3',
+          width: 512,
+          height: 512,
+          alt: 'Peta Kajian Indonesia',
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: 'Peta Kajian Indonesia',
+      description: 'Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.',
+      images: ['/logo.png?v=3'],
+    },
+  };
+}
 
-  const filteredSessions = useMemo(() => {
-    return sessions.filter(s => {
-      // Kajian tanpa lokasi fisik hanya valid jika online
-      if (!hasPhysicalLocation(s) && !s.is_online) return false;
-      
-      // Filter Wilayah / Provinsi / Kota
-      if (filters.region && !sessionMatchesRegion(s, filters.region)) {
-        return false;
-      }
-
-      // Search Query (judul, pemateri, masjid, dan alamat)
-      if (filters.searchQuery) {
-        const query = filters.searchQuery.toLowerCase();
-        const matchTitle = s.title.toLowerCase().includes(query);
-        const matchSpeaker = s.speaker_name.toLowerCase().includes(query);
-        const matchVenue = s.venues?.name?.toLowerCase().includes(query);
-        const matchAddress = s.venues?.address?.toLowerCase().includes(query);
-        if (!matchTitle && !matchSpeaker && !matchVenue && !matchAddress) return false;
-      }
-
-      // Kategori
-      if (!filters.audience.includes(s.audience_type)) return false;
-
-      // Fasilitas
-      if (filters.facilities.length > 0 && s.venues?.facilities) {
-        const hasAllFacilities = filters.facilities.every(
-          (fac) => s.venues!.facilities[fac as keyof typeof s.venues.facilities] === true
-        );
-        if (!hasAllFacilities) return false;
-      }
-
-      // Status Filter: Berlangsung, Tersimpan, Terbaru, Selesai, Rutin, Online
-      const now = new Date();
-      const info = getEffectiveSessionInfo(s, now);
-      const isRutin = !!s.is_recurring;
-      
-      if (filters.time === 'tersimpan' && !bookmarks.includes(s.id)) return false;
-      if (filters.time === 'berlangsung' && !info.isLive) return false;
-      if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
-      if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
-      if (filters.time === 'rutin' && !isRutin) return false;
-      if (filters.time === 'online' && !s.is_online) return false;
-      
-      return true;
-    });
-  }, [sessions, filters, bookmarks]);
-
-  // SMART SORTING: Live -> Upcoming/Rutin di atas, Selesai di bawah
-  const sortedSessions = useMemo(() => {
-    return [...filteredSessions].sort((a, b) => {
-      // Sorting Jarak (Terdekat) — kajian tanpa lokasi fisik ditaruh paling bawah
-      if (filters.time === 'terdekat' && userLocation) {
-        const aHasLoc = hasPhysicalLocation(a);
-        const bHasLoc = hasPhysicalLocation(b);
-        if (aHasLoc && !bHasLoc) return -1;
-        if (!aHasLoc && bHasLoc) return 1;
-        if (!aHasLoc && !bHasLoc) return 0;
-        const distA = calculateDistance(userLocation.lat, userLocation.lng, a.venues!.lat, a.venues!.lng);
-        const distB = calculateDistance(userLocation.lat, userLocation.lng, b.venues!.lat, b.venues!.lng);
-        return distA - distB;
-      }
-
-      // Default Sorting (Waktu menggunakan effectiveDate)
-      const now = new Date();
-      const infoA = getEffectiveSessionInfo(a, now);
-      const infoB = getEffectiveSessionInfo(b, now);
-      
-      // 1. Prioritas Tertinggi: Sedang Berlangsung (Live)
-      if (infoA.isLive && !infoB.isLive) return -1;
-      if (!infoA.isLive && infoB.isLive) return 1;
-
-      // 2. Upcoming / Future vs Selesai / Past
-      const aIsFuture = !infoA.isPast;
-      const bIsFuture = !infoB.isPast;
-
-      if (aIsFuture && !bIsFuture) return -1;
-      if (!aIsFuture && bIsFuture) return 1;
-
-      // 3. Kronologis waktu sesi
-      if (aIsFuture && bIsFuture) {
-        if (infoA.effectiveDate && infoB.effectiveDate) {
-          return infoA.effectiveDate.getTime() - infoB.effectiveDate.getTime();
-        }
-        if (infoA.effectiveDate && !infoB.effectiveDate) return -1;
-        if (!infoA.effectiveDate && infoB.effectiveDate) return 1;
-        return 0;
-      } else {
-        if (infoA.effectiveDate && infoB.effectiveDate) {
-          return infoB.effectiveDate.getTime() - infoA.effectiveDate.getTime();
-        }
-        return 0;
-      }
-    });
-  }, [filteredSessions, filters.time, userLocation]);
-
-  // Deep-linking: auto-select session from ?session=<id> in URL
-  useEffect(() => {
-    if (sessions.length > 0 && typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const sessionId = params.get('session');
-      if (sessionId) {
-        const found = sessions.find(s => s.id === sessionId);
-        if (found) {
-          setSelectedSession(found);
-          setIsSheetExpanded(false);
-        }
-      }
-    }
-  }, [sessions]);
-
-  // OBSERVER: Auto-Focus dinamis setiap kali daftar filter/sorting berubah
-  useEffect(() => {
-    if (sortedSessions.length > 0) {
-      setSelectedSession(prev => {
-        if (prev && sortedSessions.some(s => s.id === prev.id)) {
-          return prev;
-        }
-        return sortedSessions[0];
-      });
-    } else {
-      setSelectedSession(null);
-    }
-  }, [sortedSessions]);
-
+export default function Page() {
   return (
-    <div className="w-full h-screen bg-surface font-geist text-on-surface flex overflow-hidden">
-      
-      {/* GLOBAL SIDEBAR (Kiri Jauh) */}
-      <aside className={`hidden lg:flex transition-all duration-300 bg-surface-container-lowest z-50 flex-col justify-between py-6 shadow-[0_1px_8px_rgba(0,0,0,0.04)] shrink-0 relative ${isSidebarCollapsed ? 'w-[72px]' : 'w-64'}`}>
-        
-        {/* Toggle Button */}
-        <button 
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className={`absolute -right-3 top-8 w-6 h-6 bg-surface-container-high rounded-full flex items-center justify-center text-on-surface hover:bg-primary-container hover:text-on-primary transition-colors shadow-sm z-50`}
-        >
-          <span className="material-symbols-outlined text-[14px]">
-            {isSidebarCollapsed ? 'chevron_right' : 'chevron_left'}
-          </span>
-        </button>
-
-        <div className={`flex flex-col gap-6 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          {/* Logo Area */}
-          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : 'px-1'}`}>
-            <img
-              src="/logo.png?v=2"
-              alt="Peta Kajian Logo"
-              className={`${isSidebarCollapsed ? 'w-11 h-11' : 'w-12 h-12'} object-contain shrink-0 transition-all drop-shadow-xs`}
-            />
-            {!isSidebarCollapsed && (
-              <div className="flex flex-col overflow-hidden whitespace-nowrap">
-                <span className="font-bold text-base text-on-surface leading-tight tracking-tight">Peta Kajian</span>
-                <span className="text-[11px] font-medium text-outline">Seluruh Indonesia</span>
-              </div>
-            )}
-          </div>
-          
-          {/* Navigation Links */}
-          <nav className="flex flex-col gap-1.5">
-            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary-container text-on-primary`}>
-              <span className="material-symbols-outlined text-[20px]">map</span>
-              {!isSidebarCollapsed && <span>Jelajah Peta</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Jelajah Peta
-                </span>
-              )}
-            </a>
-            
-            <Link 
-              href="/leaderboard"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
-            >
-              <span className="material-symbols-outlined text-[20px] text-amber-500">workspace_premium</span>
-              {!isSidebarCollapsed && <span>Leaderboard Relawan</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Leaderboard Relawan
-                </span>
-              )}
-            </Link>
-
-            <Link 
-              href="/faq"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
-            >
-              <span className="material-symbols-outlined text-[20px] text-primary">help</span>
-              {!isSidebarCollapsed && <span>Pusat Bantuan & FAQ</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Pusat Bantuan & FAQ
-                </span>
-              )}
-            </Link>
-          </nav>
+    <Suspense
+      fallback={
+        <div className="w-full h-screen bg-surface flex flex-col items-center justify-center font-geist gap-3">
+          <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-on-surface-variant font-medium">Memuat Peta Kajian...</p>
         </div>
-        
-        <div className={`flex flex-col gap-1.5 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          {currentUser ? (
-            <>
-              {currentUserRole === 'admin' || currentUserRole === 'kontributor' ? (
-                <Link
-                  href="/kontributor/dashboard"
-                  className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
-                >
-                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
-                  {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
-                  {isSidebarCollapsed && (
-                    <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                      Kirim Info Kajian
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <Link
-                  href="/kontributor/profile"
-                  className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10`}
-                >
-                  <span className="material-symbols-outlined text-[20px] text-emerald-600">volunteer_activism</span>
-                  {!isSidebarCollapsed && <span>Ajukan Jadi Relawan</span>}
-                  {isSidebarCollapsed && (
-                    <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                      Ajukan Jadi Relawan
-                    </span>
-                  )}
-                </Link>
-              )}
-
-              <Link
-                href="/kontributor/profile"
-                className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface hover:bg-surface-container-high`}
-              >
-                <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-5 h-5" />
-                {!isSidebarCollapsed && (
-                  <span className="truncate">
-                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Profil Saya'}
-                  </span>
-                )}
-                {isSidebarCollapsed && (
-                  <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                    Profil Saya
-                  </span>
-                )}
-              </Link>
-            </>
-          ) : (
-            <Link
-              href="/login"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-semibold ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary/10 text-primary hover:bg-primary/20`}
-            >
-              <span className="material-symbols-outlined text-[20px]">login</span>
-              {!isSidebarCollapsed && <span>Masuk / Login</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Masuk / Login
-                </span>
-              )}
-            </Link>
-          )}
-        </div>
-      </aside>
-
-      {/* AREA KANAN */}
-      <div className="flex-1 flex flex-col min-w-0">
-        
-        {/* MAIN CONTENT SPLIT */}
-        <main className="flex-1 flex w-full h-full relative overflow-hidden bg-surface md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */">
-          
-          {/* Kolom Kanan: Map */}
-          <div className="absolute inset-0 w-full h-full md:relative md:flex-1 bg-[#f1f5f9] overflow-hidden z-10">
-            <MapComponent 
-              sessions={sortedSessions} 
-              selectedSession={selectedSession}
-              onSelectSession={setSelectedSession}
-              flyToRegion={filters.region}
-            />
-          </div>
-          
-          {/* Kolom Kiri: Search & List (Menjadi Bottom Sheet di Mobile) */}
-          <div className={`
-            absolute bottom-[64px] left-0 w-full z-20 rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]
-            ${isSheetExpanded ? 'h-[65vh]' : 'h-[160px]'}
-            md:relative md:w-[410px] lg:w-[430px] md:h-full md:rounded-none md:shadow-[1px_0_0_0_rgba(226,232,240,0.8)] md:bottom-auto
-            shrink-0 flex flex-col bg-surface-container-lowest overflow-hidden transition-all duration-300 ease-in-out
-            md:order-first
-          `}>
-            {/* Drag Handle Indicator (Hanya tampil di Mobile) */}
-            <div 
-              className="md:hidden w-full flex justify-center pt-3 pb-2 shrink-0 cursor-pointer hover:bg-surface-container-low transition-colors"
-              onClick={() => setIsSheetExpanded(!isSheetExpanded)}
-            >
-              <div className="w-12 h-1.5 rounded-full bg-outline/60"></div>
-            </div>
-
-            <div className="flex-1 overflow-hidden">
-              <SidebarFilter 
-                filters={filters} 
-                setFilters={setFilters} 
-                sessions={sortedSessions} 
-                allSessions={sessions}
-                selectedSession={selectedSession}
-                onSelectSession={(session) => {
-                  setSelectedSession(session);
-                  if (session) setIsSheetExpanded(false); // Otomatis collapse saat kajian dipilih agar map terlihat
-                }}
-                isLoading={isLoading}
-                userLocation={userLocation}
-              />
-            </div>
-          </div>
-          
-        </main>
-
-        {/* MOBILE BOTTOM NAVIGATION (Hanya di HP) */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest shadow-[0_-2px_12px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom,0px)] border-t border-surface-container-high/50">
-          <div className="flex items-center justify-around h-16 px-2">
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary font-bold">
-              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>map</span>
-              <span className="text-[10px] mt-0.5 tracking-tight">Peta</span>
-            </a>
-            <Link 
-              href="/leaderboard"
-              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-            >
-              <span className="material-symbols-outlined text-[22px] text-amber-500">workspace_premium</span>
-              <span className="text-[10px] mt-0.5 font-medium tracking-tight">Peringkat</span>
-            </Link>
-            {currentUser ? (
-              <>
-                {currentUserRole === 'admin' || currentUserRole === 'kontributor' ? (
-                  <Link 
-                    href="/kontributor/dashboard" 
-                    className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[22px]">add_circle</span>
-                    <span className="text-[10px] mt-0.5 font-medium tracking-tight">Kirim</span>
-                  </Link>
-                ) : (
-                  <Link 
-                    href="/kontributor/profile" 
-                    className="flex flex-col items-center justify-center min-w-[56px] h-12 text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[22px]">volunteer_activism</span>
-                    <span className="text-[10px] mt-0.5 font-medium tracking-tight">Relawan</span>
-                  </Link>
-                )}
-
-                <Link
-                  href="/kontributor/profile"
-                  className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-                >
-                  <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-6 h-6" />
-                  <span className="text-[10px] mt-0.5 font-medium tracking-tight">Profil</span>
-                </Link>
-              </>
-            ) : (
-              <Link
-                href="/login"
-                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary hover:text-primary transition-colors font-semibold"
-              >
-                <span className="material-symbols-outlined text-[22px]">login</span>
-                <span className="text-[10px] mt-0.5 tracking-tight">Masuk</span>
-              </Link>
-            )}
-          </div>
-        </nav>
-      </div>
-    </div>
+      }
+    >
+      <HomeClient />
+    </Suspense>
   );
 }

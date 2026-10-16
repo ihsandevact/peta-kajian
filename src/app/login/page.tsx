@@ -44,7 +44,7 @@ function LoginForm() {
         {/* Brand Logo */}
         <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
           <img
-            src="/logo.png?v=2"
+            src="/logo.png?v=3"
             alt="Peta Kajian Logo"
             className="w-full h-full object-contain drop-shadow-sm"
           />

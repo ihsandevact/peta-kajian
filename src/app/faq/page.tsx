@@ -497,7 +497,7 @@ export default function FAQPage() {
           {/* Logo & Brand */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <img
-              src="/logo.png?v=2"
+              src="/logo.png?v=3"
               alt="Peta Kajian Logo"
               className="w-10 h-10 rounded-xl object-contain shrink-0 transition-transform group-hover:scale-105"
             />

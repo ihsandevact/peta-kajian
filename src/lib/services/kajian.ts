@@ -63,6 +63,27 @@ export async function fetchActiveSessions(): Promise<StudySession[]> {
   return data as StudySession[];
 }
 
+export async function fetchSessionById(id: string): Promise<StudySession | null> {
+  try {
+    const { data, error } = await supabase
+      .from('study_sessions')
+      .select(`
+        *,
+        venues (*)
+      `)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !data) {
+      return null;
+    }
+    return data as StudySession;
+  } catch (err) {
+    console.error('Error fetching session by id:', err);
+    return null;
+  }
+}
+
 export interface ContributorEntry {
   name: string;
   count: number;
