@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { usePWAInstall } from '@/components/PWAInstallPrompt';
 
 export interface MobileNavDrawerUser {
   name?: string | null;
@@ -16,6 +17,7 @@ interface MobileNavDrawerProps {
   onClose: () => void;
   currentUser?: MobileNavDrawerUser | null;
   isAdmin?: boolean;
+  onOpenRequestContributor?: () => void;
 }
 
 export default function MobileNavDrawer({
@@ -23,9 +25,11 @@ export default function MobileNavDrawer({
   onClose,
   currentUser,
   isAdmin = false,
+  onOpenRequestContributor,
 }: MobileNavDrawerProps) {
   const pathname = usePathname();
   const [avatarError, setAvatarError] = useState(false);
+  const { canInstall, isInstalled, promptInstall } = usePWAInstall();
 
   // Otomatis tutup drawer jika rute berpindah
   useEffect(() => {
@@ -232,6 +236,32 @@ export default function MobileNavDrawer({
                   </Link>
                 );
               })}
+
+              {/* Tombol Install Aplikasi PWA */}
+              {canInstall && !isInstalled && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    promptInstall();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 mt-2 rounded-xl text-xs font-semibold bg-primary text-white hover:bg-primary/90 transition-all text-left shadow-xs cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px] shrink-0">
+                    download_for_offline
+                  </span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="truncate">Pasang Aplikasi</span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 bg-white/20 text-white rounded-md shrink-0">
+                        PWA
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-white/80 truncate font-normal">
+                      Akses cepat di layar HP
+                    </span>
+                  </div>
+                </button>
+              )}
             </div>
           </div>
         </div>

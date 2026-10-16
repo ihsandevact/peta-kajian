@@ -67,6 +67,20 @@ export async function runTelegramChannelScraperAction({
       supabaseClient: supabase,
     });
 
+    // Update status scraping di telegram_channels jika tabel memiliki kolom tersebut
+    try {
+      await supabase
+        .from('telegram_channels')
+        .update({
+          last_scraped_at: new Date().toISOString(),
+          last_scrape_status: result.success ? 'success' : (result.error || 'error'),
+          last_scrape_count: result.savedCount,
+        })
+        .ilike('channel_username', channelUsername);
+    } catch (e) {
+      console.warn('Gagal update statistik scraper channel:', e);
+    }
+
     // Revalidasi cache halaman admin dan peta publik jika ada kajian baru yang disimpan
     if (result.savedCount > 0) {
       revalidatePath('/admin');
@@ -88,3 +102,109 @@ export async function runTelegramChannelScraperAction({
     };
   }
 }
+
+export interface BatchScrapeResult {
+  success: boolean;
+  totalChannels: number;
+  totalFound: number;
+  totalExtracted: number;
+  totalSaved: number;
+  channelResults: ChannelScrapeResult[];
+  error?: string;
+}
+
+/**
+ * Server Action untuk menjalankan scraping ke SELURUH channel Telegram yang aktif sekaligus (Batch)
+ */
+export async function runBatchTelegramScraperAction(
+  maxPostsPerChannel: number = 5
+): Promise<BatchScrapeResult> {
+  try {
+    const { supabase } = await verifyAdminCaller();
+    const { fetchActiveTelegramChannels } = await import('@/lib/services/telegram');
+    const activeChannels = await fetchActiveTelegramChannels();
+
+    if (activeChannels.length === 0) {
+      return {
+        success: true,
+        totalChannels: 0,
+        totalFound: 0,
+        totalExtracted: 0,
+        totalSaved: 0,
+        channelResults: [],
+      };
+    }
+
+    const channelResults: ChannelScrapeResult[] = [];
+    let totalFound = 0;
+    let totalExtracted = 0;
+    let totalSaved = 0;
+
+    for (const channel of activeChannels) {
+      try {
+        const result = await processAndSaveChannelKajian({
+          channelUsername: channel.channel_username,
+          maxPosts: maxPostsPerChannel,
+          targetStatus: 'pending',
+          supabaseClient: supabase,
+        });
+
+        // Update waktu & statistik scraping channel
+        try {
+          await supabase
+            .from('telegram_channels')
+            .update({
+              last_scraped_at: new Date().toISOString(),
+              last_scrape_status: result.success ? 'success' : (result.error || 'error'),
+              last_scrape_count: result.savedCount,
+            })
+            .eq('id', channel.id);
+        } catch {}
+
+        channelResults.push(result);
+        totalFound += result.foundMessages;
+        totalExtracted += result.extractedCount;
+        totalSaved += result.savedCount;
+      } catch (err: any) {
+        console.error(`Gagal scraping channel ${channel.channel_username}:`, err);
+        channelResults.push({
+          success: false,
+          channelUsername: channel.channel_username,
+          foundMessages: 0,
+          extractedCount: 0,
+          savedCount: 0,
+          skippedDuplicatesCount: 0,
+          skippedPastCount: 0,
+          logs: [`Error: ${err?.message || 'Unknown'}`],
+          error: err?.message,
+        });
+      }
+    }
+
+    if (totalSaved > 0) {
+      revalidatePath('/admin');
+      revalidatePath('/admin/telegram');
+    }
+
+    return {
+      success: true,
+      totalChannels: activeChannels.length,
+      totalFound,
+      totalExtracted,
+      totalSaved,
+      channelResults,
+    };
+  } catch (error: any) {
+    console.error('Error in runBatchTelegramScraperAction:', error);
+    return {
+      success: false,
+      totalChannels: 0,
+      totalFound: 0,
+      totalExtracted: 0,
+      totalSaved: 0,
+      channelResults: [],
+      error: error?.message || 'Terjadi kesalahan saat menjalankan batch scraper.',
+    };
+  }
+}
+

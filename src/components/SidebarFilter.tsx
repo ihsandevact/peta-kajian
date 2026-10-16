@@ -295,7 +295,7 @@ export default function SidebarFilter({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleBookmark(session.id);
+                        toggleBookmark(session.id, session);
                       }}
                       className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                         isBookmarked(session.id)

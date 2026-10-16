@@ -10,7 +10,9 @@ import { createClient } from '@/utils/supabase/client';
 import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
+import { useOnlineStatus, cacheFeedSnapshot, getFeedSnapshot, getCachedOfflineSessions } from '@/utils/offlineCache';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
+import RequestContributorModal from '@/components/RequestContributorModal';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -48,6 +50,7 @@ function HeaderAvatar({ url, size = 'w-5 h-5' }: { url?: string; size?: string }
 
 export default function HomeClient() {
   const { bookmarks } = useBookmarks();
+  const { isOffline } = useOnlineStatus();
 
   const [filters, setFilters] = useState<FilterState>({
     time: 'semua',
@@ -66,6 +69,7 @@ export default function HomeClient() {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
 
   // Periksa status login dan role pengguna
   useEffect(() => {
@@ -125,12 +129,43 @@ export default function HomeClient() {
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
-      const data = await fetchActiveSessions();
-      setSessions(data);
-      setIsLoading(false);
+
+      if (isOffline) {
+        const cached = getFeedSnapshot();
+        const offlineBookmarked = getCachedOfflineSessions();
+        const map = new Map<string, StudySession>();
+        [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
+        setSessions(Array.from(map.values()));
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        const data = await fetchActiveSessions();
+        if (data && data.length > 0) {
+          setSessions(data);
+          cacheFeedSnapshot(data);
+        } else {
+          const cached = getFeedSnapshot();
+          const offlineBookmarked = getCachedOfflineSessions();
+          const map = new Map<string, StudySession>();
+          [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
+          setSessions(Array.from(map.values()));
+        }
+      } catch (e) {
+        console.warn('Gagal memuat kajian online, beralih ke offline cache:', e);
+        const cached = getFeedSnapshot();
+        const offlineBookmarked = getCachedOfflineSessions();
+        const map = new Map<string, StudySession>();
+        [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
+        setSessions(Array.from(map.values()));
+      } finally {
+        setIsLoading(false);
+      }
     }
+
     loadData();
-  }, []);
+  }, [isOffline]);
 
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
@@ -396,6 +431,16 @@ export default function HomeClient() {
       {/* AREA KANAN */}
       <div className="flex-1 flex flex-col min-w-0">
         
+        {/* Banner Peringatan Mode Offline */}
+        {isOffline && (
+          <div className="bg-amber-600 dark:bg-amber-700 text-white text-xs font-medium px-4 py-2 flex items-center justify-center gap-2 shadow-sm z-30 shrink-0">
+            <span className="material-symbols-outlined text-[18px]">wifi_off</span>
+            <span>
+              <strong>Mode Offline</strong> — Perangkat tidak terhubung ke internet. Menampilkan kajian tersimpan di memori perangkat Anda.
+            </span>
+          </div>
+        )}
+
         {/* MAIN CONTENT SPLIT */}
         <main className="flex-1 flex w-full h-full relative overflow-hidden bg-surface md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */">
           
@@ -498,6 +543,14 @@ export default function HomeClient() {
           </div>
         </nav>
       </div>
+
+      {/* Modal Permohonan Menjadi Kontributor */}
+      <RequestContributorModal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        onSuccess={() => setIsRequestModalOpen(false)}
+        userEmail={currentUser?.email || undefined}
+      />
     </div>
   );
 }

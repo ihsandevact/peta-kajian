@@ -3,6 +3,9 @@ import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
+import { subscribeToPushNotifications } from '@/utils/webPushClient';
+import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
+import NotificationReminderToggle from '@/components/NotificationReminderToggle';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import KajianPreviewModal from '@/components/KajianPreviewModal';
 
@@ -80,6 +83,17 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
     gCalUrl.searchParams.append('location', `${session.venues?.name || ''}, ${session.venues?.address || ''}`);
   }
 
+  const handleToggleAttendance = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const willAttend = !attending;
+    toggleAttendance(session.id);
+    if (willAttend) {
+      if (!isSessionReminded(session.id)) {
+        toggleSessionReminder(session.id);
+      }
+    }
+  };
+
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
       <div className="w-full max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
@@ -111,7 +125,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleBookmark(session.id);
+                  toggleBookmark(session.id, session);
                 }}
                 className={`w-7 h-7 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
                   bookmarked
@@ -155,23 +169,27 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
         )}
 
         <div className="p-2.5 sm:p-3">
-          {/* Header Badges & Action Buttons (Inline jika tidak ada poster) */}
+          {/* Header Badges & Action Buttons */}
           <div className="flex items-center justify-between pb-1.5 border-b border-surface-container-high/60 mb-1.5">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
               Kajian Aktif
             </span>
             <div className="flex items-center gap-1.5">
+              {/* Badge Kategori */}
               <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-surface-container px-2 py-0.5 rounded-full border border-surface-container-high">
                 {session.audience_type}
               </span>
+
+              {/* Toggle Pengingat Notifikasi Tepat di Samping Kategori */}
+              <NotificationReminderToggle sessionId={session.id} variant="inline" />
 
               {/* Aksi Tambahan jika TIDAK ADA poster */}
               {!hasPoster && (
                 <>
                   <button
                     type="button"
-                    onClick={() => toggleBookmark(session.id)}
+                    onClick={() => toggleBookmark(session.id, session)}
                     className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                       bookmarked
                         ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
@@ -268,7 +286,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             </div>
             <button
               type="button"
-              onClick={() => toggleAttendance(session.id)}
+              onClick={handleToggleAttendance}
               className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all active:scale-95 cursor-pointer flex items-center gap-1 border ${
                 attending
                   ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'

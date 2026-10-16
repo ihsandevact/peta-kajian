@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import type { StudySession } from '@/lib/services/kajian';
+import { cacheSessionFull, removeCachedSession } from './offlineCache';
 
 const BOOKMARKS_STORAGE_KEY = 'peta_kajian_bookmarks';
 const BOOKMARKS_EVENT = 'peta-kajian-bookmarks-updated';
@@ -80,14 +82,22 @@ export async function syncBookmarksWithDatabase(userId: string): Promise<string[
  * Melakukan toggle bookmark (tambah jika belum, hapus jika sudah ada).
  * - Berjalan optimis di localStorage & state lokal seketika (zero latency).
  * - Sinkronisasi otomatis ke Supabase di latar belakang jika pengguna login.
+ * - Menyimpan payload lengkap ke offlineCache jika bookmark ditambahkan.
  */
-export function toggleSessionBookmark(id: string): boolean {
+export function toggleSessionBookmark(id: string, session?: StudySession): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const current = getStoredBookmarks();
     const exists = current.includes(id);
     const updated = exists ? current.filter((item) => item !== id) : [...current, id];
     localStorage.setItem(BOOKMARKS_STORAGE_KEY, JSON.stringify(updated));
+
+    // Sinkronisasi dengan offlineCache untuk ketersediaan saat offline (misal di basement masjid)
+    if (exists) {
+      removeCachedSession(id);
+    } else if (session) {
+      cacheSessionFull(session);
+    }
 
     // Beritahu semua listener di halaman saat ini (Optimistic UI)
     window.dispatchEvent(new CustomEvent(BOOKMARKS_EVENT, { detail: updated }));
@@ -164,8 +174,8 @@ export function useBookmarks() {
     };
   }, []);
 
-  const toggle = useCallback((id: string) => {
-    return toggleSessionBookmark(id);
+  const toggle = useCallback((id: string, session?: StudySession) => {
+    return toggleSessionBookmark(id, session);
   }, []);
 
   const isBookmarked = useCallback(

@@ -15,6 +15,9 @@ export interface TelegramChannel {
   submitted_by_name?: string | null;
   reviewed_by?: string | null;
   reviewed_at?: string | null;
+  last_scraped_at?: string | null;
+  last_scrape_status?: string | null;
+  last_scrape_count?: number;
   created_at: string;
   updated_at: string;
 }

@@ -1,6 +1,7 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -12,9 +13,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  themeColor: "#047857",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+};
+
 export const metadata: Metadata = {
   title: "Peta Kajian Indonesia",
   description: "Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Peta Kajian",
+  },
   icons: {
     icon: [
       { url: "/favicon.ico?v=3" },
@@ -37,6 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3" />
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=3" />
         <link rel="manifest" href="/site.webmanifest" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Peta Kajian" />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
         <link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet" />
       </head>
@@ -45,7 +61,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         suppressHydrationWarning
       >
         {children}
+        <PWAInstallPrompt />
       </body>
     </html>
   );
 }
+

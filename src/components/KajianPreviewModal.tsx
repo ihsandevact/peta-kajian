@@ -7,7 +7,10 @@ import { hasPhysicalLocation } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
+import { subscribeToPushNotifications } from '@/utils/webPushClient';
+import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
+import NotificationReminderToggle from '@/components/NotificationReminderToggle';
 
 interface KajianPreviewModalProps {
   isOpen: boolean;
@@ -66,6 +69,17 @@ export default function KajianPreviewModal({
     0,
     (session.attendees_count || 0) + getExtraCount(session.id)
   );
+
+  const handleToggleAttendance = async () => {
+    if (!session) return;
+    const willAttend = !attending;
+    toggleAttendance(session.id);
+    if (willAttend) {
+      if (!isSessionReminded(session.id)) {
+        toggleSessionReminder(session.id);
+      }
+    }
+  };
 
   const now = new Date();
   const info = getEffectiveSessionInfo(session, now);
@@ -318,7 +332,7 @@ export default function KajianPreviewModal({
 
                 <button
                   type="button"
-                  onClick={() => toggleAttendance(session.id)}
+                  onClick={handleToggleAttendance}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 border ${
                     attending
                       ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
@@ -330,6 +344,20 @@ export default function KajianPreviewModal({
                   </span>
                   <span>{attending ? 'Saya Hadir' : 'Insya Allah Hadir'}</span>
                 </button>
+              </div>
+
+              {/* Pengingat Notifikasi HP (Web Push) */}
+              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-on-surface block">Pengingat Notifikasi HP</span>
+                    <span className="text-[10px] text-outline">Dapatkan alarm push 2 jam sebelum kajian dimulai</span>
+                  </div>
+                </div>
+                <NotificationReminderToggle sessionId={session.id} className="w-full sm:w-auto shrink-0 justify-center" />
               </div>
             </div>
 
@@ -375,7 +403,7 @@ export default function KajianPreviewModal({
                 {/* Tombol Bookmark */}
                 <button
                   type="button"
-                  onClick={() => toggleBookmark(session.id)}
+                  onClick={() => toggleBookmark(session.id, session)}
                   className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 px-3 rounded-xl border transition-colors cursor-pointer ${
                     bookmarked
                       ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'

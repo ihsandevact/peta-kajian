@@ -18,6 +18,7 @@ import {
   deleteTelegramChannel,
 } from '@/app/actions/telegram';
 import AdminScraperModal from '@/components/AdminScraperModal';
+import { runBatchTelegramScraperAction } from '@/app/actions/scraper';
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
@@ -50,6 +51,27 @@ export default function AdminTelegramChannelsPage() {
   const [rejectingChannel, setRejectingChannel] = useState<TelegramChannel | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
+
+  // Batch Scraper State
+  const [isBatchScraping, setIsBatchScraping] = useState(false);
+
+  const handleBatchScrape = async () => {
+    if (!confirm('Jalankan bot scraper ke seluruh channel telegram yang aktif secara otomatis?')) return;
+    setIsBatchScraping(true);
+    try {
+      const res = await runBatchTelegramScraperAction(5);
+      if (res.success) {
+        showToast(`Alhamdulillah! Berhasil memproses ${res.totalChannels} channel. Total kajian baru: ${res.totalSaved}`);
+        await loadData();
+      } else {
+        alert(res.error || 'Terjadi kesalahan saat batch scraping.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Gagal menjalankan batch scraper.');
+    } finally {
+      setIsBatchScraping(false);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -261,6 +283,19 @@ export default function AdminTelegramChannelsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
+              onClick={handleBatchScrape}
+              disabled={isBatchScraping}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white shadow-xs transition-colors cursor-pointer"
+              title="Jalankan scraping otomatis ke seluruh channel aktif sekaligus"
+            >
+              <span className={`material-symbols-outlined text-[18px] ${isBatchScraping ? 'animate-spin' : ''}`}>
+                {isBatchScraping ? 'progress_activity' : 'bolt'}
+              </span>
+              <span>{isBatchScraping ? 'Memproses Semua...' : 'Jalankan Semua Channel'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 setScraperTargetChannel(null);
                 setIsScraperModalOpen(true);
@@ -269,7 +304,7 @@ export default function AdminTelegramChannelsPage() {
               title="Jalankan bot AI untuk menyadap pengumuman dari channel Telegram"
             >
               <span className="material-symbols-outlined text-[18px] text-purple-400">smart_toy</span>
-              <span>Jalankan Bot Scraper</span>
+              <span>Scrape Per Channel</span>
             </button>
 
             <button
@@ -281,6 +316,40 @@ export default function AdminTelegramChannelsPage() {
               <span>Tambah Channel Resmi</span>
             </button>
           </div>
+        </div>
+
+        {/* Banner Otomasi Cron Scraper */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-surface-container border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-start gap-3">
+            <span className="p-2 rounded-xl bg-purple-500/15 text-purple-700 dark:text-purple-300 shrink-0">
+              <span className="material-symbols-outlined text-[20px]">schedule</span>
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-on-surface text-sm">Automasi Bot Scraper (Cron Terjadwal)</span>
+                <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
+                  Aktif
+                </span>
+              </div>
+              <p className="text-outline mt-0.5">
+                Endpoint otomatisasi siap dihubungkan ke Vercel Cron, GitHub Actions, atau cron-job.org:{' '}
+                <code className="bg-surface-container-high px-1.5 py-0.5 rounded text-[11px] font-mono text-purple-700 dark:text-purple-300">
+                  /api/cron/telegram-scraper
+                </code>
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleBatchScrape}
+            disabled={isBatchScraping}
+            className="w-full sm:w-auto px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-2xs cursor-pointer text-xs"
+          >
+            <span className={`material-symbols-outlined text-[16px] ${isBatchScraping ? 'animate-spin' : ''}`}>
+              {isBatchScraping ? 'progress_activity' : 'play_arrow'}
+            </span>
+            <span>{isBatchScraping ? 'Sedang Memproses...' : 'Scrape Semua Sekarang'}</span>
+          </button>
         </div>
 
         {/* Akses Ditolak Alert (Jika Bukan Admin) */}
@@ -515,6 +584,23 @@ export default function AdminTelegramChannelsPage() {
                             <span className="text-outline">•</span>
                             <span className="text-outline text-[11px]">
                               Oleh: <strong className="text-on-surface">{channel.submitted_by_name}</strong>
+                            </span>
+                          </>
+                        )}
+
+                        {channel.last_scraped_at && (
+                          <>
+                            <span className="text-outline">•</span>
+                            <span className="text-emerald-700 dark:text-emerald-400 font-medium text-[11px] inline-flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[13px]">history</span>
+                              <span>
+                                Terakhir:{' '}
+                                {new Date(channel.last_scraped_at).toLocaleTimeString('id-ID', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                                {channel.last_scrape_count !== undefined ? ` (${channel.last_scrape_count} baru)` : ''}
+                              </span>
                             </span>
                           </>
                         )}

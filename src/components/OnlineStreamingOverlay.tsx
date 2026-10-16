@@ -2,8 +2,13 @@
 
 import React, { useState } from 'react';
 import type { StudySession } from '@/lib/services/kajian';
-
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import { useBookmarks } from '@/utils/bookmarks';
+import { useAttendance } from '@/utils/attendance';
+import { subscribeToPushNotifications } from '@/utils/webPushClient';
+import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
+import NotificationReminderToggle from '@/components/NotificationReminderToggle';
+import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import KajianPreviewModal from '@/components/KajianPreviewModal';
 
 interface OnlineStreamingOverlayProps {
@@ -14,6 +19,17 @@ interface OnlineStreamingOverlayProps {
 export default function OnlineStreamingOverlay({ session, onClose }: OnlineStreamingOverlayProps) {
   const [imgError, setImgError] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+
+  const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
+  const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
+
+  const bookmarked = isBookmarked(session.id);
+  const attending = isAttending(session.id);
+  const totalAttendees = Math.max(
+    0,
+    (session.attendees_count || 0) + getExtraCount(session.id)
+  );
 
   const now = new Date();
   const info = getEffectiveSessionInfo(session, now);
@@ -71,6 +87,23 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
     gCalUrl.searchParams.append('location', 'Online / Live Streaming');
   }
 
+  const handleToggleAttendance = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const willAttend = !attending;
+    toggleAttendance(session.id);
+    if (willAttend) {
+      if (!isSessionReminded(session.id)) {
+        toggleSessionReminder(session.id);
+      }
+    }
+  };
+
+  const handleShare = () => {
+    shareSessionNative(session, () => {
+      setIsShareModalOpen(true);
+    });
+  };
+
   return (
     <div 
       className="absolute inset-0 z-40 flex items-center justify-center p-3 sm:p-6 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-200"
@@ -78,14 +111,14 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
     >
       {/* Studio Showcase Card */}
       <div 
-        className="relative w-full max-w-md bg-surface-container-lowest rounded-3xl shadow-2xl overflow-hidden border border-surface-container-high/70 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-md bg-surface-container-lowest rounded-3xl shadow-2xl overflow-hidden border border-surface-container-high/70 flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Poster Header (Jika ada) - Klik untuk membuka Preview Modal */}
         {hasPoster ? (
           <div
             onClick={() => setIsPreviewModalOpen(true)}
-            className="w-full h-44 sm:h-52 bg-slate-900 relative shrink-0 overflow-hidden cursor-pointer group"
+            className="w-full h-48 sm:h-56 bg-slate-900 relative shrink-0 overflow-hidden cursor-pointer group"
             title="Klik untuk melihat poster penuh & detail kajian"
           >
             <img
@@ -98,13 +131,14 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
             {/* Hover Zoom Indicator */}
-            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-xs pointer-events-none">
-              <span className="material-symbols-outlined text-[18px]">zoom_in</span>
-              <span>Lihat Poster</span>
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white font-semibold text-xs pointer-events-none">
+              <span className="material-symbols-outlined text-[20px]">zoom_in</span>
+              <span>Klik untuk Perbesar Poster & Detail</span>
             </div>
 
             {/* Close Button Absolute */}
             <button
+              type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 onClose();
@@ -116,7 +150,7 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
             </button>
 
             {/* Live Indicator on Poster */}
-            <div className="absolute bottom-3 left-3 flex items-center gap-2">
+            <div className="absolute bottom-3 left-3 flex items-center gap-2 pointer-events-none">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white shadow-md ${
                 isLive ? 'bg-red-600 animate-pulse' : 'bg-red-700/90'
               }`}>
@@ -138,8 +172,9 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
               </span>
             </div>
             <button
+              type="button"
               onClick={onClose}
-              className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+              className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors cursor-pointer"
               title="Tutup"
             >
               <span className="material-symbols-outlined text-[18px]">close</span>
@@ -148,22 +183,85 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
         )}
 
         {/* Content Body */}
-        <div className="p-5 overflow-y-auto space-y-4">
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-red-600 font-semibold mb-1">
-              <span className="material-symbols-outlined text-[16px]">{platformIcon}</span>
-              <span>Siaran Daring Tanpa Lokasi Fisik</span>
+        <div className="p-4 sm:p-5 overflow-y-auto space-y-3.5 no-scrollbar">
+          {/* Header Badges & Actions Row (Disamping Kategori) */}
+          <div className="flex items-center justify-between pb-2 border-b border-surface-container-high/60 gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="inline-flex items-center gap-1 text-xs text-red-600 dark:text-red-400 font-semibold">
+                <span className="material-symbols-outlined text-[16px]">{platformIcon}</span>
+                <span>Siaran Daring</span>
+              </span>
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-surface-container px-2 py-0.5 rounded-full border border-surface-container-high">
+                {session.audience_type}
+              </span>
+
+              {/* Toggle Pengingat Notifikasi Tepat di Samping Kategori */}
+              <NotificationReminderToggle sessionId={session.id} variant="inline" />
             </div>
-            <h2 className="text-lg sm:text-xl font-bold text-on-surface leading-snug">
+
+            {/* Quick Actions: Bookmark & Share */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBookmark(session.id, session);
+                }}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                  bookmarked
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                    : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-highest'
+                }`}
+                title={bookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
+              >
+                <span
+                  className="material-symbols-outlined text-[15px]"
+                  style={{ fontVariationSettings: bookmarked ? "'FILL' 1" : "'FILL' 0" }}
+                >
+                  bookmark
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleShare();
+                }}
+                className="w-7 h-7 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer"
+                title="Bagikan Info Kajian"
+              >
+                <span className="material-symbols-outlined text-[14px]">share</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <h2 
+              onClick={() => setIsPreviewModalOpen(true)}
+              className="text-base sm:text-lg font-bold text-on-surface leading-snug hover:text-primary transition-colors cursor-pointer"
+              title="Klik untuk membuka detail kajian"
+            >
               {session.title}
             </h2>
-            <p className="text-sm font-semibold text-primary mt-1">
+            <p className="text-xs sm:text-sm font-semibold text-primary mt-1">
               {session.speaker_name}
             </p>
+
+            {hasPoster && (
+              <button
+                type="button"
+                onClick={() => setIsPreviewModalOpen(true)}
+                className="inline-flex items-center gap-1 text-[11px] text-primary hover:underline font-semibold mt-1.5 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[14px]">open_in_full</span>
+                <span>Buka Poster Penuh & Info Lengkap</span>
+              </button>
+            )}
           </div>
 
           {/* Metadata Grid */}
-          <div className="p-3.5 rounded-2xl bg-surface-container-low/80 border border-surface-container-high/60 space-y-2 text-xs">
+          <div className="p-3 rounded-2xl bg-surface-container-low/80 border border-surface-container-high/60 space-y-2 text-xs">
             <div className="flex items-start gap-2.5">
               <span className="material-symbols-outlined text-outline text-[18px] shrink-0 mt-0.5">
                 calendar_month
@@ -184,20 +282,44 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
             )}
           </div>
 
+          {/* Kehadiran Jamaah (RSVP) */}
+          <div className="p-2 px-3 rounded-2xl bg-surface-container/60 border border-surface-container-high/60 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-on-surface-variant min-w-0">
+              <span className="material-symbols-outlined text-[17px] text-primary shrink-0">groups</span>
+              <span className="truncate">
+                <strong className="text-on-surface font-semibold">{totalAttendees}</strong> Jamaah hadir
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleToggleAttendance}
+              className={`shrink-0 px-2.5 py-1 rounded-xl text-xs font-semibold transition-all active:scale-95 cursor-pointer flex items-center gap-1 border ${
+                attending
+                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                  : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border-primary/30'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[13px]">
+                {attending ? 'check_circle' : 'how_to_reg'}
+              </span>
+              <span>{attending ? 'Saya Hadir' : 'Insya Allah Hadir'}</span>
+            </button>
+          </div>
+
           {/* Primary CTA: Watch Live Button */}
           {streamUrl ? (
-            <div className="space-y-2 pt-1">
+            <div className="space-y-1.5 pt-0.5">
               <a
                 href={streamUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2.5 shadow-lg shadow-red-600/25 hover:shadow-red-600/40 transition-all active:scale-[0.98]"
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-red-600/25 hover:shadow-red-600/40 transition-all active:scale-[0.98]"
               >
-                <span className="material-symbols-outlined text-[22px]">play_circle</span>
+                <span className="material-symbols-outlined text-[20px]">play_circle</span>
                 <span>Buka & Tonton {platformLabel}</span>
-                <span className="material-symbols-outlined text-[16px] opacity-75">open_in_new</span>
+                <span className="material-symbols-outlined text-[15px] opacity-75">open_in_new</span>
               </a>
-              <p className="text-[11px] text-center text-outline truncate px-2">
+              <p className="text-[10px] text-center text-outline truncate px-2">
                 Tautan: {streamUrl}
               </p>
             </div>
@@ -222,8 +344,9 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
             )}
 
             <button
+              type="button"
               onClick={onClose}
-              className="py-2 px-4 rounded-xl border border-surface-container-high hover:bg-surface-container text-outline text-xs font-semibold transition-colors"
+              className="py-2 px-4 rounded-xl border border-surface-container-high hover:bg-surface-container text-outline text-xs font-semibold transition-colors cursor-pointer"
             >
               Kembali ke Peta
             </button>
@@ -235,6 +358,13 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
       <KajianPreviewModal
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
+        session={session}
+      />
+
+      {/* Share Modal Fallback */}
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
         session={session}
       />
     </div>

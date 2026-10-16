@@ -86,11 +86,48 @@ const responseSchema = {
 export async function extractKajianFromPoster(
   formData: FormData
 ): Promise<{ success: boolean; data?: ExtractedKajianData; error?: string }> {
-  // 1. Verifikasi User Login
+  // 1. Verifikasi User Login & Hak Akses Kontributor/Admin
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return { success: false, error: 'Silakan login terlebih dahulu untuk menggunakan fitur AI.' };
+  }
+
+  // Verifikasi role kontributor atau admin
+  const { ADMIN_EMAILS } = await import('@/lib/services/admin');
+  const isAdminByEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim());
+  let isAuthorized = !!isAdminByEmail;
+
+  if (!isAuthorized) {
+    try {
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (roleData && (roleData.role === 'kontributor' || roleData.role === 'admin' || roleData.role === 'superadmin')) {
+        isAuthorized = true;
+      } else {
+        // Cek legacy contributor (pernah membuat session)
+        const { count } = await supabase
+          .from('study_sessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('created_by', user.id);
+        if (count && count > 0) {
+          isAuthorized = true;
+        }
+      }
+    } catch (e) {
+      console.warn('Role verification error in extractKajianFromPoster:', e);
+    }
+  }
+
+  if (!isAuthorized) {
+    return {
+      success: false,
+      error: 'Akses terbatas. Fitur pemindaian poster AI ini hanya dapat diakses oleh Relawan Kontributor Dakwah terverifikasi atau Admin. Silakan ajukan diri menjadi kontributor di profil Anda.',
+    };
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -107,9 +144,9 @@ export async function extractKajianFromPoster(
     return { success: false, error: 'Silakan pilih berkas gambar/poster kajian terlebih dahulu.' };
   }
 
-  // Batas ukuran 6MB
-  if (posterFile.size > 6 * 1024 * 1024) {
-    return { success: false, error: 'Ukuran poster maksimal 6 MB.' };
+  // Batas ukuran 10MB (client compressor biasanya mengompres ke < 1MB)
+  if (posterFile.size > 10 * 1024 * 1024) {
+    return { success: false, error: 'Ukuran poster maksimal 10 MB.' };
   }
 
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
@@ -124,19 +161,23 @@ export async function extractKajianFromPoster(
 
     const currentYear = new Date().getFullYear();
     const promptText = `
-Anda adalah asisten AI cerdas untuk platform jadwal kajian sunnah "Peta Kajian".
+Anda adalah asisten AI cerdas untuk platform jadwal kajian sunnah "Peta Kajian" di Indonesia.
 Tugas Anda adalah membaca gambar poster/flyer dakwah ini, lalu mengekstrak semua informasi jadwal kajian secara akurat dan menyusunnya ke dalam format JSON sesuai schema.
 
 Aturan Penting:
 1. title: Judul tema atau topik bahasan kajian yang paling menonjol.
 2. speaker_name: Nama ustadz / pemateri beserta gelar atau kunyahnya (contoh: "Ustadz Dr. Syafiq Riza Basalamah, M.A.").
 3. book_title: Nama kitab rujukan jika disebutkan di poster (contoh: "Kitab Tauhid", "Bulughul Maram"). Jika tidak ada kitab yang dibahas, isi null.
-4. start_datetime: Tanggal & jam kajian format YYYY-MM-DDTHH:mm (contoh: "${currentYear}-10-25T09:00"). Jika tanggal di poster tidak mencantumkan tahun, gunakan tahun sekarang (${currentYear}). Jika hanya jam tanpa tanggal pasti (kajian rutin), isi null.
+4. start_datetime: Tanggal & jam kajian format YYYY-MM-DDTHH:mm (contoh: "${currentYear}-10-25T09:00"). 
+   - Jika tanggal di poster menyertakan kalender Hijriyah dan Masehi, prioritaskan tanggal Masehi.
+   - Jika tahun tidak tertulis, gunakan tahun sekarang (${currentYear}).
+   - Jika hanya jam tanpa tanggal pasti (kajian rutin), isi null.
+   - Perkiraan waktu sholat jika tertulis "Ba'da Subuh" = 05:00, "Ba'da Maghrib" = 18:30, "Ba'da Isya" = 20:00, "Ba'da Ashar" = 16:00, "Pagi" = 09:00.
 5. mode:
    - 'offline': Diadakan di masjid / lokasi fisik dan TIDAK mencantumkan link/siaran live streaming.
    - 'online': Kajian murni via Zoom/YouTube/Instagram Live tanpa kehadiran jamaah di masjid fisik.
    - 'hybrid': Diadakan di masjid fisik DAN disiarkan live streaming.
-6. venue_name: Nama masjid atau lokasi fisik beserta daerahnya (contoh: "Masjid Agung Al-Azhar Kebayoran Baru, Jakarta Selatan"). Jika mode murni 'online', isi null.
+6. venue_name: Nama masjid atau lokasi fisik beserta kelurahan/kecamatan/kota jika ada (contoh: "Masjid Agung Al-Azhar Kebayoran Baru, Jakarta Selatan"). Jika mode murni 'online', isi null.
 7. audience: 'umum' (untuk ikhwan & akhwat), 'ikhwan' (khusus pria), atau 'akhwat' (khusus wanita).
 8. is_recurring: true jika ini kajian rutin (misalnya "Setiap Ahad Pekan ke-1 & 3", "Kajian Rutin Malam Kamis", "Rutin Ba'da Subuh"), false jika kajian tematik/tabligh akbar sekali jalan.
 9. recurring_rule: jika is_recurring = true, isi dayOfWeek (0=Ahad s/d 6=Sabtu), time (HH:mm), timeCategory (subuh|pagi|siang|sore|maghrib|isya), dan weeks ([1,2,3,4,5] atau pekan tertentu).
@@ -146,7 +187,7 @@ Aturan Penting:
     const ai = new GoogleGenAI({ apiKey });
 
     // Model multimodal aktif
-    const modelsToTry = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
     let lastError: any = null;
     let extractedJsonText: string | null = null;
 
