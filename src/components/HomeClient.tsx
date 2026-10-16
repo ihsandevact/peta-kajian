@@ -200,11 +200,17 @@ export default function HomeClient() {
         if (!hasAllFacilities) return false;
       }
 
-      // Status Filter: Berlangsung, Tersimpan, Terbaru, Selesai, Rutin, Online
+      // Status Filter: Berlangsung, Tersimpan, Selesai, Rutin, Online
       const now = new Date();
       const info = getEffectiveSessionInfo(s, now);
       const isRutin = !!s.is_recurring;
       
+      // Smart Filtering: Sembunyikan kajian tematik yang sudah lewat dari tampilan utama
+      // kecuali pengguna secara sengaja memilih filter 'selesai' atau melihat 'tersimpan'
+      if (filters.time !== 'selesai' && filters.time !== 'tersimpan' && info.isPast && !isRutin) {
+        return false;
+      }
+
       if (filters.time === 'tersimpan' && !bookmarks.includes(s.id)) return false;
       if (filters.time === 'berlangsung' && !info.isLive) return false;
       if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
@@ -272,6 +278,10 @@ export default function HomeClient() {
       if (sessionId) {
         const found = sessions.find(s => s.id === sessionId);
         if (found) {
+          const info = getEffectiveSessionInfo(found, new Date());
+          if (info.isPast && !found.is_recurring) {
+            setFilters(p => ({ ...p, time: 'selesai' }));
+          }
           setSelectedSession(found);
           setIsSheetExpanded(false);
         }

@@ -185,7 +185,7 @@ export default function SidebarFilter({
 
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
-          <Pill active={filters.time === 'semua'} label="Semua" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
+          <Pill active={filters.time === 'semua'} label="Mendatang" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
           <Pill
             active={filters.time === 'tersimpan'}
             label={bookmarks.length > 0 ? `📌 Tersimpan (${bookmarks.length})` : '📌 Tersimpan'}
@@ -193,18 +193,17 @@ export default function SidebarFilter({
           />
           <Pill active={filters.time === 'berlangsung'} label="🔴 Berlangsung" onClick={() => setFilters(p => ({ ...p, time: 'berlangsung' }))} />
           <Pill active={filters.time === 'terdekat'} label="Terdekat" onClick={() => setFilters(p => ({ ...p, time: 'terdekat' }))} />
-          <Pill active={filters.time === 'terbaru'} label="Terbaru" onClick={() => setFilters(p => ({ ...p, time: 'terbaru' }))} />
           <Pill active={filters.time === 'rutin'} label="Rutin" onClick={() => setFilters(p => ({ ...p, time: 'rutin' }))} />
           <Pill active={filters.time === 'online'} label="Online (Hybrid)" onClick={() => setFilters(p => ({ ...p, time: 'online' }))} />
-          <Pill active={filters.time === 'selesai'} label="Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
           <Pill active={!filters.audience.includes('ikhwan')} label="Khusus Akhwat" onClick={() => setFilters(p => ({ ...p, audience: p.audience.includes('ikhwan') ? ['akhwat'] : ['umum', 'ikhwan', 'akhwat'] }))} />
+          <Pill active={filters.time === 'selesai'} label="Arsip Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
         </div>
       </div>
 
       {/* 2. Result Count Subtext Bar */}
       <div className="flex px-4 py-1.5 bg-surface-container-low/70 items-center justify-between text-outline text-[11px] font-medium shrink-0">
         <span>
-          Menampilkan {sessions.length} kajian{filters.region ? ` di ${filters.region.name}` : ''}
+          Menampilkan {sessions.length} kajian{filters.time === 'selesai' ? ' (Arsip Selesai)' : ''}{filters.region ? ` di ${filters.region.name}` : ''}
         </span>
       </div>
 
@@ -222,8 +221,16 @@ export default function SidebarFilter({
                   Tandai kajian favorit dengan ikon simpan untuk menyusun jadwal kajian pribadi Anda.
                 </p>
               </>
+            ) : filters.time === 'selesai' ? (
+              <>
+                <span className="material-symbols-outlined text-[36px] text-outline/60">history</span>
+                <p className="font-semibold text-on-surface">Tidak Ada Arsip Kajian Selesai</p>
+                <p className="text-xs text-on-surface-variant max-w-[240px]">
+                  Belum ada riwayat kajian masa lalu yang sesuai dengan filter pencarian ini.
+                </p>
+              </>
             ) : (
-              'Tidak ada kajian yang sesuai pencarian.'
+              'Tidak ada kajian mendatang yang sesuai pencarian.'
             )}
           </div>
         ) : (
