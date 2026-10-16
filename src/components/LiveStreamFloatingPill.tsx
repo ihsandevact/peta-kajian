@@ -27,23 +27,35 @@ export default function LiveStreamFloatingPill({
     async function checkLiveCount() {
       try {
         const supabase = createClient();
-        const { data, count, error } = await supabase
+        const { data, error } = await supabase
           .from('youtube_channels')
-          .select('id, channel_name, channel_handle, current_video_id, current_video_title, default_speaker_name', { count: 'exact' })
+          .select('id, channel_name, channel_handle, current_video_id, current_video_title, default_speaker_name')
           .eq('is_active', true)
-          .eq('is_currently_live', true)
-          .limit(1);
+          .eq('is_currently_live', true);
 
-        if (!error && typeof count === 'number') {
-          setLiveCount(count);
-          if (data && data[0] && data[0].current_video_id) {
+        if (!error && data) {
+          // Deduplikasi berdasarkan current_video_id unik
+          const uniqueMap = new Map<string, any>();
+          data.forEach((item) => {
+            if (item.current_video_id) {
+              const k = item.current_video_id.toLowerCase().trim();
+              if (!uniqueMap.has(k)) {
+                uniqueMap.set(k, item);
+              }
+            }
+          });
+          const uniqueLive = Array.from(uniqueMap.values());
+          setLiveCount(uniqueLive.length);
+          if (uniqueLive.length > 0) {
             setFirstLive({
-              videoId: data[0].current_video_id,
-              title: data[0].current_video_title || `Live ${data[0].channel_name}`,
-              channelName: data[0].channel_name,
-              speakerName: data[0].default_speaker_name || '',
-              handle: data[0].channel_handle,
+              videoId: uniqueLive[0].current_video_id,
+              title: uniqueLive[0].current_video_title || `Live ${uniqueLive[0].channel_name}`,
+              channelName: uniqueLive[0].channel_name,
+              speakerName: uniqueLive[0].default_speaker_name || '',
+              handle: uniqueLive[0].channel_handle,
             });
+          } else {
+            setFirstLive(null);
           }
         }
       } catch (err) {

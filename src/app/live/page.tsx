@@ -60,9 +60,19 @@ export default function LiveStreamingPage() {
     setLoading(false);
   }
 
-  // Daftar channel yang sedang live saat ini
+  // Daftar channel yang sedang live saat ini (didukung proteksi deduplikasi)
   const liveChannels = useMemo(() => {
-    return channels.filter((c) => c.is_currently_live && c.current_video_id);
+    const map = new Map<string, YoutubeChannel>();
+    channels.forEach((c) => {
+      if (c.is_currently_live && c.current_video_id) {
+        // Kunci deduplikasi utama: videoId unik atau handle channel
+        const normKey = (c.current_video_id || c.channel_handle).toLowerCase().trim();
+        if (!map.has(normKey)) {
+          map.set(normKey, c);
+        }
+      }
+    });
+    return Array.from(map.values());
   }, [channels]);
 
   // Filter pencarian khusus untuk siaran live yang sedang tayang
@@ -79,9 +89,18 @@ export default function LiveStreamingPage() {
     });
   }, [liveChannels, searchQuery]);
 
-  // Filter pencarian untuk channel (khusus admin)
+  // Filter pencarian untuk channel (khusus admin, deduplikasi handle)
   const filteredAllChannels = useMemo(() => {
-    return channels.filter((c) => {
+    const map = new Map<string, YoutubeChannel>();
+    channels.forEach((c) => {
+      const normHandle = (c.channel_handle || '').toLowerCase().trim();
+      if (!map.has(normHandle)) {
+        map.set(normHandle, c);
+      }
+    });
+    const uniqueChannels = Array.from(map.values());
+
+    return uniqueChannels.filter((c) => {
       const q = searchQuery.toLowerCase().trim();
       if (!q) return true;
       return (

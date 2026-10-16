@@ -96,6 +96,20 @@ export async function addYoutubeChannelAction(formData: {
       return { success: false, error: 'Nama Channel dan Handle (@handle) wajib diisi.' };
     }
 
+    // Cek duplikasi channel secara case-insensitive
+    const { data: existing } = await supabase
+      .from('youtube_channels')
+      .select('id, channel_name')
+      .ilike('channel_handle', handle)
+      .maybeSingle();
+
+    if (existing) {
+      return {
+        success: false,
+        error: `Channel dengan handle ${handle} sudah terdaftar (${existing.channel_name}).`,
+      };
+    }
+
     const { error } = await supabase.from('youtube_channels').insert({
       channel_name: channelName,
       channel_handle: handle,

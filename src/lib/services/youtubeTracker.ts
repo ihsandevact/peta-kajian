@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
 import { supabase } from '@/lib/supabase';
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 
 export interface YoutubeChannel {
   id: string;
@@ -53,7 +53,7 @@ export interface ResolvedYoutubeChannel {
  * Normalisasi format handle (@username)
  */
 export function normalizeHandle(handle: string): string {
-  const clean = handle.trim().replace(/^https?:\/\/(www\.)?youtube\.com\//i, '').replace(/^\/+/, '');
+  const clean = handle.trim().toLowerCase().replace(/^https?:\/\/(www\.)?youtube\.com\//i, '').replace(/^\/+/, '');
   return clean.startsWith('@') ? clean : `@${clean}`;
 }
 
@@ -223,12 +223,25 @@ export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?:
       if (vidMatch) videoId = vidMatch[1];
     }
 
-    // Penanda siaran langsung YouTube yang valid
-    const hasIsLiveMarker = html.includes('"isLive":true') || html.includes('"isLiveNow":true');
-    const isLiveBroadcast = html.includes('"liveBroadcastDetails"') || html.includes('"isLiveContent":true');
-    const isEnded = html.includes('"status":"ENDED"') || html.includes('"ended":true');
+    // 1. Periksa penanda pasti OFFLINE atau siaran berakhir
+    const isOfflineStatus =
+      html.includes('LIVE_STREAM_OFFLINE') ||
+      html.includes('"isLiveNow":false') ||
+      html.includes('This live event has ended') ||
+      html.includes('Siaran langsung ini telah berakhir') ||
+      html.includes('"status":"ENDED"');
 
-    const isLive = Boolean(videoId && (hasIsLiveMarker || isLiveBroadcast) && !isEnded);
+    // 2. Periksa penanda siaran langsung yang aktif saat ini
+    const isLiveNow = html.includes('"isLiveNow":true');
+    const hasLiveStreamability = html.includes('liveStreamabilityRenderer');
+    const hasLiveMarker = html.includes('"isLive":true');
+
+    // Suatu siaran dinyatakan LIVE hanya jika videoId ada, tidak berstatus offline, dan memiliki indikator live aktif
+    const isLive = Boolean(
+      videoId &&
+      !isOfflineStatus &&
+      (isLiveNow || (hasLiveMarker && hasLiveStreamability))
+    );
 
     if (!isLive || !videoId) {
       return {
@@ -332,7 +345,7 @@ export async function fetchLiveYoutubeChannels(): Promise<YoutubeChannel[]> {
  * Mengambil seluruh channel untuk antarmuka admin
  */
 export async function fetchAdminYoutubeChannels(): Promise<YoutubeChannel[]> {
-  const supabaseServer = await createClient();
+  const supabaseServer = createAdminClient();
   const { data, error } = await supabaseServer
     .from('youtube_channels')
     .select('*')
@@ -360,7 +373,7 @@ export async function syncAllYoutubeChannels(): Promise<{
   const reports: ChannelSyncReport[] = [];
   let liveCount = 0;
 
-  const supabaseServer = await createClient();
+  const supabaseServer = createAdminClient();
 
   for (const channel of channels) {
     // Delay 500ms antar channel untuk stabilitas
@@ -460,6 +473,18 @@ export async function syncAllYoutubeChannels(): Promise<{
       // Channel sedang OFFLINE
       // Jika sebelumnya sedang live, kita tandai bahwa siaran telah berakhir
       if (channel.is_currently_live) {
+        // Bersihkan row study_sessions buatan bot jika ada agar tidak meninggalkan data menggantung
+        if (channel.current_session_id) {
+          try {
+            await supabaseServer
+              .from('study_sessions')
+              .delete()
+              .eq('id', channel.current_session_id);
+          } catch (sessionErr) {
+            console.warn(`Gagal membersihkan study_session bot ${channel.current_session_id}:`, sessionErr);
+          }
+        }
+
         await supabaseServer
           .from('youtube_channels')
           .update({

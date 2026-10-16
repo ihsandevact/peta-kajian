@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { sendWebPushNotification } from '@/lib/services/webPush';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +30,7 @@ async function handlePushRemindersCron(req: NextRequest) {
     }
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const now = new Date();
 
   // Rentang waktu: 90 menit s/d 150 menit ke depan (pusat di H-2 jam)

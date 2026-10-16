@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { fetchActiveTelegramChannels } from '@/lib/services/telegram';
 import { processAndSaveChannelKajian } from '@/lib/services/telegramScraper';
 
@@ -34,7 +34,7 @@ async function handleScraperCron(req: NextRequest) {
   }
 
   const startTime = Date.now();
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   try {
     const activeChannels = await fetchActiveTelegramChannels();
