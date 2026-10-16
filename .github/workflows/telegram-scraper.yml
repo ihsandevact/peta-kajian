@@ -26,10 +26,11 @@ jobs:
           MAX_POSTS="${{ github.event.inputs.max_posts || '5' }}"
           URL="https://${CLEAN_HOST}/api/cron/telegram-scraper?key=${{ secrets.CRON_SECRET }}&max=${MAX_POSTS}"
           
-          RESPONSE=$(curl -s -L --max-redirs 5 -w "\nHTTP_STATUS:%{http_code}" -m 180 \
+          RESPONSE=$(curl -sS -L --max-redirs 5 -w "\nHTTP_STATUS:%{http_code}" -m 330 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "User-Agent: PetaKajian-Cron/1.0" \
             -X GET "$URL" || echo -e "\nHTTP_STATUS:ERROR")
+
           
           BODY=$(echo "$RESPONSE" | sed -e '$d')
           STATUS=$(echo "$RESPONSE" | tail -n1 | sed -e 's|HTTP_STATUS:||')
