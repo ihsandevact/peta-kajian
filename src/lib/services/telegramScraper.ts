@@ -51,8 +51,191 @@ function isValidHttpUrl(value: unknown): boolean {
 }
 
 /**
+ * Membersihkan judul kajian dari tanda baca, simbol, dan kata umum (stop words).
+ */
+export function normalizeKajianTitle(title: string): string {
+  if (!title) return '';
+  return title
+    .toLowerCase()
+    .replace(/[^\w\s]/gi, ' ')
+    .replace(
+      /\b(kajian|rutin|tabligh|akbar|bedah|buku|kitab|tematik|ikhwan|akhwat|khusus|umum|dan|di|bersama|part|jilid|eps|episode|sesi|ke)\b/gi,
+      ' '
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Membersihkan nama pemateri dari gelar kehormatan, sapaan, dan label umum.
+ */
+export function normalizeSpeakerName(speaker: string): string {
+  if (!speaker) return '';
+  return speaker
+    .toLowerCase()
+    .replace(/[^\w\s]/gi, ' ')
+    .replace(
+      /\b(al|ustadz|ustad|ust|kiai|kyai|kh|k\.h\.|dr|dr\.|prof|prof\.|lc|lc\.|ma|m\.a\.|m\.sc|msc|hafizhahullah|hafidzahullah|pemateri|narasumber|tidak|disebutkan|asatidzah|syekh|syaikh|bin|abu|ummu)\b/gi,
+      ' '
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Menghitung kemiripan dua string (skor 0 sampai 1) menggunakan Bigram Dice Coefficient.
+ */
+export function calculateTextSimilarity(str1: string, str2: string): number {
+  const s1 = str1.trim().toLowerCase();
+  const s2 = str2.trim().toLowerCase();
+
+  if (s1 === s2) return 1;
+  if (!s1 || !s2) return 0;
+  if (s1.includes(s2) || s2.includes(s1)) return 0.9;
+
+  const getBigrams = (str: string) => {
+    const bigrams = new Set<string>();
+    for (let i = 0; i < str.length - 1; i++) {
+      bigrams.add(str.substring(i, i + 2));
+    }
+    return bigrams;
+  };
+
+  const bg1 = getBigrams(s1);
+  const bg2 = getBigrams(s2);
+  let intersection = 0;
+
+  for (const b of bg1) {
+    if (bg2.has(b)) intersection++;
+  }
+
+  const total = bg1.size + bg2.size;
+  return total > 0 ? (2 * intersection) / total : 0;
+}
+
+/**
+ * Memeriksa duplikasi kajian secara cerdas (multi-layer & fuzzy).
+ * Memeriksa baik kajian aktif (confirmed), menunggu kurasi (pending), maupun yang pernah di-reject.
+ */
+export async function checkIsDuplicateKajian({
+  kajian,
+  venueId,
+  contributorName,
+  supabaseClient,
+}: {
+  kajian: ExtractedScraperKajian;
+  venueId: string | null;
+  contributorName: string;
+  supabaseClient: any;
+}): Promise<{ isDuplicate: boolean; reason?: string }> {
+  try {
+    const cleanNewTitle = normalizeKajianTitle(kajian.title);
+    const cleanNewSpeaker = normalizeSpeakerName(kajian.speaker_name);
+
+    // 1. Pengecekan Khusus Kajian Rutin (is_recurring: true)
+    if (kajian.is_recurring) {
+      const { data: recurringCandidates } = await supabaseClient
+        .from('study_sessions')
+        .select('id, title, speaker_name, venue_id, contributor_name, status')
+        .eq('is_recurring', true)
+        .in('status', ['confirmed', 'pending']);
+
+      for (const cand of recurringCandidates || []) {
+        const cleanCandTitle = normalizeKajianTitle(cand.title);
+        const cleanCandSpeaker = normalizeSpeakerName(cand.speaker_name);
+
+        const titleSim = calculateTextSimilarity(cleanNewTitle, cleanCandTitle);
+        const isSameVenue = venueId && cand.venue_id === venueId;
+        const isSameSource = cand.contributor_name === contributorName;
+
+        // Jika judul mirip di venue yang sama atau channel yang sama
+        if ((isSameVenue || isSameSource) && titleSim >= 0.7) {
+          return {
+            isDuplicate: true,
+            reason: `Kajian rutin serupa sudah terdaftar: "${cand.title}" (${cand.status})`,
+          };
+        }
+
+        // Jika pemateri sama di venue yang sama untuk kajian rutin
+        if (isSameVenue && cleanNewSpeaker && cleanCandSpeaker && cleanNewSpeaker === cleanCandSpeaker) {
+          return {
+            isDuplicate: true,
+            reason: `Kajian rutin pemateri ${cand.speaker_name} di masjid yang sama sudah terdaftar: "${cand.title}"`,
+          };
+        }
+      }
+    }
+
+    // 2. Pengecekan Kajian Berdasarkan Waktu Pelaksanaan (+/- 14 jam dari waktu jadwal)
+    if (kajian.start_datetime) {
+      const targetTime = new Date(kajian.start_datetime).getTime();
+      if (!isNaN(targetTime)) {
+        const windowStart = new Date(targetTime - 14 * 60 * 60 * 1000).toISOString();
+        const windowEnd = new Date(targetTime + 14 * 60 * 60 * 1000).toISOString();
+
+        // Ambil semua kajian di rentang hari tersebut (termasuk status confirmed, pending, rejected)
+        const { data: timeCandidates } = await supabaseClient
+          .from('study_sessions')
+          .select('id, title, speaker_name, start_datetime, venue_id, contributor_name, status')
+          .gte('start_datetime', windowStart)
+          .lte('start_datetime', windowEnd);
+
+        for (const cand of timeCandidates || []) {
+          const cleanCandTitle = normalizeKajianTitle(cand.title);
+          const cleanCandSpeaker = normalizeSpeakerName(cand.speaker_name);
+          const titleSim = calculateTextSimilarity(cleanNewTitle, cleanCandTitle);
+          const isSameVenue = venueId && cand.venue_id === venueId;
+          const isSameSource = cand.contributor_name === contributorName;
+
+          // A. Judul mirip di tempat yang sama pada hari yang sama
+          if (isSameVenue && (titleSim >= 0.65 || cleanNewTitle.includes(cleanCandTitle) || cleanCandTitle.includes(cleanNewTitle))) {
+            return {
+              isDuplicate: true,
+              reason: `Judul serupa di masjid yang sama pada hari tersebut: "${cand.title}" (${cand.status})`,
+            };
+          }
+
+          // B. Judul mirip dari channel asal yang sama pada hari yang sama
+          if (isSameSource && (titleSim >= 0.65 || cleanNewTitle.includes(cleanCandTitle) || cleanCandTitle.includes(cleanNewTitle))) {
+            return {
+              isDuplicate: true,
+              reason: `Judul serupa dari @${contributorName.replace(/^@/, '')} pada hari yang sama: "${cand.title}" (${cand.status})`,
+            };
+          }
+
+          // C. Pemateri yang sama di tempat yang sama pada hari yang sama (selisih waktu < 4 jam)
+          if (isSameVenue && cleanNewSpeaker && cleanCandSpeaker && (cleanNewSpeaker === cleanCandSpeaker || cleanNewSpeaker.includes(cleanCandSpeaker) || cleanCandSpeaker.includes(cleanNewSpeaker))) {
+            const candTime = new Date(cand.start_datetime).getTime();
+            if (Math.abs(targetTime - candTime) <= 4 * 60 * 60 * 1000) {
+              return {
+                isDuplicate: true,
+                reason: `Pemateri ${cand.speaker_name} sudah ada jadwal di tempat ini pada jam berdekatan: "${cand.title}" (${cand.status})`,
+              };
+            }
+          }
+
+          // D. Judul dan pemateri keduanya sangat mirip (apapun venuenya pada hari yang sama)
+          if (titleSim >= 0.8 && cleanNewSpeaker && cleanCandSpeaker && cleanNewSpeaker === cleanCandSpeaker) {
+            return {
+              isDuplicate: true,
+              reason: `Kajian dengan judul dan pemateri yang sama pada hari tersebut: "${cand.title}" (${cand.status})`,
+            };
+          }
+        }
+      }
+    }
+
+    return { isDuplicate: false };
+  } catch (err: any) {
+    console.warn('[checkIsDuplicateKajian] Error saat cek duplikat:', err);
+    return { isDuplicate: false };
+  }
+}
+
+/**
  * Menyadap pesan teks dan gambar dari channel publik Telegram (t.me/s/{channel})
  */
+
 export async function scrapeTelegramHtml(
   rawChannelUsername: string,
   maxPosts: number = 5
@@ -500,21 +683,24 @@ export async function processAndSaveChannelKajian({
       continue;
     }
 
-    // B. Cek Duplikasi Kajian (hanya untuk kajian berlokasi fisik)
-    const { data: existingSession } = await supabaseClient
-      .from('study_sessions')
-      .select('id')
-      .ilike('speaker_name', kajian.speaker_name)
-      .eq('start_datetime', kajian.start_datetime)
-      .eq('venue_id', venueId)
-      .limit(1)
-      .maybeSingle();
+    // B. Cek Duplikasi Kajian secara Cerdas (Multi-layer & Fuzzy Matching)
+    const contributorName = kajian.source_channel
+      ? `@${kajian.source_channel.replace(/^@/, '')}`
+      : `@${cleanUser}`;
 
-    if (existingSession) {
+    const dupCheck = await checkIsDuplicateKajian({
+      kajian,
+      venueId,
+      contributorName,
+      supabaseClient,
+    });
+
+    if (dupCheck.isDuplicate) {
       skippedDuplicatesCount++;
-      allLogs.push(`   ⏭️ Jadwal kajian sudah ada di database (Duplikat). Dilewati.`);
+      allLogs.push(`   ⏭️ Jadwal kajian sudah ada di database (Duplikat: ${dupCheck.reason}). Dilewati.`);
       continue;
     }
+
 
     // C. Insert Study Session Baru (Fisik atau Hybrid)
     const posterUrl = isValidHttpUrl(kajian.poster_url) ? kajian.poster_url : null;
@@ -530,7 +716,7 @@ export async function processAndSaveChannelKajian({
       recurring_pattern: kajian.recurring_pattern || null,
       is_online: isOnline,
       stream_url: streamUrl,
-      contributor_name: kajian.source_channel ? `@${kajian.source_channel.replace(/^@/, '')}` : `@${cleanUser}`,
+      contributor_name: contributorName,
       status: targetStatus, // Default: 'pending' (membutuhkan approval admin)
     });
 
