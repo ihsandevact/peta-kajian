@@ -8,8 +8,10 @@ import type { StudySession } from '@/lib/services/kajian';
 import ShareModal from '@/components/ShareModal';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
 import { checkIsAdmin } from '@/lib/services/admin';
+import { useLivePlayer } from '@/context/LivePlayerContext';
 
 export default function LiveStreamingPage() {
+  const { playStream } = useLivePlayer();
   const [channels, setChannels] = useState<YoutubeChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -345,10 +347,29 @@ export default function LiveStreamingPage() {
                                     speakerName: speaker,
                                   })
                                 }
-                                className="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors"
+                                className="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                               >
                                 <span className="material-symbols-outlined text-[18px]">play_circle</span>
-                                <span>Tonton Sekarang</span>
+                                <span>Tonton</span>
+                              </button>
+
+                              {/* Tombol Putar Mini Player (PiP) */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  playStream({
+                                    videoId,
+                                    title,
+                                    channelName: channel.channel_name,
+                                    speakerName: speaker,
+                                    handle: channel.channel_handle,
+                                  })
+                                }
+                                className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                title="Putar di Mini Player (PiP pojok bawah)"
+                                aria-label="Putar di Mini Player"
+                              >
+                                <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
                               </button>
 
                               {/* Share Button */}
@@ -579,6 +600,23 @@ export default function LiveStreamingPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playStream({
+                      videoId: selectedVideo.videoId,
+                      title: selectedVideo.title,
+                      channelName: selectedVideo.channelName,
+                      speakerName: selectedVideo.speakerName || '',
+                    });
+                    setSelectedVideo(null);
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Lanjutkan di Mini Player pojok kanan bawah"
+                >
+                  <span className="material-symbols-outlined text-[16px] text-red-600">picture_in_picture_alt</span>
+                  <span>Putar di Pojok</span>
+                </button>
                 <a
                   href={`https://www.youtube.com/watch?v=${selectedVideo.videoId}`}
                   target="_blank"
@@ -586,11 +624,11 @@ export default function LiveStreamingPage() {
                   className="px-3.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center gap-1.5 transition-colors"
                 >
                   <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                  <span>Buka di YouTube</span>
+                  <span>YouTube</span>
                 </a>
                 <button
                   onClick={() => setSelectedVideo(null)}
-                  className="px-4 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-colors"
+                  className="px-4 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-colors cursor-pointer"
                 >
                   Tutup
                 </button>

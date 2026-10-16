@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
+import { useLivePlayer } from '@/context/LivePlayerContext';
 
 interface LiveStreamFloatingPillProps {
   hasSelectedSession?: boolean;
@@ -11,21 +12,39 @@ interface LiveStreamFloatingPillProps {
 export default function LiveStreamFloatingPill({
   hasSelectedSession = false,
 }: LiveStreamFloatingPillProps) {
+  const { playStream, isOpen } = useLivePlayer();
   const [liveCount, setLiveCount] = useState<number>(0);
+  const [firstLive, setFirstLive] = useState<{
+    videoId: string;
+    title: string;
+    channelName: string;
+    speakerName: string;
+    handle?: string;
+  } | null>(null);
   const [dismissed, setDismissed] = useState<boolean>(false);
 
   useEffect(() => {
     async function checkLiveCount() {
       try {
         const supabase = createClient();
-        const { count, error } = await supabase
+        const { data, count, error } = await supabase
           .from('youtube_channels')
-          .select('*', { count: 'exact', head: true })
+          .select('id, channel_name, channel_handle, current_video_id, current_video_title, default_speaker_name', { count: 'exact' })
           .eq('is_active', true)
-          .eq('is_currently_live', true);
+          .eq('is_currently_live', true)
+          .limit(1);
 
         if (!error && typeof count === 'number') {
           setLiveCount(count);
+          if (data && data[0] && data[0].current_video_id) {
+            setFirstLive({
+              videoId: data[0].current_video_id,
+              title: data[0].current_video_title || `Live ${data[0].channel_name}`,
+              channelName: data[0].channel_name,
+              speakerName: data[0].default_speaker_name || '',
+              handle: data[0].channel_handle,
+            });
+          }
         }
       } catch (err) {
         // Silent fail
@@ -38,7 +57,7 @@ export default function LiveStreamFloatingPill({
     return () => clearInterval(interval);
   }, []);
 
-  if (liveCount <= 0 || dismissed) {
+  if (liveCount <= 0 || dismissed || isOpen) {
     return null;
   }
 
@@ -65,13 +84,27 @@ export default function LiveStreamFloatingPill({
           </span>
         </span>
 
-        {/* Action Button Tonton */}
+        {/* Action Button: Putar di Pojok (Langsung di Peta) */}
+        {firstLive && (
+          <button
+            type="button"
+            onClick={() => playStream(firstLive)}
+            className="ml-0.5 px-2.5 py-1 rounded-full bg-red-600 hover:bg-red-700 active:scale-95 text-white text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all shadow-xs shrink-0 whitespace-nowrap cursor-pointer"
+            title="Putar langsung di pojok peta"
+          >
+            <span className="material-symbols-outlined text-[14px]">play_arrow</span>
+            <span>Putar</span>
+          </button>
+        )}
+
+        {/* Action Button: Buka Halaman /live */}
         <Link
           href="/live"
-          className="ml-0.5 px-2.5 py-1 rounded-full bg-red-600 hover:bg-red-700 active:scale-95 text-white text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all shadow-xs shrink-0 whitespace-nowrap"
+          className="px-2 py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-[10px] sm:text-[11px] font-bold flex items-center gap-0.5 transition-colors shrink-0 whitespace-nowrap"
+          title="Buka halaman live streaming"
         >
-          <span>Tonton</span>
-          <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+          <span>Semua</span>
+          <span className="material-symbols-outlined text-[13px]">chevron_right</span>
         </Link>
 
         {/* Dismiss Button */}

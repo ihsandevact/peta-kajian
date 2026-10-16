@@ -8,6 +8,7 @@ import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
 import NotificationReminderToggle from '@/components/NotificationReminderToggle';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import KajianPreviewModal from '@/components/KajianPreviewModal';
+import { useLivePlayer } from '@/context/LivePlayerContext';
 
 interface VenueCardProps {
   session: StudySession;
@@ -15,12 +16,30 @@ interface VenueCardProps {
 }
 
 export default function VenueCard({ session, onClose }: VenueCardProps) {
+  const { playStream } = useLivePlayer();
   const [imgError, setImgError] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
+
+  const ytVideoId = session.stream_url
+    ? session.stream_url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1]
+    : null;
+
+  const handleWatchLive = () => {
+    if (ytVideoId) {
+      playStream({
+        videoId: ytVideoId,
+        title: session.title,
+        speakerName: session.speaker_name,
+        channelName: session.venues?.name || session.speaker_name,
+      });
+    } else if (session.stream_url) {
+      window.open(session.stream_url, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   const bookmarked = isBookmarked(session.id);
   const attending = isAttending(session.id);
@@ -323,15 +342,14 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                   <span>Rute Maps</span>
                 </a>
 
-                <a
-                  href={session.stream_url!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                <button
+                  type="button"
+                  onClick={handleWatchLive}
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                   <span>Tonton Live</span>
-                </a>
+                </button>
               </div>
 
               {hasCalendar && (
@@ -372,15 +390,14 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           ) : hasLive && hasCalendar ? (
             /* Skenario 3: Murni Online Streaming (Ada Live + Kalender, Tanpa Masjid Fisik) */
             <div className="grid grid-cols-2 gap-1.5 w-full">
-              <a
-                href={session.stream_url!}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+              <button
+                type="button"
+                onClick={handleWatchLive}
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                 <span>Tonton Live</span>
-              </a>
+              </button>
 
               <a
                 href={gCalUrl.toString()}
@@ -407,15 +424,14 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 </a>
               )}
               {hasLive && (
-                <a
-                  href={session.stream_url!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                <button
+                  type="button"
+                  onClick={handleWatchLive}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
                   <span>Tonton Siaran Live</span>
-                </a>
+                </button>
               )}
               {hasCalendar && (
                 <a

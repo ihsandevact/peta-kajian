@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import { LivePlayerProvider } from "@/context/LivePlayerContext";
+import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePlayer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,8 +62,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="font-geist antialiased bg-surface text-on-surface h-full flex flex-col"
         suppressHydrationWarning
       >
-        {children}
-        <PWAInstallPrompt />
+        <LivePlayerProvider>
+          {children}
+          <PersistentFloatingLivePlayer />
+          <PWAInstallPrompt />
+        </LivePlayerProvider>
       </body>
     </html>
   );
