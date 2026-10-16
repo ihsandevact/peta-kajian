@@ -90,6 +90,12 @@ export async function runTelegramChannelScraperAction({
       }
     }
 
+    // Revalidasi jika ada channel YouTube baru yang otomatis didaftarkan
+    if (result.registeredChannelsCount > 0) {
+      revalidatePath('/admin/youtube');
+      revalidatePath('/live');
+    }
+
     return {
       success: true,
       result,
@@ -109,6 +115,7 @@ export interface BatchScrapeResult {
   totalFound: number;
   totalExtracted: number;
   totalSaved: number;
+  totalRegisteredChannels?: number;
   channelResults: ChannelScrapeResult[];
   error?: string;
 }
@@ -139,6 +146,7 @@ export async function runBatchTelegramScraperAction(
     let totalFound = 0;
     let totalExtracted = 0;
     let totalSaved = 0;
+    let totalRegisteredChannels = 0;
 
     for (const channel of activeChannels) {
       try {
@@ -165,6 +173,7 @@ export async function runBatchTelegramScraperAction(
         totalFound += result.foundMessages;
         totalExtracted += result.extractedCount;
         totalSaved += result.savedCount;
+        totalRegisteredChannels += result.registeredChannelsCount || 0;
       } catch (err: any) {
         console.error(`Gagal scraping channel ${channel.channel_username}:`, err);
         channelResults.push({
@@ -175,6 +184,7 @@ export async function runBatchTelegramScraperAction(
           savedCount: 0,
           skippedDuplicatesCount: 0,
           skippedPastCount: 0,
+          registeredChannelsCount: 0,
           logs: [`Error: ${err?.message || 'Unknown'}`],
           error: err?.message,
         });
@@ -186,12 +196,18 @@ export async function runBatchTelegramScraperAction(
       revalidatePath('/admin/telegram');
     }
 
+    if (totalRegisteredChannels > 0) {
+      revalidatePath('/admin/youtube');
+      revalidatePath('/live');
+    }
+
     return {
       success: true,
       totalChannels: activeChannels.length,
       totalFound,
       totalExtracted,
       totalSaved,
+      totalRegisteredChannels,
       channelResults,
     };
   } catch (error: any) {

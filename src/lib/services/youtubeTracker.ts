@@ -43,6 +43,12 @@ export interface ChannelSyncReport {
   message?: string;
 }
 
+export interface ResolvedYoutubeChannel {
+  handle: string;
+  channelName: string;
+  defaultSpeakerName: string;
+}
+
 /**
  * Normalisasi format handle (@username)
  */
@@ -50,6 +56,106 @@ export function normalizeHandle(handle: string): string {
   const clean = handle.trim().replace(/^https?:\/\/(www\.)?youtube\.com\//i, '').replace(/^\/+/, '');
   return clean.startsWith('@') ? clean : `@${clean}`;
 }
+
+/**
+ * Menyelesaikan URL siaran/video/channel YouTube menjadi handle dan nama channel yang valid
+ */
+export async function resolveYoutubeChannelInfo(
+  streamUrl: string,
+  fallbackSpeaker?: string | null
+): Promise<ResolvedYoutubeChannel | null> {
+  if (!streamUrl || typeof streamUrl !== 'string') return null;
+
+  const isYoutube = /(?:youtube\.com|youtu\.be)/i.test(streamUrl);
+  if (!isYoutube) return null;
+
+  try {
+    // 1. Cek apakah URL langsung berupa format handle: youtube.com/@handle
+    const directHandleMatch = streamUrl.match(/@([a-zA-Z0-9_.-]+)/);
+    if (directHandleMatch) {
+      const handle = normalizeHandle(`@${directHandleMatch[1]}`);
+
+      let channelName = fallbackSpeaker?.trim() || handle.replace('@', '');
+      try {
+        const res = await fetch(`https://www.youtube.com/${handle}`, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+          },
+          cache: 'no-store',
+        });
+        if (res.ok) {
+          const html = await res.text();
+          const authorMatch =
+            html.match(/"channelMetadataRenderer":\s*\{"title":"([^"]+)"/)?.[1] ||
+            html.match(/<meta property="og:title" content="([^"]+)"/)?.[1] ||
+            html.match(/<title>([^<]+)<\/title>/)?.[1]?.replace(/\s*-\s*YouTube\s*$/i, '');
+          if (authorMatch && !authorMatch.includes('404')) {
+            channelName = authorMatch
+              .replace(/&amp;/g, '&')
+              .replace(/&#39;/g, "'")
+              .replace(/&quot;/g, '"')
+              .trim();
+          }
+        }
+      } catch {
+        // Fallback ke channelName awal
+      }
+
+      return {
+        handle,
+        channelName,
+        defaultSpeakerName: fallbackSpeaker?.trim() || 'Asatidzah',
+      };
+    }
+
+    // 2. Jika berupa video / live link: youtube.com/watch?v=..., youtu.be/..., youtube.com/live/...
+    const targetUrl = streamUrl.startsWith('http') ? streamUrl : `https://${streamUrl}`;
+    const res = await fetch(targetUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+      },
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+
+    if (!res.ok) return null;
+    const html = await res.text();
+
+    const handleMatch =
+      html.match(/"canonicalBaseUrl":"\/@([^"]+)"/)?.[1] ||
+      html.match(/href="https:\/\/www\.youtube\.com\/@([^"]+)"/)?.[1] ||
+      html.match(/"channelUrl":"https:\/\/www\.youtube\.com\/@([^"]+)"/)?.[1];
+
+    if (!handleMatch) {
+      return null;
+    }
+
+    const handle = normalizeHandle(`@${handleMatch}`);
+
+    const authorMatch =
+      html.match(/"author":"([^"]+)"/)?.[1] ||
+      html.match(/<link itemprop="name" content="([^"]+)">/)?.[1] ||
+      html.match(/<meta property="og:video:actor" content="([^"]+)"/)?.[1];
+
+    let channelName = authorMatch
+      ? authorMatch.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim()
+      : (fallbackSpeaker?.trim() || handle.replace('@', ''));
+
+    return {
+      handle,
+      channelName,
+      defaultSpeakerName: fallbackSpeaker?.trim() || 'Asatidzah',
+    };
+  } catch (err) {
+    console.warn(`Gagal me-resolve YouTube channel dari URL ${streamUrl}:`, err);
+    return null;
+  }
+}
+
 
 /**
  * Ekstraksi nama Ustadz / Pemateri secara otomatis dari judul video

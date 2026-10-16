@@ -2,6 +2,7 @@ import * as cheerio from 'cheerio';
 import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
 import { cleanTelegramUsername } from './telegram';
+import { resolveYoutubeChannelInfo } from './youtubeTracker';
 
 export interface RawTelegramMessage {
   text: string;
@@ -32,6 +33,7 @@ export interface ChannelScrapeResult {
   savedCount: number;
   skippedDuplicatesCount: number;
   skippedPastCount: number;
+  registeredChannelsCount: number;
   logs: string[];
   error?: string;
 }
@@ -334,6 +336,7 @@ export async function processAndSaveChannelKajian({
       savedCount: 0,
       skippedDuplicatesCount: 0,
       skippedPastCount: 0,
+      registeredChannelsCount: 0,
       logs: allLogs,
     };
   }
@@ -352,6 +355,7 @@ export async function processAndSaveChannelKajian({
       savedCount: 0,
       skippedDuplicatesCount: 0,
       skippedPastCount: 0,
+      registeredChannelsCount: 0,
       logs: allLogs,
     };
   }
@@ -360,6 +364,7 @@ export async function processAndSaveChannelKajian({
   let savedCount = 0;
   let skippedDuplicatesCount = 0;
   let skippedPastCount = 0;
+  let registeredChannelsCount = 0;
 
   for (const kajian of kajianList) {
     allLogs.push(`👉 Memproses: "${kajian.title}" oleh ${kajian.speaker_name}`);
@@ -423,11 +428,7 @@ export async function processAndSaveChannelKajian({
       } else {
         const geo = await geocodeVenue(venueName);
         if (!geo) {
-          if (!isOnline) {
-            allLogs.push(`   ⚠️ Titik koordinat "${venueName}" tidak ditemukan. Kajian dilewati agar tidak muncul pin acak.`);
-            continue;
-          }
-          allLogs.push(`   ⚠️ Titik koordinat "${venueName}" tidak ditemukan. Disimpan sebagai kajian online saja.`);
+          allLogs.push(`   ⚠️ Titik koordinat "${venueName}" tidak ditemukan.`);
         } else {
           venueId = crypto.randomUUID();
           const { error: venueError } = await supabaseClient.from('venues').insert({
@@ -440,24 +441,74 @@ export async function processAndSaveChannelKajian({
 
           if (venueError) {
             allLogs.push(`   ❌ Gagal mendaftarkan masjid baru: ${venueError.message}`);
-            continue;
+          } else {
+            allLogs.push(`   🏠 Masjid BARU terdaftar: ${venueName} (${geo.full_address})`);
           }
-          allLogs.push(`   🏠 Masjid BARU terdaftar: ${venueName} (${geo.full_address})`);
         }
       }
     } else {
       allLogs.push(`   📺 Kajian daring/online (tanpa lokasi fisik masjid).`);
     }
 
-    // B. Cek Duplikasi Kajian
-    let dupQuery = supabaseClient
+    // JIKA TIDAK MEMILIKI VENUE ID (Masjid fisik tidak ditemukan / online murni):
+    if (!venueId) {
+      if (streamUrl) {
+        allLogs.push(`   🔍 Memeriksa link live streaming: ${streamUrl}`);
+        const ytInfo = await resolveYoutubeChannelInfo(streamUrl, kajian.speaker_name);
+        if (ytInfo) {
+          const { data: existingChannel } = await supabaseClient
+            .from('youtube_channels')
+            .select('id, channel_name, channel_handle')
+            .ilike('channel_handle', ytInfo.handle)
+            .maybeSingle();
+
+          if (existingChannel) {
+            allLogs.push(
+              `   📺 Channel YouTube "${existingChannel.channel_name}" (${existingChannel.channel_handle}) sudah terdaftar di YouTube Tracker. Kajian online tanpa peta dilewati.`
+            );
+          } else {
+            const newChanId = crypto.randomUUID();
+            const { error: chanErr } = await supabaseClient.from('youtube_channels').insert({
+              id: newChanId,
+              channel_name: ytInfo.channelName,
+              channel_handle: ytInfo.handle,
+              default_speaker_name: ytInfo.defaultSpeakerName,
+              default_city: 'Nasional',
+              is_active: true,
+              is_currently_live: false,
+            });
+
+            if (chanErr) {
+              allLogs.push(`   ❌ Gagal mendaftarkan channel YouTube baru: ${chanErr.message}`);
+            } else {
+              registeredChannelsCount++;
+              allLogs.push(
+                `   🎉 Channel YouTube BARU otomatis didaftarkan: "${ytInfo.channelName}" (${ytInfo.handle})!`
+              );
+            }
+          }
+        } else {
+          allLogs.push(
+            `   ℹ️ Link siaran daring bukan YouTube atau tidak dapat di-resolve (${streamUrl}). Kajian dilewati.`
+          );
+        }
+      } else {
+        allLogs.push(`   ⚠️ Titik koordinat masjid tidak ditemukan dan tidak ada siaran daring. Kajian dilewati.`);
+      }
+
+      // Selalu skip dari study_sessions karena tidak memiliki lokasi fisik di peta
+      continue;
+    }
+
+    // B. Cek Duplikasi Kajian (hanya untuk kajian berlokasi fisik)
+    const { data: existingSession } = await supabaseClient
       .from('study_sessions')
       .select('id')
       .ilike('speaker_name', kajian.speaker_name)
-      .eq('start_datetime', kajian.start_datetime);
-
-    dupQuery = venueId ? dupQuery.eq('venue_id', venueId) : dupQuery.is('venue_id', null);
-    const { data: existingSession } = await dupQuery.limit(1).maybeSingle();
+      .eq('start_datetime', kajian.start_datetime)
+      .eq('venue_id', venueId)
+      .limit(1)
+      .maybeSingle();
 
     if (existingSession) {
       skippedDuplicatesCount++;
@@ -465,7 +516,7 @@ export async function processAndSaveChannelKajian({
       continue;
     }
 
-    // C. Insert Study Session Baru
+    // C. Insert Study Session Baru (Fisik atau Hybrid)
     const posterUrl = isValidHttpUrl(kajian.poster_url) ? kajian.poster_url : null;
     const { error: sessionError } = await supabaseClient.from('study_sessions').insert({
       venue_id: venueId,
@@ -494,7 +545,7 @@ export async function processAndSaveChannelKajian({
   }
 
   allLogs.push(
-    `🏁 Selesai untuk @${cleanUser}: Disimpan = ${savedCount}, Duplikat = ${skippedDuplicatesCount}, Lampau = ${skippedPastCount}, Total Pesan = ${messages.length}`
+    `🏁 Selesai untuk @${cleanUser}: Disimpan = ${savedCount}, Channel YouTube Baru = ${registeredChannelsCount}, Duplikat = ${skippedDuplicatesCount}, Lampau = ${skippedPastCount}, Total Pesan = ${messages.length}`
   );
 
   return {
@@ -505,6 +556,7 @@ export async function processAndSaveChannelKajian({
     savedCount,
     skippedDuplicatesCount,
     skippedPastCount,
+    registeredChannelsCount,
     logs: allLogs,
   };
 }

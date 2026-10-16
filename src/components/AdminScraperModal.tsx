@@ -57,6 +57,7 @@ export default function AdminScraperModal({
     duplicates: 0,
     skippedPast: 0,
     extracted: 0,
+    channelsRegistered: 0,
   });
 
   const isCancelledRef = useRef(false);
@@ -131,7 +132,7 @@ export default function AdminScraperModal({
     setCurrentIndex(0);
     setTotalTargets(targets.length);
     setLogs([]);
-    setStats({ channelsDone: 0, saved: 0, duplicates: 0, skippedPast: 0, extracted: 0 });
+    setStats({ channelsDone: 0, saved: 0, duplicates: 0, skippedPast: 0, extracted: 0, channelsRegistered: 0 });
 
     appendLog(
       `🚀 Memulai proses Scraper untuk ${targets.length} channel (Target Status: ${
@@ -144,6 +145,7 @@ export default function AdminScraperModal({
     let runningPast = 0;
     let runningExtracted = 0;
     let runningChannelsDone = 0;
+    let runningChannelsRegistered = 0;
 
     for (let i = 0; i < targets.length; i++) {
       if (isCancelledRef.current) {
@@ -175,6 +177,7 @@ export default function AdminScraperModal({
           runningDuplicates += res.skippedDuplicatesCount;
           runningPast += res.skippedPastCount || 0;
           runningExtracted += res.extractedCount;
+          runningChannelsRegistered += res.registeredChannelsCount || 0;
           runningChannelsDone += 1;
 
           setStats({
@@ -183,6 +186,7 @@ export default function AdminScraperModal({
             duplicates: runningDuplicates,
             skippedPast: runningPast,
             extracted: runningExtracted,
+            channelsRegistered: runningChannelsRegistered,
           });
         }
       } catch (err: any) {
@@ -198,7 +202,7 @@ export default function AdminScraperModal({
     setIsRunning(false);
     setIsCompleted(true);
     appendLog(
-      `🎉 Selesai! Total ${runningChannelsDone} channel diproses. Kajian baru tersimpan: ${runningSaved}, Lampau dilewati: ${runningPast}, Duplikat dilewati: ${runningDuplicates}.`
+      `🎉 Selesai! Total ${runningChannelsDone} channel diproses. Kajian peta: ${runningSaved}, Channel YouTube baru: ${runningChannelsRegistered}, Lampau dilewati: ${runningPast}, Duplikat: ${runningDuplicates}.`
     );
 
     if (onFinished) {
@@ -475,7 +479,7 @@ export default function AdminScraperModal({
               </div>
 
               {/* Mini Stats Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1 text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 pt-1 text-center">
                 <div className="p-2 rounded-xl bg-surface-container-low border border-surface-container-high">
                   <span className="text-[10px] text-outline block">Channel Selesai</span>
                   <span className="text-sm font-bold text-on-surface font-mono">
@@ -489,9 +493,15 @@ export default function AdminScraperModal({
                   </span>
                 </div>
                 <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
-                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 block">Baru Disimpan</span>
+                  <span className="text-[10px] text-emerald-700 dark:text-emerald-300 block">Kajian Disimpan</span>
                   <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                     {stats.saved}
+                  </span>
+                </div>
+                <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20">
+                  <span className="text-[10px] text-rose-700 dark:text-rose-300 block">YouTube Baru</span>
+                  <span className="text-sm font-bold text-rose-600 dark:text-rose-400 font-mono">
+                    {stats.channelsRegistered}
                   </span>
                 </div>
                 <div className="p-2 rounded-xl bg-neutral-500/10 border border-neutral-500/20">

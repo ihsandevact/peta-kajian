@@ -54,6 +54,7 @@ async function handleScraperCron(req: NextRequest) {
     let totalSaved = 0;
     let totalExtracted = 0;
     let totalFound = 0;
+    let totalRegisteredChannels = 0;
 
     for (const channel of activeChannels) {
       try {
@@ -79,11 +80,13 @@ async function handleScraperCron(req: NextRequest) {
         totalFound += scrapeRes.foundMessages;
         totalExtracted += scrapeRes.extractedCount;
         totalSaved += scrapeRes.savedCount;
+        totalRegisteredChannels += scrapeRes.registeredChannelsCount || 0;
 
         results.push({
           channel: channel.channel_username,
           success: scrapeRes.success,
           savedCount: scrapeRes.savedCount,
+          registeredChannelsCount: scrapeRes.registeredChannelsCount,
           skippedDuplicates: scrapeRes.skippedDuplicatesCount,
         });
       } catch (channelErr: any) {
@@ -104,6 +107,7 @@ async function handleScraperCron(req: NextRequest) {
       totalFound,
       totalExtracted,
       totalSaved,
+      totalRegisteredChannels,
       channels: results,
     });
   } catch (error: any) {
