@@ -61,6 +61,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
   const info = getEffectiveSessionInfo(session, now);
   const dateObj = info.effectiveDate;
   const hasDate = !!dateObj;
+  const isPast = info.isPast && !session.is_recurring;
 
   // Format Tanggal
   const dateStr = dateObj
@@ -84,8 +85,8 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
     session.stream_url &&
     session.stream_url.trim() !== '' &&
     session.stream_url.toLowerCase() !== 'null'
-  );
-  const hasCalendar = hasDate;
+  ) && !isPast;
+  const hasCalendar = hasDate && !isPast;
 
   // --- GOOGLE CALENDAR GENERATOR ---
   const gCalUrl = new URL('https://calendar.google.com/calendar/render');
@@ -104,6 +105,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
 
   const handleToggleAttendance = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isPast) return;
     const willAttend = !attending;
     toggleAttendance(session.id);
     if (willAttend) {
@@ -115,7 +117,9 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
 
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
-      <div className="w-full max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
+      <div className={`w-full max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom flex flex-col relative overflow-x-hidden ${
+        isPast ? 'border-surface-container-highest shadow-md' : 'border-surface-container-high/80'
+      }`}>
         {/* Gambar Poster Header - Dapat diklik untuk membuka Preview Modal */}
         {hasPoster && (
           <div
@@ -126,7 +130,9 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             <img
               src={session.poster_url}
               alt={`Poster ${session.title}`}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                isPast ? 'grayscale-[35%] brightness-90' : ''
+              }`}
               onError={() => setImgError(true)}
             />
             {/* Vignette Overlay */}
@@ -190,18 +196,27 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
         <div className="p-2.5 sm:p-3">
           {/* Header Badges & Action Buttons */}
           <div className="flex items-center justify-between pb-1.5 border-b border-surface-container-high/60 mb-1.5">
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
-              Kajian Aktif
-            </span>
+            {isPast ? (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full border border-surface-container-highest">
+                <span className="material-symbols-outlined text-[13px] text-outline">history</span>
+                Kajian Telah Selesai
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                Kajian Aktif
+              </span>
+            )}
             <div className="flex items-center gap-1.5">
               {/* Badge Kategori */}
               <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-surface-container px-2 py-0.5 rounded-full border border-surface-container-high">
                 {session.audience_type}
               </span>
 
-              {/* Toggle Pengingat Notifikasi Tepat di Samping Kategori */}
-              <NotificationReminderToggle sessionId={session.id} variant="inline" />
+              {/* Toggle Pengingat Notifikasi Tepat di Samping Kategori (Hanya jika belum selesai) */}
+              {!isPast && (
+                <NotificationReminderToggle sessionId={session.id} variant="inline" />
+              )}
 
               {/* Aksi Tambahan jika TIDAK ADA poster */}
               {!hasPoster && (
@@ -298,38 +313,75 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           {/* Kehadiran Jamaah (RSVP) */}
           <div className="mt-2 p-1.5 px-2.5 rounded-xl bg-surface-container/60 border border-surface-container-high/60 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant min-w-0">
-              <span className="material-symbols-outlined text-[16px] text-primary shrink-0">groups</span>
+              <span className={`material-symbols-outlined text-[16px] shrink-0 ${isPast ? 'text-outline' : 'text-primary'}`}>groups</span>
               <span className="truncate whitespace-nowrap">
-                <strong className="text-on-surface font-semibold">{totalAttendees}</strong> Jamaah hadir
+                <strong className="text-on-surface font-semibold">{totalAttendees}</strong> {isPast ? 'Jamaah tercatat' : 'Jamaah hadir'}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={handleToggleAttendance}
-              className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all active:scale-95 cursor-pointer flex items-center gap-1 border ${
-                attending
-                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                  : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border-primary/30'
-              }`}
-            >
-              {attending ? (
-                <>
-                  <span className="material-symbols-outlined text-[13px]">check_circle</span>
-                  <span>Saya Hadir</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[13px]">how_to_reg</span>
-                  <span>Insya Allah Hadir</span>
-                </>
-              )}
-            </button>
+            {isPast ? (
+              <button
+                type="button"
+                disabled
+                className="shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-surface-container-high text-on-surface-variant/60 border border-surface-container-highest cursor-not-allowed select-none"
+                title="Kajian ini telah berakhir, presensi telah ditutup"
+              >
+                {attending ? (
+                  <span className="flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[13px] text-emerald-600">check_circle</span>
+                    <span>Telah Hadir</span>
+                  </span>
+                ) : (
+                  <span>Selesai</span>
+                )}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleToggleAttendance}
+                className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all active:scale-95 cursor-pointer flex items-center gap-1 border ${
+                  attending
+                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                    : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border-primary/30'
+                }`}
+              >
+                {attending ? (
+                  <>
+                    <span className="material-symbols-outlined text-[13px]">check_circle</span>
+                    <span>Saya Hadir</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[13px]">how_to_reg</span>
+                    <span>Insya Allah Hadir</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Aksi Bawah */}
           <div className="mt-2 pt-2 border-t border-surface-container-high/60 flex flex-col gap-1.5">
-          {/* Skenario 1: Hybrid (Ada Rute Maps DAN Ada Tonton Live) */}
-          {hasRoute && hasLive ? (
+          {/* Skenario Khusus: Kajian Selesai/Arsip (Hanya Aktifkan Link Rute Maps ke Masjid) */}
+          {isPast ? (
+            <div className="flex flex-col gap-1.5 w-full">
+              {hasRoute ? (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                  <span>Petunjuk Rute ke Lokasi</span>
+                </a>
+              ) : (
+                <div className="w-full py-1.5 px-3 text-center text-xs font-medium text-on-surface-variant bg-surface-container rounded-xl border border-surface-container-high">
+                  Kajian Online Telah Selesai
+                </div>
+              )}
+            </div>
+          ) : hasRoute && hasLive ? (
+            /* Skenario 1: Hybrid (Ada Rute Maps DAN Ada Tonton Live) */
             <>
               <div className="grid grid-cols-2 gap-1.5 w-full">
                 <a

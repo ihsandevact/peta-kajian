@@ -71,7 +71,7 @@ export default function KajianPreviewModal({
   );
 
   const handleToggleAttendance = async () => {
-    if (!session) return;
+    if (!session || isPast) return;
     const willAttend = !attending;
     toggleAttendance(session.id);
     if (willAttend) {
@@ -85,6 +85,7 @@ export default function KajianPreviewModal({
   const info = getEffectiveSessionInfo(session, now);
   const dateObj = info.effectiveDate;
   const hasDate = !!dateObj;
+  const isPast = info.isPast && !session.is_recurring;
 
   // Format Tanggal
   const dateStr = dateObj
@@ -177,7 +178,9 @@ export default function KajianPreviewModal({
                 <img
                   src={session.poster_url}
                   alt={`Poster ${session.title}`}
-                  className="max-h-[32vh] md:max-h-[72vh] w-auto h-auto max-w-full object-contain rounded-xl sm:rounded-2xl shadow-2xl transition-transform duration-300 hover:scale-[1.02]"
+                  className={`max-h-[32vh] md:max-h-[72vh] w-auto h-auto max-w-full object-contain rounded-xl sm:rounded-2xl shadow-2xl transition-transform duration-300 hover:scale-[1.02] ${
+                    isPast ? 'grayscale-[30%] brightness-90' : ''
+                  }`}
                   onError={() => setImgError(true)}
                 />
 
@@ -210,19 +213,30 @@ export default function KajianPreviewModal({
               {/* Header Badges & Tombol Tutup */}
               <div className="flex items-center justify-between pb-3 border-b border-surface-container-high/60">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
-                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-                    <span>Kajian Aktif</span>
-                  </span>
+                  {isPast ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant bg-surface-container-high px-2.5 py-1 rounded-full border border-surface-container-highest">
+                      <span className="material-symbols-outlined text-[14px] text-outline">history</span>
+                      <span>Kajian Telah Selesai</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200 dark:border-emerald-800">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                      <span>Kajian Aktif</span>
+                    </span>
+                  )}
 
                   <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider bg-surface-container px-2.5 py-1 rounded-full border border-surface-container-high">
                     {session.audience_type}
                   </span>
 
                   {session.is_online && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-50 dark:bg-red-950/40 px-2.5 py-1 rounded-full border border-red-200 dark:border-red-800">
-                      <span className="material-symbols-outlined text-[14px]">videocam</span>
-                      <span>Live Streaming</span>
+                    <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${
+                      isPast
+                        ? 'text-on-surface-variant bg-surface-container border-surface-container-high'
+                        : 'text-red-700 bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800'
+                    }`}>
+                      <span className="material-symbols-outlined text-[14px]">{isPast ? 'videocam_off' : 'videocam'}</span>
+                      <span>{isPast ? 'Siaran Selesai' : 'Live Streaming'}</span>
                     </span>
                   )}
                 </div>
@@ -236,6 +250,19 @@ export default function KajianPreviewModal({
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
               </div>
+
+              {/* Banner Penanda Arsip Kajian */}
+              {isPast && (
+                <div className="p-3 rounded-2xl bg-surface-container-high/60 border border-surface-container-highest flex items-start gap-2.5 text-xs text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[18px] text-outline shrink-0 mt-0.5">history</span>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-on-surface">Kajian Ini Telah Berakhir</span>
+                    <span className="text-[11px] text-outline mt-0.5">
+                      Informasi majelis ini tersimpan sebagai arsip. Anda masih dapat melihat petunjuk rute ke lokasi masjid di bawah.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Judul & Pemateri */}
               <div>
@@ -296,8 +323,8 @@ export default function KajianPreviewModal({
                   </div>
                 )}
 
-                {/* Live Stream URL Link */}
-                {hasLive && (
+                {/* Live Stream URL Link (Hanya jika belum selesai) */}
+                {hasLive && !isPast && (
                   <div className="flex items-center justify-between pt-2 border-t border-surface-container-high/60">
                     <div className="flex items-center gap-2 text-red-600 font-semibold text-xs">
                       <span className="material-symbols-outlined text-[18px]">smart_display</span>
@@ -319,75 +346,110 @@ export default function KajianPreviewModal({
               {/* Kehadiran Jamaah (RSVP) */}
               <div className="p-3 rounded-2xl bg-surface-container/60 border border-surface-container-high/70 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs text-on-surface-variant">
-                  <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isPast ? 'bg-surface-container text-outline' : 'bg-primary/10 text-primary'}`}>
                     <span className="material-symbols-outlined text-[18px]">groups</span>
                   </div>
                   <div>
                     <span className="block font-bold text-on-surface">
                       {totalAttendees} Jamaah
                     </span>
-                    <span className="text-[10px] text-outline">Berencana menghadiri kajian</span>
+                    <span className="text-[10px] text-outline">{isPast ? 'Tercatat menghadiri kajian' : 'Berencana menghadiri kajian'}</span>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleToggleAttendance}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 border ${
-                    attending
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                      : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border-primary/30'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[15px]">
-                    {attending ? 'check_circle' : 'how_to_reg'}
-                  </span>
-                  <span>{attending ? 'Saya Hadir' : 'Insya Allah Hadir'}</span>
-                </button>
+                {isPast ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-surface-container text-on-surface-variant/60 border border-surface-container-high cursor-not-allowed select-none"
+                    title="Kajian telah selesai, presensi telah ditutup"
+                  >
+                    {attending ? (
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[15px] text-emerald-600">check_circle</span>
+                        <span>Telah Hadir</span>
+                      </span>
+                    ) : (
+                      <span>Kajian Selesai</span>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleToggleAttendance}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 border ${
+                      attending
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-surface-container-lowest text-primary hover:bg-primary/10 border-primary/30'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">
+                      {attending ? 'check_circle' : 'how_to_reg'}
+                    </span>
+                    <span>{attending ? 'Saya Hadir' : 'Insya Allah Hadir'}</span>
+                  </button>
+                )}
               </div>
 
-              {/* Pengingat Notifikasi HP (Web Push) */}
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+              {/* Pengingat Notifikasi HP (Web Push) - Hanya untuk kajian yang belum selesai */}
+              {!isPast && (
+                <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-on-surface block">Pengingat Notifikasi HP</span>
+                      <span className="text-[10px] text-outline">Dapatkan alarm push 2 jam sebelum kajian dimulai</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-xs font-bold text-on-surface block">Pengingat Notifikasi HP</span>
-                    <span className="text-[10px] text-outline">Dapatkan alarm push 2 jam sebelum kajian dimulai</span>
-                  </div>
+                  <NotificationReminderToggle sessionId={session.id} className="w-full sm:w-auto shrink-0 justify-center" />
                 </div>
-                <NotificationReminderToggle sessionId={session.id} className="w-full sm:w-auto shrink-0 justify-center" />
-              </div>
+              )}
             </div>
 
             {/* ================= TOMBOL AKSI UTAMA DI FOOTER ================= */}
             <div className="pt-4 border-t border-surface-container-high/60 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
-                {hasRoute && (
+              {isPast ? (
+                /* Khusus Kajian Selesai/Arsip: Hanya Petunjuk Rute Maps yang diaktifkan */
+                hasRoute && (
                   <a
                     href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
                   >
-                    <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
-                    <span>Petunjuk Rute</span>
+                    <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                    <span>Petunjuk Rute ke Lokasi Masjid</span>
                   </a>
-                )}
+                )
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {hasRoute && (
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
+                      <span>Petunjuk Rute</span>
+                    </a>
+                  )}
 
-                {hasDate && (
-                  <a
-                    href={gCalUrl.toString()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">event_available</span>
-                    <span>Ke Kalender</span>
-                  </a>
-                )}
-              </div>
+                  {hasDate && (
+                    <a
+                      href={gCalUrl.toString()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">event_available</span>
+                      <span>Ke Kalender</span>
+                    </a>
+                  )}
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 {/* Tombol Bagikan */}

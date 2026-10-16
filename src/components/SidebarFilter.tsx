@@ -238,7 +238,7 @@ export default function SidebarFilter({
             const now = new Date();
             const info = getEffectiveSessionInfo(session, now);
             const isLive = info.isLive;
-            const isPast = info.isPast;
+            const isPast = info.isPast && !session.is_recurring;
             const isRutin = session.is_recurring;
             
             const isAkhwatOnly = session.audience_type === 'akhwat';
@@ -260,7 +260,7 @@ export default function SidebarFilter({
                 ref={isLast ? lastElementRef : null}
                 onClick={() => onSelectSession(session)}
                 className={`cursor-pointer p-4 transition-colors relative border-b border-surface-container-high/50 group
-                  ${isSelected ? 'bg-primary-container/10 shadow-[inset_3px_0_0_0_#15803d]' : 'hover:bg-surface-container-low'}
+                  ${isSelected ? 'bg-primary-container/10 shadow-[inset_3px_0_0_0_#15803d]' : isPast ? 'bg-surface-container-low/30 opacity-80 hover:opacity-100 hover:bg-surface-container-low' : 'hover:bg-surface-container-low'}
                 `}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -280,7 +280,10 @@ export default function SidebarFilter({
                         Rutin
                       </span>
                     ) : isPast ? (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide">Selesai</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide border border-surface-container-high">
+                        <span className="material-symbols-outlined text-[12px] text-outline">history</span>
+                        Selesai
+                      </span>
                     ) : (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#dcfce7] text-[#166534] uppercase tracking-wide border border-[#bbf7d0]">Akan Datang</span>
                     )}
@@ -288,9 +291,13 @@ export default function SidebarFilter({
                     <span className="text-[11px] text-on-surface-variant capitalize px-1 bg-surface-container-low rounded">{session.audience_type}</span>
 
                     {session.is_online && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#fee2e2] text-[#b91c1c] uppercase tracking-wide border border-[#fecaca]">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#dc2626]"></span>
-                        {session.venues ? 'Hybrid' : 'Online'}
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${
+                        isPast
+                          ? 'bg-surface-container text-on-surface-variant border-surface-container-high'
+                          : 'bg-[#fee2e2] text-[#b91c1c] border-[#fecaca]'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isPast ? 'bg-outline' : 'bg-[#dc2626]'}`}></span>
+                        {isPast ? 'Siaran Selesai' : (session.venues ? 'Hybrid' : 'Online')}
                       </span>
                     )}
                   </div>
@@ -338,12 +345,22 @@ export default function SidebarFilter({
                 <div className="mt-2 pt-1.5 flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     {hasPhysicalLocation(session) && (
-                      <a href={`https://maps.google.com/?q=${session.venues?.lat},${session.venues?.lng}`} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()} className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors">
+                      <a
+                        href={`https://maps.google.com/?q=${session.venues?.lat},${session.venues?.lng}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className={`inline-flex items-center gap-1 text-[11px] font-medium transition-colors ${
+                          isPast
+                            ? 'text-primary font-semibold hover:underline bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20'
+                            : 'text-on-surface-variant hover:text-primary'
+                        }`}
+                      >
                         <span>Rute Maps</span>
                         <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                       </a>
                     )}
-                    {session.stream_url && (
+                    {session.stream_url && !isPast && (
                       <a 
                         href={session.stream_url} 
                         target="_blank" 
