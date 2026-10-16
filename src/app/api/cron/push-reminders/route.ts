@@ -48,7 +48,7 @@ async function handlePushRemindersCron(req: NextRequest) {
         title,
         speaker_name,
         start_datetime,
-        venues ( name, address_text )
+        venues ( name, address )
       `)
       .eq('status', 'confirmed')
       .gte('start_datetime', windowStart)
