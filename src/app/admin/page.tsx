@@ -448,9 +448,29 @@ export default function AdminModerationPage() {
                           )}
 
                           <div className="flex items-center gap-1.5">
-                            <span className="material-symbols-outlined text-[16px] text-outline">person_outline</span>
-                            <span>Pengirim: <strong>{session.contributor_name && session.contributor_name.toLowerCase() !== 'null' && session.contributor_name.trim() !== '' ? session.contributor_name : 'Anonim'}</strong></span>
+                            <span className="material-symbols-outlined text-[16px] text-outline">
+                              {session.contributor_name?.startsWith('@') ? 'smart_toy' : 'person_outline'}
+                            </span>
+                            <span>
+                              Sumber:{' '}
+                              {session.contributor_name?.startsWith('@') ? (
+                                <span className="inline-flex items-center gap-1 text-sky-800 dark:text-sky-300 font-semibold">
+                                  <span className="px-1.5 py-0.5 rounded bg-sky-100 dark:bg-sky-950/60 border border-sky-300 dark:border-sky-800 text-[11px] font-mono">
+                                    Scraper {session.contributor_name}
+                                  </span>
+                                </span>
+                              ) : (
+                                <strong>
+                                  {session.contributor_name &&
+                                  session.contributor_name.toLowerCase() !== 'null' &&
+                                  session.contributor_name.trim() !== ''
+                                    ? session.contributor_name
+                                    : 'Anonim'}
+                                </strong>
+                              )}
+                            </span>
                           </div>
+
                         </div>
 
                         {/* Rejection Reason (If Rejected) */}

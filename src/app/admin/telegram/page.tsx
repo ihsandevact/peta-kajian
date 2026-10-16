@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin } from '@/lib/services/admin';
 import {
@@ -53,6 +54,7 @@ export default function AdminTelegramChannelsPage() {
 
   // Batch Scraper State
   const [isBatchScraping, setIsBatchScraping] = useState(false);
+  const [pendingScraperKajianCount, setPendingScraperKajianCount] = useState(0);
 
   const handleBatchScrape = async () => {
     if (!confirm('Jalankan bot scraper ke seluruh channel telegram yang aktif secara otomatis?')) return;
@@ -86,11 +88,20 @@ export default function AdminTelegramChannelsPage() {
     setIsAdmin(adminCheck);
 
     if (adminCheck) {
-      const data = await fetchAdminTelegramChannels('all');
+      const [data, countRes] = await Promise.all([
+        fetchAdminTelegramChannels('all'),
+        supabase
+          .from('study_sessions')
+          .select('id', { count: 'exact', head: true })
+          .ilike('contributor_name', '@%')
+          .eq('status', 'pending'),
+      ]);
       setChannels(data);
+      setPendingScraperKajianCount(countRes.count || 0);
     }
     setLoading(false);
   }, []);
+
 
   useEffect(() => {
     loadData();
@@ -306,6 +317,30 @@ export default function AdminTelegramChannelsPage() {
           </div>
         </div>
 
+        {/* Banner Pintas Moderasi Kajian Scraping (Jika Ada yang Pending) */}
+        {pendingScraperKajianCount > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-2.5">
+              <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[24px]">notifications_active</span>
+              <div>
+                <p className="text-sm font-bold">
+                  Ada {pendingScraperKajianCount} kajian hasil scraping yang menunggu kurasi Anda
+                </p>
+                <p className="text-xs text-amber-700/80 dark:text-amber-300/80 mt-0.5">
+                  Kajian baru dari channel Telegram perlu ditinjau sebelum otomatis tampil di peta publik.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/admin?filter=pending"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-colors shrink-0"
+            >
+              <span>Buka Antrean Moderasi</span>
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </Link>
+          </div>
+        )}
+
         {/* Banner Otomasi Cron Scraper */}
         <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-surface-container border border-purple-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
           <div className="flex items-start gap-3">
@@ -314,31 +349,26 @@ export default function AdminTelegramChannelsPage() {
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-on-surface text-sm">Automasi Bot Scraper (Cron Terjadwal)</span>
+                <span className="font-bold text-on-surface text-sm">Automasi Bot Scraper Terjadwal</span>
                 <span className="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
-                  Aktif
+                  Aktif via GitHub Actions
                 </span>
               </div>
               <p className="text-outline mt-0.5">
-                Endpoint otomatisasi siap dihubungkan ke Vercel Cron, GitHub Actions, atau cron-job.org:{' '}
-                <code className="bg-surface-container-high px-1.5 py-0.5 rounded text-[11px] font-mono text-purple-700 dark:text-purple-300">
-                  /api/cron/telegram-scraper
-                </code>
+                Channel aktif akan disadap otomatis berkala. Pantau kesehatan background worker di pusat komando.
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleBatchScrape}
-            disabled={isBatchScraping}
-            className="w-full sm:w-auto px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-2xs cursor-pointer text-xs"
+          <Link
+            href="/admin/cron"
+            className="w-full sm:w-auto px-3.5 py-1.5 bg-surface-container hover:bg-surface-container-high text-on-surface font-semibold rounded-xl border border-surface-container-high transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-2xs text-xs"
           >
-            <span className={`material-symbols-outlined text-[16px] ${isBatchScraping ? 'animate-spin' : ''}`}>
-              {isBatchScraping ? 'progress_activity' : 'play_arrow'}
-            </span>
-            <span>{isBatchScraping ? 'Sedang Memproses...' : 'Scrape Semua Sekarang'}</span>
-          </button>
+            <span className="material-symbols-outlined text-[16px] text-purple-600">monitoring</span>
+            <span>Lihat Log & Status di Monitoring Cron</span>
+            <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+          </Link>
         </div>
+
 
         {/* Akses Ditolak Alert (Jika Bukan Admin) */}
         {!loading && !isAdmin && (

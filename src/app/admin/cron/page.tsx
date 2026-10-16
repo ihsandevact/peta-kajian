@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin } from '@/lib/services/admin';
 import type {
@@ -330,9 +331,41 @@ export default function AdminCronMonitoringPage() {
                   </span>
                   <span>{isTriggering ? 'Sedang Menjalankan...' : 'Jalankan Sekarang'}</span>
                 </button>
+
+                {/* Link Navigasi Entitas Terkait */}
+                <div className="pt-2 text-center border-t border-surface-container-high/40">
+                  {job.jobName === 'youtube-tracker' && (
+                    <Link
+                      href="/admin/youtube"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      <span>Kelola Daftar Channel YouTube</span>
+                      <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                    </Link>
+                  )}
+                  {job.jobName === 'telegram-scraper' && (
+                    <Link
+                      href="/admin/telegram"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      <span>Kelola Channel Telegram & Scraper</span>
+                      <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                    </Link>
+                  )}
+                  {job.jobName === 'push-reminders' && (
+                    <Link
+                      href="/admin"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      <span>Lihat Jadwal di Manajemen Kajian</span>
+                      <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                    </Link>
+                  )}
+                </div>
               </div>
             );
           })}
+
         </div>
 
         {/* Tabel Riwayat Log Eksekusi */}

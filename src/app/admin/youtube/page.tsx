@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin } from '@/lib/services/admin';
 import type { YoutubeChannel, ChannelSyncReport } from '@/lib/services/youtubeTracker';
@@ -218,9 +219,20 @@ export default function AdminYoutubeChannelsPage() {
                 Pelacak YouTube Live Kajian
               </h1>
             </div>
-            <p className="text-xs text-outline mt-1">
-              Pantau siaran langsung channel dakwah kajian secara otomatis (0 Quota API).
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+              <p className="text-xs text-outline">
+                Pantau siaran langsung channel dakwah kajian secara otomatis (0 Quota API).
+              </p>
+              <span className="text-outline/40 hidden sm:inline">•</span>
+              <Link
+                href="/admin/cron"
+                className="inline-flex items-center gap-1 text-xs text-primary font-medium hover:underline"
+              >
+                <span>Lihat Status Cron</span>
+                <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+              </Link>
+            </div>
+
           </div>
 
           <div className="flex items-center gap-2.5 shrink-0">
