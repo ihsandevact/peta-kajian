@@ -102,9 +102,11 @@ export default function MobileNavDrawer({
         {/* Drawer Header */}
         <div className="p-4 border-b border-surface-container-high/60 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0">
-              <span className="material-symbols-outlined text-[20px]">mosque</span>
-            </div>
+            <img
+              src="/logo.png?v=2"
+              alt="Peta Kajian Logo"
+              className="w-10 h-10 rounded-xl object-contain shrink-0"
+            />
             <div>
               <span className="font-bold text-sm text-on-surface">Peta Kajian</span>
               <p className="text-[10px] text-outline leading-tight">Seluruh Indonesia</p>

@@ -41,9 +41,13 @@ function LoginForm() {
 
       {/* Main Login Card */}
       <div className="max-w-md w-full bg-surface-container-lowest rounded-3xl p-6 sm:p-8 shadow-xl border border-surface-container-high/60 text-center relative z-10 animate-in fade-in zoom-in-95 duration-200">
-        {/* Brand Icon */}
-        <div className="w-16 h-16 bg-primary-container text-on-primary-container rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-inner">
-          <span className="material-symbols-outlined text-[32px]">mosque</span>
+        {/* Brand Logo */}
+        <div className="w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+          <img
+            src="/logo.png?v=2"
+            alt="Peta Kajian Logo"
+            className="w-full h-full object-contain drop-shadow-sm"
+          />
         </div>
 
         <h1 className="text-2xl font-bold text-on-surface mb-2 tracking-tight">

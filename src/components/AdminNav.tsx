@@ -41,9 +41,11 @@ export default function AdminNav({ userEmail }: { userEmail?: string }) {
           {/* Brand & Logo */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <Link href="/admin" className="flex items-center gap-2">
-              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-600/10 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold shrink-0">
-                <span className="material-symbols-outlined text-[20px] sm:text-[22px]">shield</span>
-              </div>
+              <img
+                src="/logo.png?v=2"
+                alt="Peta Kajian Logo"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shrink-0"
+              />
               <div>
                 <div className="flex items-center gap-1.5">
                   <span className="font-bold text-xs sm:text-base text-on-surface">Peta Kajian</span>

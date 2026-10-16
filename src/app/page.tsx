@@ -274,13 +274,15 @@ export default function Home() {
 
         <div className={`flex flex-col gap-6 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
           {/* Logo Area */}
-          <div className={`flex items-center gap-2 ${isSidebarCollapsed ? 'justify-center' : 'px-2'}`}>
-            <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-on-primary text-[18px]">mosque</span>
-            </div>
+          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : 'px-1'}`}>
+            <img
+              src="/logo.png?v=2"
+              alt="Peta Kajian Logo"
+              className={`${isSidebarCollapsed ? 'w-11 h-11' : 'w-12 h-12'} object-contain shrink-0 transition-all drop-shadow-xs`}
+            />
             {!isSidebarCollapsed && (
               <div className="flex flex-col overflow-hidden whitespace-nowrap">
-                <span className="font-semibold text-base text-on-surface leading-tight">Peta Kajian</span>
+                <span className="font-bold text-base text-on-surface leading-tight tracking-tight">Peta Kajian</span>
                 <span className="text-[11px] font-medium text-outline">Seluruh Indonesia</span>
               </div>
             )}

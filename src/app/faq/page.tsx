@@ -496,9 +496,11 @@ export default function FAQPage() {
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           {/* Logo & Brand */}
           <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center font-bold shrink-0 transition-transform group-hover:scale-105">
-              <span className="material-symbols-outlined text-[22px]">mosque</span>
-            </div>
+            <img
+              src="/logo.png?v=2"
+              alt="Peta Kajian Logo"
+              className="w-10 h-10 rounded-xl object-contain shrink-0 transition-transform group-hover:scale-105"
+            />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-sm sm:text-base text-on-surface">Peta Kajian</span>
