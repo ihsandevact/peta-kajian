@@ -17,6 +17,7 @@ import {
   adminCreateTelegramChannel,
   deleteTelegramChannel,
 } from '@/app/actions/telegram';
+import AdminScraperModal from '@/components/AdminScraperModal';
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
@@ -28,6 +29,10 @@ export default function AdminTelegramChannelsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Modal AI Scraper
+  const [isScraperModalOpen, setIsScraperModalOpen] = useState(false);
+  const [scraperTargetChannel, setScraperTargetChannel] = useState<string | null>(null);
 
   // Modal Tambah Channel
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -253,7 +258,20 @@ export default function AdminTelegramChannelsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setScraperTargetChannel(null);
+                setIsScraperModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold bg-neutral-900 hover:bg-neutral-800 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-white shadow-xs transition-colors cursor-pointer border border-neutral-700"
+              title="Jalankan bot AI untuk menyadap pengumuman dari channel Telegram"
+            >
+              <span className="material-symbols-outlined text-[18px] text-purple-400">smart_toy</span>
+              <span>Jalankan Bot Scraper</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
@@ -549,24 +567,40 @@ export default function AdminTelegramChannelsPage() {
                         </>
                       )}
 
-                      {/* Jika Status Approved: Toggle Aktif/Nonaktif */}
+                      {/* Jika Status Approved: Tombol Scrape & Toggle Aktif/Nonaktif */}
                       {isApproved && (
-                        <button
-                          type="button"
-                          disabled={isProcessing}
-                          onClick={() => handleToggleActive(channel)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
-                            channel.is_active
-                              ? 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-surface-container-high'
-                              : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300'
-                          }`}
-                          title={channel.is_active ? 'Klik untuk menjeda scraping channel ini' : 'Klik untuk mengaktifkan scraper'}
-                        >
-                          <span className="material-symbols-outlined text-[16px]">
-                            {channel.is_active ? 'pause' : 'play_arrow'}
-                          </span>
-                          <span>{channel.is_active ? 'Jeda Scraper' : 'Aktifkan'}</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            disabled={isProcessing}
+                            onClick={() => {
+                              setScraperTargetChannel(channel.channel_username);
+                              setIsScraperModalOpen(true);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-700 dark:text-purple-300 border border-purple-500/30 transition-colors cursor-pointer disabled:opacity-50"
+                            title={`Scrape jadwal kajian langsung dari channel @${channel.channel_username}`}
+                          >
+                            <span className="material-symbols-outlined text-[16px]">sync</span>
+                            <span>Scrape</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={isProcessing}
+                            onClick={() => handleToggleActive(channel)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 ${
+                              channel.is_active
+                                ? 'bg-surface-container text-on-surface hover:bg-surface-container-high border border-surface-container-high'
+                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-300'
+                            }`}
+                            title={channel.is_active ? 'Klik untuk menjeda scraping channel ini' : 'Klik untuk mengaktifkan scraper'}
+                          >
+                            <span className="material-symbols-outlined text-[16px]">
+                              {channel.is_active ? 'pause' : 'play_arrow'}
+                            </span>
+                            <span>{channel.is_active ? 'Jeda' : 'Aktifkan'}</span>
+                          </button>
+                        </>
                       )}
 
                       {/* Tombol Hapus */}
@@ -770,6 +804,15 @@ export default function AdminTelegramChannelsPage() {
           </div>
         </div>
       )}
+
+      {/* Modal AI Telegram Scraper Runner */}
+      <AdminScraperModal
+        isOpen={isScraperModalOpen}
+        onClose={() => setIsScraperModalOpen(false)}
+        initialSelectedChannel={scraperTargetChannel}
+        channels={channels}
+        onFinished={loadData}
+      />
     </div>
   );
 }

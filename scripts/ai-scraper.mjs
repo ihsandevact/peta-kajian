@@ -110,14 +110,16 @@ const responseSchema = {
           speaker_name: { type: "STRING", description: "Nama pemateri beserta gelar" },
           book_title: { type: "STRING", description: "Nama kitab yang dibahas, null jika tidak ada" },
           audience_type: { type: "STRING", description: "Satu dari: 'umum', 'ikhwan', atau 'akhwat'" },
-          start_datetime: { type: "STRING", description: "Waktu mulai dalam format ISO8601 (YYYY-MM-DDTHH:mm:ssZ). Gunakan tahun ini." },
+          start_datetime: { type: "STRING", description: "Waktu mulai dalam format ISO8601 (YYYY-MM-DDTHH:mm:ssZ). Wajib tanggal yang akan datang atau tanggal rutin berikutnya." },
+          is_recurring: { type: "BOOLEAN", description: "true jika kajian rutin berulang, false jika tematik/sekali jalan." },
+          recurring_pattern: { type: "STRING", nullable: true, description: "Keterangan pola rutin jika is_recurring=true, null jika bukan kajian rutin." },
           venue_name: { type: "STRING", nullable: true, description: "Nama Masjid fisik beserta daerahnya (contoh: Masjid Nurul Iman Blok M). null jika kajian hanya online." },
           is_online: { type: "BOOLEAN", description: "true jika kajian disiarkan live (YouTube/Zoom/Instagram/dll)." },
           stream_url: { type: "STRING", nullable: true, description: "URL live streaming jika disebutkan, null jika tidak ada." },
           source_channel: { type: "STRING", nullable: true, description: "Username Telegram asal pengumuman (contoh: khalidbasalamahofficial)" },
           poster_url: { type: "STRING", description: "URL gambar poster (salin kembali URL yang diberikan)" }
         },
-        required: ["title", "speaker_name", "audience_type", "start_datetime", "is_online"]
+        required: ["title", "speaker_name", "audience_type", "start_datetime", "is_online", "is_recurring"]
       }
     }
   },
@@ -184,11 +186,28 @@ async function runScraper() {
     URL Poster Asli: ${msg.poster_url || "Tidak ada poster"}`
   ).join('\n\n---\n\n');
 
+  const now = new Date();
+  const todayIso = now.toISOString();
+  const todayFormatted = now.toLocaleDateString('id-ID', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+
   const promptText = `
     Anda adalah bot pengekstrak data jadwal kajian sunnah.
     Saya akan memberikan kumpulan pengumuman kajian mentah dari berbagai channel Telegram.
     Tugas Anda adalah memilah teks tersebut, mengabaikan pengumuman yang BUKAN kajian, lalu mengembalikan data kajian ke format JSON yang valid.
-    PENTING: Salin 'URL Poster Asli' persis seperti yang diberikan ke kolom poster_url. Jika 'Tidak ada poster', isi dengan null.
+    Hari ini adalah: ${todayFormatted} (${todayIso}).
+
+    ATURAN PENYARINGAN WAKTU (SANGAT PENTING):
+    1. HANYA ekstrak kajian yang AKAN DATANG (upcoming) atau KAJIAN RUTIN berulang:
+       - Jika kajian tematik/sekali jalan (is_recurring=false) dan tanggal pelaksanaannya SUDAH LEWAT sebelum hari ini (${todayFormatted}), JANGAN DIEKSTRAK (abaikan).
+       - Jika kajian bersifat RUTIN/BERKALA (misal: "Setiap Ahad Subuh", "Kajian Rutin Malam Jumat"), TETAP EKSTRAK dan set is_recurring=true serta isi recurring_pattern.
+    2. start_datetime: Wajib menyertakan tanggal dan jam yang jelas dalam format ISO8601 (YYYY-MM-DDTHH:mm:ssZ).
+       - Untuk kajian rutin, gunakan tanggal jadwal terdekat berikutnya (>= hari ini).
+    3. Salin 'URL Poster Asli' persis seperti yang diberikan ke kolom poster_url. Jika 'Tidak ada poster', isi dengan null.
     
     ATURAN KAJIAN ONLINE:
     - Jika kajian disiarkan via YouTube/Zoom/Instagram Live/Facebook Live/channel streaming DAN tidak menyebut masjid/tempat fisik,
@@ -208,7 +227,7 @@ async function runScraper() {
   for (let i = 0; i < maxRetries; i++) {
     try {
       response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+        model: 'gemini-flash-latest',
         contents: promptText,
         config: {
           responseMimeType: "application/json",
@@ -245,6 +264,24 @@ async function runScraper() {
   // Proses satu-persatu untuk Geocoding & Insert
   for (const kajian of kajianList) {
     console.log(`⚙️  Memproses: ${kajian.title} (${kajian.speaker_name})`);
+
+    // Filter Waktu: Lewati kajian tematik/sekali jalan yang tanggalnya sudah lampau
+    const now = new Date();
+    // Beri toleransi 4 jam ke belakang untuk kajian hari ini yang sedang berlangsung
+    const pastThreshold = new Date(now.getTime() - 4 * 60 * 60 * 1000);
+
+    if (!kajian.is_recurring && kajian.start_datetime) {
+      const sessionDate = new Date(kajian.start_datetime);
+      if (!isNaN(sessionDate.getTime()) && sessionDate < pastThreshold) {
+        console.log(`   ⏭️  Kajian sudah lampau (${sessionDate.toLocaleString('id-ID')}). Dilewati (Skip).`);
+        console.log("------------------------------------------");
+        continue;
+      }
+    }
+
+    if (kajian.is_recurring) {
+      console.log(`   🔄 Terdeteksi sebagai kajian RUTIN (${kajian.recurring_pattern || 'Berkala'}).`);
+    }
     
     // 0. Normalisasi: jaring pengaman jika AI tetap mengisi nama channel sebagai venue
     let venueName = (kajian.venue_name || '').trim() || null;
@@ -334,11 +371,12 @@ async function runScraper() {
         audience_type: kajian.audience_type,
         start_datetime: kajian.start_datetime,
         poster_url: kajian.poster_url,
-        is_recurring: false,
+        is_recurring: !!kajian.is_recurring,
+        recurring_pattern: kajian.recurring_pattern || null,
         is_online: isOnline,
         stream_url: streamUrl,
         contributor_name: kajian.source_channel ? `@${kajian.source_channel.replace(/^@/, '')}` : null,
-        status: 'confirmed'
+        status: 'pending' // Wajib kurasi admin sebelum tampil di peta publik
       });
 
     if (sessionError) {

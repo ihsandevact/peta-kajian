@@ -8,6 +8,8 @@ import { approveSession, rejectSession, togglePublishSession } from '@/app/actio
 import type { StudySession } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useAttendance } from '@/utils/attendance';
+import AdminScraperModal from '@/components/AdminScraperModal';
+import { fetchActiveTelegramChannels, type TelegramChannel } from '@/lib/services/telegram';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -58,15 +60,21 @@ export default function AdminModerationPage() {
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Scraper Modal State
+  const [channels, setChannels] = useState<TelegramChannel[]>([]);
+  const [isScraperModalOpen, setIsScraperModalOpen] = useState(false);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [data, statsData] = await Promise.all([
+      const [data, statsData, channelsData] = await Promise.all([
         fetchSessionsByStatus('all'),
         fetchAdminStats(),
+        fetchActiveTelegramChannels(),
       ]);
       setSessions(data);
       setStats(statsData);
+      setChannels(channelsData);
     } catch (err) {
       console.error('Error loading admin sessions:', err);
     } finally {
@@ -177,17 +185,29 @@ export default function AdminModerationPage() {
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-on-surface-variant bg-surface-container-low hover:bg-surface-container border border-surface-container-high transition-colors w-max"
-            >
-              <span className={`material-symbols-outlined text-[16px] ${loading ? 'animate-spin' : ''}`}>
-                refresh
-              </span>
-              <span>Segarkan Antrean</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setIsScraperModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 transition-colors w-max cursor-pointer"
+                title="Tarik info kajian terbaru dari channel Telegram menggunakan AI Scraper"
+              >
+                <span className="material-symbols-outlined text-[16px] text-purple-600 dark:text-purple-400">smart_toy</span>
+                <span>Tarik Info Telegram</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={loadData}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-on-surface-variant bg-surface-container-low hover:bg-surface-container border border-surface-container-high transition-colors w-max cursor-pointer"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${loading ? 'animate-spin' : ''}`}>
+                  refresh
+                </span>
+                <span>Segarkan Antrean</span>
+              </button>
+            </div>
           </div>
 
           {/* Quick Stats Grid */}
@@ -619,6 +639,14 @@ export default function AdminModerationPage() {
           setEditingSession(null);
           loadData();
         }}
+      />
+
+      {/* AI Telegram Scraper Modal */}
+      <AdminScraperModal
+        isOpen={isScraperModalOpen}
+        onClose={() => setIsScraperModalOpen(false)}
+        channels={channels}
+        onFinished={loadData}
       />
     </div>
   );

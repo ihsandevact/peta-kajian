@@ -145,8 +145,8 @@ Aturan Penting:
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // Coba model multimodal aktif: gemini-3.7-flash, gemini-3.5-flash, gemini-3.8-flash
-    const modelsToTry = ['gemini-3.7-flash', 'gemini-3.5-flash', 'gemini-3.8-flash'];
+    // Model multimodal aktif
+    const modelsToTry = ['gemini-flash-latest', 'gemini-flash-lite-latest'];
     let lastError: any = null;
     let extractedJsonText: string | null = null;
 
