@@ -1,0 +1,45 @@
+name: 📱 Scrape Telegram Channels
+
+on:
+  schedule:
+    # Berjalan 3x sehari: 06:00 WIB (23:00 UTC), 12:00 WIB (05:00 UTC), 18:00 WIB (11:00 UTC)
+    - cron: '0 23,5,11 * * *'
+  workflow_dispatch:
+    inputs:
+      max_posts:
+        description: 'Jumlah postingan maksimal per channel'
+        required: true
+        default: '5'
+        type: string
+
+jobs:
+  scrape-telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📱 Scrape Telegram Channels
+        run: |
+          echo "========================================="
+          echo "Menjalankan Telegram Scraper otomatis..."
+          echo "========================================="
+          APP_HOST="${{ secrets.APP_URL || 'petakajian.my.id' }}"
+          CLEAN_HOST=$(echo "$APP_HOST" | sed -e 's|^https://||' -e 's|^http://||' -e 's|/$||')
+          MAX_POSTS="${{ github.event.inputs.max_posts || '5' }}"
+          URL="https://${CLEAN_HOST}/api/cron/telegram-scraper?key=${{ secrets.CRON_SECRET }}&max=${MAX_POSTS}"
+          
+          RESPONSE=$(curl -s -L --max-redirs 5 -w "\nHTTP_STATUS:%{http_code}" -m 180 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: PetaKajian-Cron/1.0" \
+            -X GET "$URL" || echo -e "\nHTTP_STATUS:ERROR")
+          
+          BODY=$(echo "$RESPONSE" | sed -e '$d')
+          STATUS=$(echo "$RESPONSE" | tail -n1 | sed -e 's|HTTP_STATUS:||')
+          
+          echo "HTTP Status: $STATUS"
+          echo "Response Body: $BODY"
+          
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Telegram Scraper gagal dengan HTTP $STATUS: $BODY"
+            exit 1
+          else
+            echo "✅ Telegram Scraper berhasil dieksekusi."
+          fi

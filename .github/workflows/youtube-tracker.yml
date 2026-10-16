@@ -1,0 +1,38 @@
+name: 📺 Sync YouTube Live Streams
+
+on:
+  schedule:
+    # Berjalan otomatis setiap 15 menit
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync-youtube:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📺 Sync YouTube Live Streams
+        run: |
+          echo "========================================="
+          echo "Memeriksa status siaran YouTube Live..."
+          echo "========================================="
+          APP_HOST="${{ secrets.APP_URL || 'petakajian.my.id' }}"
+          CLEAN_HOST=$(echo "$APP_HOST" | sed -e 's|^https://||' -e 's|^http://||' -e 's|/$||')
+          URL="https://${CLEAN_HOST}/api/cron/youtube-tracker?key=${{ secrets.CRON_SECRET }}"
+          
+          RESPONSE=$(curl -s -L --max-redirs 5 -w "\nHTTP_STATUS:%{http_code}" -m 60 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: PetaKajian-Cron/1.0" \
+            -X GET "$URL" || echo -e "\nHTTP_STATUS:ERROR")
+          
+          BODY=$(echo "$RESPONSE" | sed -e '$d')
+          STATUS=$(echo "$RESPONSE" | tail -n1 | sed -e 's|HTTP_STATUS:||')
+          
+          echo "HTTP Status: $STATUS"
+          echo "Response Body: $BODY"
+          
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::YouTube Live Tracker gagal dengan HTTP $STATUS: $BODY"
+            exit 1
+          else
+            echo "✅ YouTube Live Tracker berhasil disinkronkan."
+          fi

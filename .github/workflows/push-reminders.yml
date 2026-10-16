@@ -1,0 +1,38 @@
+name: 🔔 Send Push Reminders
+
+on:
+  schedule:
+    # Berjalan otomatis setiap jam pada menit :00
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🔔 Check & Send Push Reminders H-2 Jam
+        run: |
+          echo "========================================="
+          echo "Memeriksa pengingat kajian H-2 jam..."
+          echo "========================================="
+          APP_HOST="${{ secrets.APP_URL || 'petakajian.my.id' }}"
+          CLEAN_HOST=$(echo "$APP_HOST" | sed -e 's|^https://||' -e 's|^http://||' -e 's|/$||')
+          URL="https://${CLEAN_HOST}/api/cron/push-reminders?key=${{ secrets.CRON_SECRET }}"
+          
+          RESPONSE=$(curl -s -L --max-redirs 5 -w "\nHTTP_STATUS:%{http_code}" -m 60 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "User-Agent: PetaKajian-Cron/1.0" \
+            -X GET "$URL" || echo -e "\nHTTP_STATUS:ERROR")
+          
+          BODY=$(echo "$RESPONSE" | sed -e '$d')
+          STATUS=$(echo "$RESPONSE" | tail -n1 | sed -e 's|HTTP_STATUS:||')
+          
+          echo "HTTP Status: $STATUS"
+          echo "Response Body: $BODY"
+          
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::Push Reminders gagal dengan HTTP $STATUS: $BODY"
+            exit 1
+          else
+            echo "✅ Push Reminders berhasil dievaluasi."
+          fi
