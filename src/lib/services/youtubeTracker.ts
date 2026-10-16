@@ -23,6 +23,7 @@ export interface YoutubeChannel {
 
 export interface LiveDetectionResult {
   handle: string;
+  channelId?: string | null;
   isLive: boolean;
   videoId: string | null;
   title: string;
@@ -47,6 +48,33 @@ export interface ResolvedYoutubeChannel {
   handle: string;
   channelName: string;
   defaultSpeakerName: string;
+}
+
+/**
+ * Header standar browser dengan cookie bypass Google Consent dialog (SOCS & CONSENT)
+ */
+export const YOUTUBE_FETCH_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+  'Cookie': 'SOCS=CAESEwgDEgk2MTQ1NzU1OTQaAmVuIAEaBgiA_LyaBg; CONSENT=PENDING+999; PREF=tz=Asia.Jakarta&f6=40000000',
+  'Sec-Fetch-Mode': 'navigate',
+  'Sec-Fetch-Site': 'none',
+  'Sec-Fetch-Dest': 'document',
+};
+
+/**
+ * Membersihkan decode HTML entities dari string judul / teks
+ */
+export function cleanHtmlEntities(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
 }
 
 /**
@@ -78,12 +106,9 @@ export async function resolveYoutubeChannelInfo(
       let channelName = fallbackSpeaker?.trim() || handle.replace('@', '');
       try {
         const res = await fetch(`https://www.youtube.com/${handle}`, {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-          },
+          headers: YOUTUBE_FETCH_HEADERS,
           cache: 'no-store',
+          signal: AbortSignal.timeout(8000),
         });
         if (res.ok) {
           const html = await res.text();
@@ -92,11 +117,7 @@ export async function resolveYoutubeChannelInfo(
             html.match(/<meta property="og:title" content="([^"]+)"/)?.[1] ||
             html.match(/<title>([^<]+)<\/title>/)?.[1]?.replace(/\s*-\s*YouTube\s*$/i, '');
           if (authorMatch && !authorMatch.includes('404')) {
-            channelName = authorMatch
-              .replace(/&amp;/g, '&')
-              .replace(/&#39;/g, "'")
-              .replace(/&quot;/g, '"')
-              .trim();
+            channelName = cleanHtmlEntities(authorMatch);
           }
         }
       } catch {
@@ -113,13 +134,10 @@ export async function resolveYoutubeChannelInfo(
     // 2. Jika berupa video / live link: youtube.com/watch?v=..., youtu.be/..., youtube.com/live/...
     const targetUrl = streamUrl.startsWith('http') ? streamUrl : `https://${streamUrl}`;
     const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+      headers: YOUTUBE_FETCH_HEADERS,
       redirect: 'follow',
       cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
     });
 
     if (!res.ok) return null;
@@ -142,7 +160,7 @@ export async function resolveYoutubeChannelInfo(
       html.match(/<meta property="og:video:actor" content="([^"]+)"/)?.[1];
 
     let channelName = authorMatch
-      ? authorMatch.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"').trim()
+      ? cleanHtmlEntities(authorMatch)
       : (fallbackSpeaker?.trim() || handle.replace('@', ''));
 
     return {
@@ -189,28 +207,69 @@ export function extractSpeakerFromTitle(title: string, defaultSpeaker = 'Asatidz
 /**
  * Pengecekan status Live siaran YouTube via canonical endpoint (0 Quota)
  */
-export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?: string | null): Promise<LiveDetectionResult> {
+export async function checkChannelLiveStatus(
+  rawHandle: string,
+  defaultSpeaker?: string | null,
+  knownChannelId?: string | null
+): Promise<LiveDetectionResult> {
   const handle = normalizeHandle(rawHandle);
-  const targetUrl = `https://www.youtube.com/${handle}/live`;
+
+  // Tentukan URL target: prioritaskan channel ID kanonik jika tersedia, atau gunakan handle
+  const primaryUrl = knownChannelId
+    ? `https://www.youtube.com/channel/${knownChannelId}/live`
+    : `https://www.youtube.com/${handle}/live`;
 
   try {
-    const res = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+    let res = await fetch(primaryUrl, {
+      headers: YOUTUBE_FETCH_HEADERS,
       redirect: 'follow',
       cache: 'no-store',
+      signal: AbortSignal.timeout(8000),
     });
+
+    // Jika target URL pertama 404 dan tadi menggunakan channel ID, coba URL alternatif via handle
+    if (res.status === 404 && knownChannelId) {
+      res = await fetch(`https://www.youtube.com/${handle}/live`, {
+        headers: YOUTUBE_FETCH_HEADERS,
+        redirect: 'follow',
+        cache: 'no-store',
+        signal: AbortSignal.timeout(8000),
+      });
+    }
 
     const html = await res.text();
     const finalUrl = res.url || '';
+
+    // Temukan channelId kanonik jika belum ada
+    let channelId = knownChannelId || null;
+    if (!channelId) {
+      const chMatch =
+        html.match(/"channelId":"([a-zA-Z0-9_-]{24})"/)?.[1] ||
+        html.match(/"externalChannelId":"([a-zA-Z0-9_-]{24})"/)?.[1] ||
+        html.match(/<meta itemprop="channelId" content="([a-zA-Z0-9_-]{24})">/)?.[1];
+      if (chMatch) channelId = chMatch;
+    }
+
+    // Ekstraksi ytInitialPlayerResponse secara aman
+    let playerObj: any = null;
+    const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*({[\s\S]+?});(?:var|<\/script>)/);
+    if (playerMatch) {
+      try {
+        playerObj = JSON.parse(playerMatch[1]);
+      } catch {
+        // Abaikan parse error jika JSON terpotong
+      }
+    }
 
     // Cek Video ID dari URL final atau canonical link
     let videoId: string | null = null;
     if (finalUrl.includes('/watch?v=')) {
       const match = finalUrl.match(/watch\?v=([a-zA-Z0-9_-]{11})/);
       if (match) videoId = match[1];
+    }
+
+    if (!videoId && playerObj?.videoDetails?.videoId) {
+      videoId = playerObj.videoDetails.videoId;
     }
 
     if (!videoId) {
@@ -223,29 +282,101 @@ export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?:
       if (vidMatch) videoId = vidMatch[1];
     }
 
-    // 1. Periksa penanda pasti OFFLINE atau siaran berakhir
-    const isOfflineStatus =
-      html.includes('LIVE_STREAM_OFFLINE') ||
-      html.includes('"isLiveNow":false') ||
-      html.includes('This live event has ended') ||
-      html.includes('Siaran langsung ini telah berakhir') ||
-      html.includes('"status":"ENDED"');
+    // 1. Evaluasi status siaran LIVE secara deterministik (Scoped ke Player Utama)
+    let isLive = false;
 
-    // 2. Periksa penanda siaran langsung yang aktif saat ini
-    const isLiveNow = html.includes('"isLiveNow":true');
-    const hasLiveStreamability = html.includes('liveStreamabilityRenderer');
-    const hasLiveMarker = html.includes('"isLive":true');
+    if (playerObj && videoId) {
+      const videoDetails = playerObj.videoDetails;
+      const playabilityStatus = playerObj.playabilityStatus;
+      const liveBroadcast = playerObj.microformat?.playerMicroformatRenderer?.liveBroadcastDetails;
 
-    // Suatu siaran dinyatakan LIVE hanya jika videoId ada, tidak berstatus offline, dan memiliki indikator live aktif
-    const isLive = Boolean(
-      videoId &&
-      !isOfflineStatus &&
-      (isLiveNow || (hasLiveMarker && hasLiveStreamability))
-    );
+      const isStatusOk = playabilityStatus?.status === 'OK';
+      const hasLiveStreamability = Boolean(playabilityStatus?.liveStreamability?.liveStreamabilityRenderer);
+      const isPlayerEnded =
+        playabilityStatus?.status === 'LIVE_STREAM_OFFLINE' ||
+        playerObj.playabilityStatus?.reason?.toLowerCase().includes('ended') ||
+        playerObj.playabilityStatus?.reason?.toLowerCase().includes('berakhir');
+
+      // Validasi: Status player harus OK, konten live aktif, dan bukan berstatus offline/ended
+      if (!isPlayerEnded && isStatusOk && (hasLiveStreamability || liveBroadcast?.isLiveNow === true || videoDetails?.isLive === true)) {
+        isLive = true;
+      }
+    } else if (videoId) {
+      // Fallback jika ytInitialPlayerResponse gagal di-parse:
+      // Periksa scoped playabilityStatus agar tidak terpengaruh video rekomendasi di sidebar
+      const playabilityMatch = html.match(/"playabilityStatus":\s*\{[^}]+\}/);
+      const playabilitySnippet = playabilityMatch ? playabilityMatch[0] : '';
+      const isPlayerEnded =
+        playabilitySnippet.includes('LIVE_STREAM_OFFLINE') ||
+        playabilitySnippet.includes('ENDED');
+
+      const isLiveNow = html.includes('"isLiveNow":true');
+      const hasLiveStreamability = html.includes('liveStreamabilityRenderer');
+      const hasLiveMarker = html.includes('"isLive":true');
+
+      if (!isPlayerEnded && (isLiveNow || (hasLiveMarker && hasLiveStreamability))) {
+        isLive = true;
+      }
+    }
+
+    // 2. Fallback cerdas via YouTube RSS Feed jika HTML belum mendeteksi live tapi channelId ada
+    if (!isLive && channelId) {
+      try {
+        const rssRes = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
+          headers: { 'User-Agent': YOUTUBE_FETCH_HEADERS['User-Agent'] },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(5000),
+        });
+        if (rssRes.ok) {
+          const rssText = await rssRes.text();
+          const firstEntryMatch = rssText.match(/<entry>([\s\S]*?)<\/entry>/);
+          if (firstEntryMatch) {
+            const entryXml = firstEntryMatch[1];
+            const rssVidMatch = entryXml.match(/<yt:videoId>([a-zA-Z0-9_-]{11})<\/yt:videoId>/);
+            const rssTitleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
+            const entryTitle = rssTitleMatch ? cleanHtmlEntities(rssTitleMatch[1]) : '';
+            const entryVideoId = rssVidMatch ? rssVidMatch[1] : null;
+
+            // Jika judul video terbaru mengandung indikator live
+            const isLiveTitle = /\[LIVE\]|\(LIVE\)|LIVE STREAMING|SIARAN LANGSUNG/i.test(entryTitle);
+            if (entryVideoId && isLiveTitle) {
+              // Verifikasi langsung ke halaman video watch tersebut
+              const watchRes = await fetch(`https://www.youtube.com/watch?v=${entryVideoId}`, {
+                headers: YOUTUBE_FETCH_HEADERS,
+                cache: 'no-store',
+                signal: AbortSignal.timeout(5000),
+              });
+              if (watchRes.ok) {
+                const watchHtml = await watchRes.text();
+                const watchPlayerMatch = watchHtml.match(/ytInitialPlayerResponse\s*=\s*({[\s\S]+?});(?:var|<\/script>)/);
+                if (watchPlayerMatch) {
+                  try {
+                    const wp = JSON.parse(watchPlayerMatch[1]);
+                    if (
+                      wp.playabilityStatus?.status === 'OK' &&
+                      (wp.playabilityStatus?.liveStreamability || wp.videoDetails?.isLive)
+                    ) {
+                      videoId = entryVideoId;
+                      playerObj = wp;
+                      isLive = true;
+                    }
+                  } catch {
+                    // ignore
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (rssErr) {
+        // Fallback RSS error diabaikan agar tidak mengganggu alur utama
+      }
+    }
 
     if (!isLive || !videoId) {
       return {
         handle,
+        channelId,
         isLive: false,
         videoId: null,
         title: '',
@@ -256,27 +387,23 @@ export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?:
     }
 
     // Ekstraksi Judul
-    let title = '';
-    const titleMatch = html.match(/<meta name="title" content="([^"]+)"/);
-    if (titleMatch) {
-      title = titleMatch[1];
-    } else {
-      const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/);
-      if (ogTitle) title = ogTitle[1];
-      else {
-        const pageTitle = html.match(/<title>([^<]+)<\/title>/);
-        if (pageTitle) title = pageTitle[1].replace(/\s*-\s*YouTube\s*$/i, '');
+    let title = playerObj?.videoDetails?.title || '';
+    if (!title) {
+      const titleMatch = html.match(/<meta name="title" content="([^"]+)"/);
+      if (titleMatch) {
+        title = titleMatch[1];
+      } else {
+        const ogTitle = html.match(/<meta property="og:title" content="([^"]+)"/);
+        if (ogTitle) title = ogTitle[1];
+        else {
+          const pageTitle = html.match(/<title>([^<]+)<\/title>/);
+          if (pageTitle) title = pageTitle[1].replace(/\s*-\s*YouTube\s*$/i, '');
+        }
       }
     }
 
     // Bersihkan karakter decode html
-    title = title
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .trim();
+    title = cleanHtmlEntities(title);
 
     const posterUrl = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
     const streamUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -284,6 +411,7 @@ export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?:
 
     return {
       handle,
+      channelId,
       isLive: true,
       videoId,
       title,
@@ -295,6 +423,7 @@ export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?:
     console.error(`Error checking YouTube Live for ${handle}:`, err);
     return {
       handle,
+      channelId: knownChannelId || null,
       isLive: false,
       videoId: null,
       title: '',
@@ -310,7 +439,8 @@ export async function checkChannelLiveStatus(rawHandle: string, defaultSpeaker?:
  * Mengambil daftar channel youtube yang dipantau (Aktif)
  */
 export async function fetchActiveYoutubeChannels(): Promise<YoutubeChannel[]> {
-  const { data, error } = await supabase
+  const supabaseServer = createAdminClient();
+  const { data, error } = await supabaseServer
     .from('youtube_channels')
     .select('*')
     .eq('is_active', true)
@@ -327,7 +457,8 @@ export async function fetchActiveYoutubeChannels(): Promise<YoutubeChannel[]> {
  * Mengambil channel yang saat ini statusnya LIVE
  */
 export async function fetchLiveYoutubeChannels(): Promise<YoutubeChannel[]> {
-  const { data, error } = await supabase
+  const supabaseServer = createAdminClient();
+  const { data, error } = await supabaseServer
     .from('youtube_channels')
     .select('*, study_sessions(*)')
     .eq('is_active', true)
@@ -363,6 +494,7 @@ export async function fetchAdminYoutubeChannels(): Promise<YoutubeChannel[]> {
  * - Mendeteksi apakah ada yang live
  * - Membuat row `study_sessions` baru jika siaran live baru dimulai
  * - Menutup/mengarsipkan sesi saat siaran selesai
+ * - Berjalan secara batch concurrency untuk mencegah timeout serverless
  */
 export async function syncAllYoutubeChannels(): Promise<{
   totalChannels: number;
@@ -375,153 +507,207 @@ export async function syncAllYoutubeChannels(): Promise<{
 
   const supabaseServer = createAdminClient();
 
-  for (const channel of channels) {
-    // Delay 500ms antar channel untuk stabilitas
-    await new Promise((r) => setTimeout(r, 500));
+  // Proses channel dalam batch paralel (4 channel sekaligus) agar cepat (< 8 detik) dan stabil
+  const BATCH_SIZE = 4;
+  for (let i = 0; i < channels.length; i += BATCH_SIZE) {
+    const batch = channels.slice(i, i + BATCH_SIZE);
 
-    const check = await checkChannelLiveStatus(
-      channel.channel_handle,
-      channel.default_speaker_name
-    );
+    const batchResults = await Promise.allSettled(
+      batch.map(async (channel) => {
+        const check = await checkChannelLiveStatus(
+          channel.channel_handle,
+          channel.default_speaker_name,
+          channel.channel_id
+        );
 
-    const nowIso = new Date().toISOString();
+        const nowIso = new Date().toISOString();
 
-    if (check.error) {
-      reports.push({
-        channelId: channel.id,
-        channelName: channel.channel_name,
-        handle: channel.channel_handle,
-        status: 'error',
-        message: check.error,
-      });
-      continue;
-    }
-
-    if (check.isLive && check.videoId) {
-      liveCount++;
-
-      // Periksa apakah videoId ini sudah ada di study_sessions
-      const { data: existingSessions } = await supabaseServer
-        .from('study_sessions')
-        .select('id, title, stream_url')
-        .eq('stream_url', check.streamUrl)
-        .limit(1);
-
-      let sessionId = existingSessions && existingSessions.length > 0 ? existingSessions[0].id : null;
-
-      if (!sessionId) {
-        // Buat sesi kajian baru secara otomatis
-        const { data: newSession, error: insertError } = await supabaseServer
-          .from('study_sessions')
-          .insert({
-            title: check.title || `Live Streaming ${channel.channel_name}`,
-            speaker_name: check.speakerName,
-            is_online: true,
-            stream_url: check.streamUrl,
-            poster_url: check.posterUrl,
-            status: 'confirmed',
-            audience_type: 'umum',
-            start_datetime: nowIso,
-            is_recurring: false,
-            contributor_name: `${channel.channel_name} (Bot Sync)`,
-          })
-          .select('id')
-          .single();
-
-        if (insertError) {
-          console.error(`Failed to create study_session for ${channel.channel_name}:`, insertError);
-        } else if (newSession) {
-          sessionId = newSession.id;
-        }
-
-        reports.push({
-          channelId: channel.id,
-          channelName: channel.channel_name,
-          handle: channel.channel_handle,
-          status: 'live_new',
-          videoId: check.videoId,
-          title: check.title,
-          sessionId,
-        });
-      } else {
-        reports.push({
-          channelId: channel.id,
-          channelName: channel.channel_name,
-          handle: channel.channel_handle,
-          status: 'live_existing',
-          videoId: check.videoId,
-          title: check.title,
-          sessionId,
-        });
-      }
-
-      // Perbarui metadata tabel youtube_channels
-      await supabaseServer
-        .from('youtube_channels')
-        .update({
-          is_currently_live: true,
-          current_video_id: check.videoId,
-          current_video_title: check.title,
-          current_session_id: sessionId,
-          last_live_at: nowIso,
-          last_checked_at: nowIso,
-          updated_at: nowIso,
-        })
-        .eq('id', channel.id);
-
-    } else {
-      // Channel sedang OFFLINE
-      // Jika sebelumnya sedang live, kita tandai bahwa siaran telah berakhir
-      if (channel.is_currently_live) {
-        // Bersihkan row study_sessions buatan bot jika ada agar tidak meninggalkan data menggantung
-        if (channel.current_session_id) {
+        // Jika channel_id kanonik baru saja ditemukan dan di DB masih kosong, perbarui ke DB
+        if (check.channelId && !channel.channel_id) {
           try {
             await supabaseServer
-              .from('study_sessions')
-              .delete()
-              .eq('id', channel.current_session_id);
-          } catch (sessionErr) {
-            console.warn(`Gagal membersihkan study_session bot ${channel.current_session_id}:`, sessionErr);
+              .from('youtube_channels')
+              .update({ channel_id: check.channelId })
+              .eq('id', channel.id);
+          } catch (updateIdErr) {
+            console.warn(`Gagal memperbarui channel_id untuk ${channel.channel_name}:`, updateIdErr);
           }
         }
 
-        await supabaseServer
-          .from('youtube_channels')
-          .update({
-            is_currently_live: false,
-            current_video_id: null,
-            current_video_title: null,
-            current_session_id: null,
-            last_checked_at: nowIso,
-            updated_at: nowIso,
-          })
-          .eq('id', channel.id);
+        if (check.error) {
+          return {
+            report: {
+              channelId: channel.id,
+              channelName: channel.channel_name,
+              handle: channel.channel_handle,
+              status: 'error' as const,
+              message: check.error,
+            },
+            isLive: false,
+          };
+        }
 
-        reports.push({
-          channelId: channel.id,
-          channelName: channel.channel_name,
-          handle: channel.channel_handle,
-          status: 'offline',
-          message: 'Siaran langsung baru saja berakhir.',
-        });
-      } else {
-        // Update waktu pengecekan saja
-        await supabaseServer
-          .from('youtube_channels')
-          .update({
-            last_checked_at: nowIso,
-            updated_at: nowIso,
-          })
-          .eq('id', channel.id);
+        if (check.isLive && check.videoId) {
+          // Periksa apakah videoId ini sudah ada di study_sessions
+          const { data: existingSessions } = await supabaseServer
+            .from('study_sessions')
+            .select('id, title, stream_url')
+            .eq('stream_url', check.streamUrl)
+            .limit(1);
 
-        reports.push({
-          channelId: channel.id,
-          channelName: channel.channel_name,
-          handle: channel.channel_handle,
-          status: 'offline',
-          message: 'Offline (tidak sedang live)',
-        });
+          let sessionId = existingSessions && existingSessions.length > 0 ? existingSessions[0].id : null;
+
+          if (!sessionId) {
+            // Buat sesi kajian baru secara otomatis
+            const { data: newSession, error: insertError } = await supabaseServer
+              .from('study_sessions')
+              .insert({
+                title: check.title || `Live Streaming ${channel.channel_name}`,
+                speaker_name: check.speakerName,
+                is_online: true,
+                stream_url: check.streamUrl,
+                poster_url: check.posterUrl,
+                status: 'confirmed',
+                audience_type: 'umum',
+                start_datetime: nowIso,
+                is_recurring: false,
+                contributor_name: `${channel.channel_name} (Bot Sync)`,
+              })
+              .select('id')
+              .single();
+
+            if (insertError) {
+              console.error(`Failed to create study_session for ${channel.channel_name}:`, insertError);
+            } else if (newSession) {
+              sessionId = newSession.id;
+            }
+
+            // Perbarui metadata tabel youtube_channels
+            await supabaseServer
+              .from('youtube_channels')
+              .update({
+                is_currently_live: true,
+                current_video_id: check.videoId,
+                current_video_title: check.title,
+                current_session_id: sessionId,
+                last_live_at: nowIso,
+                last_checked_at: nowIso,
+                updated_at: nowIso,
+              })
+              .eq('id', channel.id);
+
+            return {
+              report: {
+                channelId: channel.id,
+                channelName: channel.channel_name,
+                handle: channel.channel_handle,
+                status: 'live_new' as const,
+                videoId: check.videoId,
+                title: check.title,
+                sessionId,
+              },
+              isLive: true,
+            };
+          } else {
+            // Sesi sudah ada sebelumnya di database
+            await supabaseServer
+              .from('youtube_channels')
+              .update({
+                is_currently_live: true,
+                current_video_id: check.videoId,
+                current_video_title: check.title,
+                current_session_id: sessionId,
+                last_live_at: nowIso,
+                last_checked_at: nowIso,
+                updated_at: nowIso,
+              })
+              .eq('id', channel.id);
+
+            return {
+              report: {
+                channelId: channel.id,
+                channelName: channel.channel_name,
+                handle: channel.channel_handle,
+                status: 'live_existing' as const,
+                videoId: check.videoId,
+                title: check.title,
+                sessionId,
+              },
+              isLive: true,
+            };
+          }
+        } else {
+          // Channel sedang OFFLINE
+          if (channel.is_currently_live) {
+            // Bersihkan row study_sessions buatan bot jika ada agar tidak meninggalkan data menggantung
+            if (channel.current_session_id) {
+              try {
+                await supabaseServer
+                  .from('study_sessions')
+                  .delete()
+                  .eq('id', channel.current_session_id);
+              } catch (sessionErr) {
+                console.warn(`Gagal membersihkan study_session bot ${channel.current_session_id}:`, sessionErr);
+              }
+            }
+
+            await supabaseServer
+              .from('youtube_channels')
+              .update({
+                is_currently_live: false,
+                current_video_id: null,
+                current_video_title: null,
+                current_session_id: null,
+                last_checked_at: nowIso,
+                updated_at: nowIso,
+              })
+              .eq('id', channel.id);
+
+            return {
+              report: {
+                channelId: channel.id,
+                channelName: channel.channel_name,
+                handle: channel.channel_handle,
+                status: 'offline' as const,
+                message: 'Siaran langsung baru saja berakhir.',
+              },
+              isLive: false,
+            };
+          } else {
+            // Update waktu pengecekan saja
+            await supabaseServer
+              .from('youtube_channels')
+              .update({
+                last_checked_at: nowIso,
+                updated_at: nowIso,
+              })
+              .eq('id', channel.id);
+
+            return {
+              report: {
+                channelId: channel.id,
+                channelName: channel.channel_name,
+                handle: channel.channel_handle,
+                status: 'offline' as const,
+                message: 'Offline (tidak sedang live)',
+              },
+              isLive: false,
+            };
+          }
+        }
+      })
+    );
+
+    for (const res of batchResults) {
+      if (res.status === 'fulfilled') {
+        reports.push(res.value.report);
+        if (res.value.isLive) liveCount++;
       }
+    }
+
+    // Delay 300ms antar batch untuk stabilitas koneksi
+    if (i + BATCH_SIZE < channels.length) {
+      await new Promise((r) => setTimeout(r, 300));
     }
   }
 
