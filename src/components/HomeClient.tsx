@@ -13,6 +13,7 @@ import { useBookmarks } from '@/utils/bookmarks';
 import { useOnlineStatus, cacheFeedSnapshot, getFeedSnapshot, getCachedOfflineSessions } from '@/utils/offlineCache';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import RequestContributorModal from '@/components/RequestContributorModal';
+import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -336,6 +337,24 @@ export default function HomeClient() {
             </a>
             
             <Link 
+              href="/live"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-red-600 dark:text-red-400 hover:bg-red-500/10 w-full text-left`}
+            >
+              <span className="material-symbols-outlined text-[20px] text-red-600">smart_display</span>
+              {!isSidebarCollapsed && (
+                <span className="flex items-center gap-1.5">
+                  <span>Live Kajian</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
+                </span>
+              )}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Live Kajian
+                </span>
+              )}
+            </Link>
+            
+            <Link 
               href="/leaderboard"
               className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
             >
@@ -446,6 +465,9 @@ export default function HomeClient() {
           
           {/* Kolom Kanan: Map */}
           <div className="absolute inset-0 w-full h-full md:relative md:flex-1 bg-[#f1f5f9] overflow-hidden z-10">
+            {/* Quick Access Floating Pill jika ada channel live */}
+            <LiveStreamFloatingPill hasSelectedSession={!!selectedSession} />
+
             <MapComponent 
               sessions={sortedSessions} 
               selectedSession={selectedSession}
@@ -496,6 +518,16 @@ export default function HomeClient() {
               <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>map</span>
               <span className="text-[10px] mt-0.5 tracking-tight">Peta</span>
             </a>
+            <Link 
+              href="/live"
+              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-red-600 dark:text-red-400 hover:text-red-700 transition-colors relative"
+            >
+              <div className="relative">
+                <span className="material-symbols-outlined text-[22px]">smart_display</span>
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-600 animate-ping" />
+              </div>
+              <span className="text-[10px] mt-0.5 font-bold tracking-tight">Live</span>
+            </Link>
             <Link 
               href="/leaderboard"
               className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"

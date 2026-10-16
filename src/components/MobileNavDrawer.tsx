@@ -64,6 +64,7 @@ export default function MobileNavDrawer({
   const mainNavLinks = currentUser
     ? [
         { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
+        { href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
         isContributorOrAdmin
           ? { href: '/kontributor/dashboard', label: 'Kirim Info Kajian', icon: 'add_circle', desc: 'Bagikan info kajian baru' }
           : { href: '/kontributor/profile', label: 'Ajukan Jadi Kontributor', icon: 'volunteer_activism', desc: 'Daftar sebagai relawan dakwah' },
@@ -73,6 +74,7 @@ export default function MobileNavDrawer({
       ]
     : [
         { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
+        { href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
         { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
         { href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
       ];
@@ -81,6 +83,7 @@ export default function MobileNavDrawer({
     { href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', desc: 'Tinjau & setujui kiriman kajian' },
     { href: '/admin/users', label: 'Kelola Relawan', icon: 'group', desc: 'Daftar pengguna & hak akses' },
     { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed', desc: 'Kelola sumber data scraper' },
+    { href: '/admin/youtube', label: 'YouTube Live Channels', icon: 'smart_display', desc: 'Kelola & pantau siaran live kajian' },
   ];
 
   const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Relawan';
