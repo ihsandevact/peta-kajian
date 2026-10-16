@@ -4,6 +4,7 @@ import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
+import KajianPreviewModal from '@/components/KajianPreviewModal';
 
 interface VenueCardProps {
   session: StudySession;
@@ -13,6 +14,7 @@ interface VenueCardProps {
 export default function VenueCard({ session, onClose }: VenueCardProps) {
   const [imgError, setImgError] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
@@ -81,23 +83,36 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
       <div className="w-full max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border border-surface-container-high/80 transition-all transform origin-bottom flex flex-col relative overflow-x-hidden">
-        {/* Gambar Poster Header - Kompak agar tidak memicu scroll */}
+        {/* Gambar Poster Header - Dapat diklik untuk membuka Preview Modal */}
         {hasPoster && (
-          <div className="w-full h-[88px] sm:h-[94px] bg-surface-container shrink-0 relative overflow-hidden">
+          <div
+            onClick={() => setIsPreviewModalOpen(true)}
+            className="w-full h-[88px] sm:h-[94px] bg-surface-container shrink-0 relative overflow-hidden cursor-pointer group"
+            title="Klik untuk melihat poster penuh & detail kajian"
+          >
             <img
               src={session.poster_url}
               alt={`Poster ${session.title}`}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               onError={() => setImgError(true)}
             />
             {/* Vignette Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
+            {/* Hover Zoom Indicator */}
+            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-[11px] pointer-events-none">
+              <span className="material-symbols-outlined text-[16px]">zoom_in</span>
+              <span>Lihat Poster</span>
+            </div>
+
             {/* Tombol Aksi Absolute Floating (Jika ada gambar) */}
             <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
               <button
                 type="button"
-                onClick={() => toggleBookmark(session.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleBookmark(session.id);
+                }}
                 className={`w-7 h-7 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
                   bookmarked
                     ? 'bg-amber-500 text-white'
@@ -112,7 +127,10 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
 
               <button
                 type="button"
-                onClick={handleShare}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleShare(e);
+                }}
                 className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
                 title="Bagikan Info Kajian"
               >
@@ -122,7 +140,10 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
               {onClose && (
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClose();
+                  }}
                   className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
                   title="Tutup"
                 >
@@ -413,6 +434,13 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
       <ShareModal
         isOpen={isShareModalOpen}
         onClose={() => setIsShareModalOpen(false)}
+        session={session}
+      />
+
+      {/* Preview Modal Poster & Detail Kajian */}
+      <KajianPreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
         session={session}
       />
     </div>

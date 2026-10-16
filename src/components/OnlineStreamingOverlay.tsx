@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { StudySession } from '@/lib/services/kajian';
 
 import { getEffectiveSessionInfo } from '@/utils/recurring';
+import KajianPreviewModal from '@/components/KajianPreviewModal';
 
 interface OnlineStreamingOverlayProps {
   session: StudySession;
@@ -12,6 +13,7 @@ interface OnlineStreamingOverlayProps {
 
 export default function OnlineStreamingOverlay({ session, onClose }: OnlineStreamingOverlayProps) {
   const [imgError, setImgError] = useState(false);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
   const now = new Date();
   const info = getEffectiveSessionInfo(session, now);
@@ -79,22 +81,35 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
         className="relative w-full max-w-md bg-surface-container-lowest rounded-3xl shadow-2xl overflow-hidden border border-surface-container-high/70 flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Poster Header (Jika ada) */}
+        {/* Poster Header (Jika ada) - Klik untuk membuka Preview Modal */}
         {hasPoster ? (
-          <div className="w-full h-44 sm:h-52 bg-slate-900 relative shrink-0 overflow-hidden">
+          <div
+            onClick={() => setIsPreviewModalOpen(true)}
+            className="w-full h-44 sm:h-52 bg-slate-900 relative shrink-0 overflow-hidden cursor-pointer group"
+            title="Klik untuk melihat poster penuh & detail kajian"
+          >
             <img
               src={session.poster_url}
               alt={session.title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               onError={() => setImgError(true)}
             />
             {/* Gradient Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
+            {/* Hover Zoom Indicator */}
+            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-xs pointer-events-none">
+              <span className="material-symbols-outlined text-[18px]">zoom_in</span>
+              <span>Lihat Poster</span>
+            </div>
+
             {/* Close Button Absolute */}
             <button
-              onClick={onClose}
-              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors shadow-md z-10"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClose();
+              }}
+              className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/50 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors shadow-md z-10 cursor-pointer"
               title="Tutup & Kembali ke Peta"
             >
               <span className="material-symbols-outlined text-[18px]">close</span>
@@ -215,6 +230,13 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
           </div>
         </div>
       </div>
+
+      {/* Full Preview Modal */}
+      <KajianPreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        session={session}
+      />
     </div>
   );
 }

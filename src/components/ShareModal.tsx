@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { StudySession } from '@/lib/services/kajian';
 
 interface ShareModalProps {
@@ -81,8 +82,13 @@ export async function shareSessionNative(
 
 export default function ShareModal({ isOpen, onClose, session }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  if (!isOpen || !session) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !session || !mounted) return null;
 
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const shareUrl = `${origin}/?session=${session.id}`;
@@ -123,8 +129,8 @@ export default function ShareModal({ isOpen, onClose, session }: ShareModalProps
     window.open(twUrl, '_blank', 'noopener,noreferrer');
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 font-geist">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200 font-geist">
       <div
         className="w-full max-w-sm bg-surface-container-lowest rounded-3xl border border-surface-container-high/80 shadow-2xl p-5 flex flex-col gap-4 relative animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
@@ -221,6 +227,7 @@ export default function ShareModal({ isOpen, onClose, session }: ShareModalProps
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
