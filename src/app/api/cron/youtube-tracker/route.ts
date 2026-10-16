@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { syncAllYoutubeChannels } from '@/lib/services/youtubeTracker';
+import { recordCronLog } from '@/lib/services/cronLogger';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 menit max untuk background execution
@@ -37,6 +38,17 @@ async function handleYoutubeCron(req: NextRequest) {
     const syncResult = await syncAllYoutubeChannels();
     const durationMs = Date.now() - startTime;
 
+    // Catat log sukses ke database
+    await recordCronLog({
+      job_name: 'youtube-tracker',
+      status: 'success',
+      duration_ms: durationMs,
+      summary: {
+        totalChannels: syncResult.totalChannels,
+        liveCount: syncResult.liveCount,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
@@ -46,12 +58,22 @@ async function handleYoutubeCron(req: NextRequest) {
       reports: syncResult.reports,
     });
   } catch (err: any) {
+    const durationMs = Date.now() - startTime;
     console.error('Error in YouTube tracker cron route:', err);
+
+    // Catat log error ke database
+    await recordCronLog({
+      job_name: 'youtube-tracker',
+      status: 'error',
+      duration_ms: durationMs,
+      error_message: err.message || 'Terjadi kesalahan pada cron tracker YouTube.',
+    });
+
     return NextResponse.json(
       {
         success: false,
         error: err.message || 'Terjadi kesalahan pada cron tracker YouTube.',
-        durationMs: Date.now() - startTime,
+        durationMs,
       },
       { status: 500 }
     );

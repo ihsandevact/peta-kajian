@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { fetchActiveTelegramChannels } from '@/lib/services/telegram';
 import { processAndSaveChannelKajian } from '@/lib/services/telegramScraper';
+import { recordCronLog } from '@/lib/services/cronLogger';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 menit max untuk background batch scraper di serverless
@@ -40,12 +41,24 @@ async function handleScraperCron(req: NextRequest) {
     const activeChannels = await fetchActiveTelegramChannels();
 
     if (activeChannels.length === 0) {
+      const durationMs = Date.now() - startTime;
+      await recordCronLog({
+        job_name: 'telegram-scraper',
+        status: 'success',
+        duration_ms: durationMs,
+        summary: {
+          totalChannels: 0,
+          totalSaved: 0,
+          message: 'Tidak ada channel aktif',
+        },
+      });
+
       return NextResponse.json({
         success: true,
         message: 'Tidak ada channel telegram aktif untuk di-scrape.',
         totalChannels: 0,
         totalSaved: 0,
-        durationMs: Date.now() - startTime,
+        durationMs,
       });
     }
 
@@ -99,10 +112,26 @@ async function handleScraperCron(req: NextRequest) {
       }
     }
 
+    const durationMs = Date.now() - startTime;
+
+    // Catat log sukses ke database
+    await recordCronLog({
+      job_name: 'telegram-scraper',
+      status: 'success',
+      duration_ms: durationMs,
+      summary: {
+        totalChannels: activeChannels.length,
+        totalFound,
+        totalExtracted,
+        totalSaved,
+        totalRegisteredChannels,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       timestamp: new Date().toISOString(),
-      durationMs: Date.now() - startTime,
+      durationMs,
       totalChannels: activeChannels.length,
       totalFound,
       totalExtracted,
@@ -111,11 +140,22 @@ async function handleScraperCron(req: NextRequest) {
       channels: results,
     });
   } catch (error: any) {
+    const durationMs = Date.now() - startTime;
     console.error('Fatal error in handleScraperCron:', error);
+
+    // Catat log error ke database
+    await recordCronLog({
+      job_name: 'telegram-scraper',
+      status: 'error',
+      duration_ms: durationMs,
+      error_message: error?.message || 'Internal server error running scraper cron.',
+    });
+
     return NextResponse.json(
       {
         success: false,
         error: error?.message || 'Internal server error running scraper cron.',
+        durationMs,
       },
       { status: 500 }
     );

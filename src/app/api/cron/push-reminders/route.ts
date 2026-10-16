@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { sendWebPushNotification } from '@/lib/services/webPush';
+import { recordCronLog } from '@/lib/services/cronLogger';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,7 @@ async function handlePushRemindersCron(req: NextRequest) {
     }
   }
 
+  const startTime = Date.now();
   const supabase = createAdminClient();
   const now = new Date();
 
@@ -57,11 +59,24 @@ async function handlePushRemindersCron(req: NextRequest) {
     }
 
     if (!upcomingSessions || upcomingSessions.length === 0) {
+      const durationMs = Date.now() - startTime;
+      await recordCronLog({
+        job_name: 'push-reminders',
+        status: 'success',
+        duration_ms: durationMs,
+        summary: {
+          sessionsChecked: 0,
+          notificationsSent: 0,
+          message: 'Tidak ada kajian H-2 jam.',
+        },
+      });
+
       return NextResponse.json({
         success: true,
         message: 'Tidak ada kajian yang dimulai dalam rentang H-2 jam saat ini.',
         sessionsChecked: 0,
         notificationsSent: 0,
+        durationMs,
       });
     }
 
@@ -160,17 +175,45 @@ async function handlePushRemindersCron(req: NextRequest) {
       });
     }
 
+    const durationMs = Date.now() - startTime;
+
+    // Catat log sukses ke database
+    await recordCronLog({
+      job_name: 'push-reminders',
+      status: 'success',
+      duration_ms: durationMs,
+      summary: {
+        sessionsCount: upcomingSessions.length,
+        totalNotificationsSent: totalSent,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       timestamp: now.toISOString(),
+      durationMs,
       sessionsCount: upcomingSessions.length,
       totalNotificationsSent: totalSent,
       details,
     });
   } catch (error: any) {
+    const durationMs = Date.now() - startTime;
     console.error('Push reminders cron error:', error);
+
+    // Catat log error ke database
+    await recordCronLog({
+      job_name: 'push-reminders',
+      status: 'error',
+      duration_ms: durationMs,
+      error_message: error?.message || 'Error executing push reminders.',
+    });
+
     return NextResponse.json(
-      { success: false, error: error?.message || 'Error executing push reminders.' },
+      {
+        success: false,
+        error: error?.message || 'Error executing push reminders.',
+        durationMs,
+      },
       { status: 500 }
     );
   }

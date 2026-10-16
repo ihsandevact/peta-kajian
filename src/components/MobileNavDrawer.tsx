@@ -84,6 +84,7 @@ export default function MobileNavDrawer({
     { href: '/admin/users', label: 'Kelola Relawan', icon: 'group', desc: 'Daftar pengguna & hak akses' },
     { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed', desc: 'Kelola sumber data scraper' },
     { href: '/admin/youtube', label: 'YouTube Live Channels', icon: 'smart_display', desc: 'Kelola & pantau siaran live kajian' },
+    { href: '/admin/cron', label: 'Status Otomatisasi (Cron)', icon: 'schedule', desc: 'Pantau scheduler background worker' },
   ];
 
   const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Relawan';

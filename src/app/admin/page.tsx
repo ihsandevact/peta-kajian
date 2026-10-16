@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import AdminNav from '@/components/AdminNav';
 import { fetchSessionsByStatus, fetchAdminStats } from '@/lib/services/admin';
 import { approveSession, rejectSession, togglePublishSession } from '@/app/actions/admin';
 import type { StudySession } from '@/lib/services/kajian';
@@ -156,10 +155,8 @@ export default function AdminModerationPage() {
   }, [sessions, activeTab, searchQuery]);
 
   return (
-    <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
-      <AdminNav />
-
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 py-6 sm:py-8 flex flex-col gap-6">
+    <div className="w-full font-geist text-on-surface">
+      <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 flex flex-col gap-6">
         {/* Toast Notifikasi */}
         {toastMessage && (
           <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in fade-in duration-200">

@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
-import AdminNav from '@/components/AdminNav';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin } from '@/lib/services/admin';
 import type { YoutubeChannel, ChannelSyncReport } from '@/lib/services/youtubeTracker';
@@ -176,13 +175,10 @@ export default function AdminYoutubeChannelsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-surface font-geist flex flex-col">
-        <AdminNav />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex items-center gap-2 text-outline">
-            <span className="material-symbols-outlined animate-spin text-[24px]">sync</span>
-            <span className="text-sm">Memuat data channel YouTube...</span>
-          </div>
+      <div className="flex-1 flex items-center justify-center min-h-[50vh]">
+        <div className="flex items-center gap-2 text-outline">
+          <span className="material-symbols-outlined animate-spin text-[24px]">sync</span>
+          <span className="text-sm">Memuat data channel YouTube...</span>
         </div>
       </div>
     );
@@ -190,25 +186,20 @@ export default function AdminYoutubeChannelsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-surface font-geist flex flex-col">
-        <AdminNav />
-        <div className="flex-1 flex items-center justify-center p-4">
-          <div className="max-w-md w-full p-6 rounded-2xl bg-surface-container-lowest border border-surface-container-high text-center">
-            <span className="material-symbols-outlined text-[48px] text-red-500 mb-2">lock</span>
-            <h2 className="text-lg font-bold text-on-surface">Akses Dibatasi</h2>
-            <p className="text-xs text-outline mt-1 mb-4">
-              Halaman ini hanya dapat diakses oleh administrator resmi Peta Kajian.
-            </p>
-          </div>
+      <div className="flex-1 flex items-center justify-center p-4 min-h-[50vh]">
+        <div className="max-w-md w-full p-6 rounded-2xl bg-surface-container-lowest border border-surface-container-high text-center">
+          <span className="material-symbols-outlined text-[48px] text-red-500 mb-2">lock</span>
+          <h2 className="text-lg font-bold text-on-surface">Akses Dibatasi</h2>
+          <p className="text-xs text-outline mt-1 mb-4">
+            Halaman ini hanya dapat diakses oleh administrator resmi Peta Kajian.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
-      <AdminNav />
-
+    <div className="w-full flex flex-col font-geist text-on-surface">
       {/* TOAST NOTIFICATION */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-neutral-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs flex items-center gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
@@ -219,7 +210,7 @@ export default function AdminYoutubeChannelsPage() {
 
       {/* HEADER SECTION */}
       <div className="bg-surface-container-lowest border-b border-surface-container-high/60 py-6 px-4 sm:px-6">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-red-600 text-[26px]">smart_display</span>
@@ -258,7 +249,7 @@ export default function AdminYoutubeChannelsPage() {
       </div>
 
       {/* MAIN CONTENT */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full flex flex-col gap-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full flex flex-col gap-6">
         {/* STATS OVERVIEW */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high flex items-center gap-3">

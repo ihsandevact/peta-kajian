@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import AdminNav from '@/components/AdminNav';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin } from '@/lib/services/admin';
 import {
@@ -250,20 +249,9 @@ export default function AdminTelegramChannelsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-container-lowest text-on-surface font-geist selection:bg-purple-100 selection:text-purple-900 pb-16">
-      {/* Admin Navigation Bar */}
-      <AdminNav />
-
+    <div className="w-full font-geist text-on-surface">
+      <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-6">
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-neutral-900 text-white text-xs sm:text-sm font-medium px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 border border-neutral-700 animate-in fade-in slide-in-from-bottom-3 duration-200">
-          <span className="material-symbols-outlined text-[18px] text-emerald-400">check_circle</span>
-          <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Main Container */}
-      <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-6 space-y-6">
         {/* Header Title & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-surface-container-high/60 pb-5">
           <div>

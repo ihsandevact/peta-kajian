@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import AdminNav from '@/components/AdminNav';
 import { createClient } from '@/utils/supabase/client';
 import {
   toggleUserRole,
@@ -292,11 +291,8 @@ export default function AdminUsersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
-      <AdminNav />
-
-      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-8 flex flex-col gap-5 sm:gap-6">
-        {/* Toast Notifikasi */}
+    <main className="w-full max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 flex flex-col gap-5 sm:gap-6">
+      {/* Toast Notifikasi */}
         {toastMessage && (
           <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 text-xs font-semibold flex items-center justify-between animate-in fade-in duration-200">
             <div className="flex items-center gap-2">
@@ -869,6 +865,5 @@ export default function AdminUsersPage() {
           </div>
         )}
       </main>
-    </div>
   );
 }

@@ -33,6 +33,7 @@ export default function AdminNav({ userEmail }: { userEmail?: string }) {
     { href: '/admin/users', label: 'Kelola Relawan', icon: 'group' },
     { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed' },
     { href: '/admin/youtube', label: 'YouTube Live', icon: 'smart_display' },
+    { href: '/admin/cron', label: 'Status Cron', icon: 'schedule' },
   ];
 
   return (
