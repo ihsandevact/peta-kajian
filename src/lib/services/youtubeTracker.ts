@@ -267,6 +267,142 @@ export async function verifyVideoLiveStatusInnerTube(videoId: string): Promise<{
   }
 }
 
+/**
+ * Pengecekan status Live siaran YouTube via YouTube Data API v3 resmi.
+ * Menggunakan pendekatan hemat kuota (1 kuota per panggilan) via playlist Uploads (UU...).
+ * 100% legal, deterministik, dan kebal dari Captcha/bot protection di cloud (Vercel).
+ */
+export async function checkChannelLiveViaApi(
+  channelIdOrHandle: string,
+  apiKey: string,
+  defaultSpeaker?: string | null,
+  knownChannelId?: string | null
+): Promise<LiveDetectionResult | null> {
+  if (!apiKey) return null;
+
+  try {
+    let channelId = knownChannelId || (channelIdOrHandle.startsWith('UC') ? channelIdOrHandle : null);
+    let uploadsPlaylistId = channelId ? (channelId.startsWith('UC') ? `UU${channelId.slice(2)}` : `UU${channelId}`) : null;
+
+    // Jika channelId kanonik belum diketahui, resolve via channels.list forHandle (1 kuota)
+    if (!uploadsPlaylistId) {
+      const handleClean = channelIdOrHandle.replace(/^@/, '');
+      const chRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/channels?part=id,contentDetails,snippet&forHandle=${encodeURIComponent(handleClean)}&key=${apiKey}`,
+        { cache: 'no-store', signal: AbortSignal.timeout(6000) }
+      );
+      if (!chRes.ok) return null;
+      const chData = await chRes.json();
+      const chItem = chData.items?.[0];
+      if (!chItem) return null;
+
+      channelId = chItem.id;
+      uploadsPlaylistId = chItem.contentDetails?.relatedPlaylists?.uploads || (channelId ? `UU${channelId.slice(2)}` : null);
+    }
+
+    if (!uploadsPlaylistId) return null;
+
+    // 1. Ambil 2 video terbaru dari playlist Uploads channel (1 kuota)
+    const playlistRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=2&key=${apiKey}`,
+      { cache: 'no-store', signal: AbortSignal.timeout(6000) }
+    );
+
+    if (!playlistRes.ok) {
+      return null;
+    }
+
+    const playlistData = await playlistRes.json();
+    const items = playlistData.items || [];
+    if (items.length === 0) {
+      return {
+        handle: channelIdOrHandle,
+        channelId,
+        isLive: false,
+        videoId: null,
+        title: '',
+        posterUrl: null,
+        streamUrl: null,
+        speakerName: defaultSpeaker || 'Asatidzah',
+      };
+    }
+
+    const videoIds = items
+      .map((item: any) => item.snippet?.resourceId?.videoId)
+      .filter(Boolean);
+
+    if (videoIds.length === 0) {
+      return {
+        handle: channelIdOrHandle,
+        channelId,
+        isLive: false,
+        videoId: null,
+        title: '',
+        posterUrl: null,
+        streamUrl: null,
+        speakerName: defaultSpeaker || 'Asatidzah',
+      };
+    }
+
+    // 2. Periksa status live siaran pada video terbaru (1 kuota untuk multiple ID)
+    const videosRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet,liveStreamingDetails&id=${videoIds.join(',')}&key=${apiKey}`,
+      { cache: 'no-store', signal: AbortSignal.timeout(6000) }
+    );
+
+    if (!videosRes.ok) return null;
+    const videosData = await videosRes.json();
+    const videoItems = videosData.items || [];
+
+    for (const vid of videoItems) {
+      const snippet = vid.snippet;
+      const liveDetails = vid.liveStreamingDetails;
+      const liveBroadcastContent = snippet?.liveBroadcastContent; // 'live' | 'upcoming' | 'none'
+
+      // Terverifikasi live jika status siaran adalah 'live' ATAU
+      // actualStartTime ada dan actualEndTime belum ada
+      const isCurrentlyLive =
+        liveBroadcastContent === 'live' ||
+        (Boolean(liveDetails?.actualStartTime) && !liveDetails?.actualEndTime);
+
+      if (isCurrentlyLive) {
+        const videoId = vid.id;
+        const title = cleanHtmlEntities(snippet?.title || '');
+        const speakerName = extractSpeakerFromTitle(title, defaultSpeaker || 'Asatidzah');
+        const posterUrl =
+          snippet?.thumbnails?.maxres?.url ||
+          snippet?.thumbnails?.high?.url ||
+          snippet?.thumbnails?.default?.url ||
+          `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+        return {
+          handle: snippet?.channelTitle || channelIdOrHandle,
+          channelId,
+          isLive: true,
+          videoId,
+          title,
+          posterUrl,
+          streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          speakerName,
+        };
+      }
+    }
+
+    return {
+      handle: items[0]?.snippet?.channelTitle || channelIdOrHandle,
+      channelId,
+      isLive: false,
+      videoId: null,
+      title: '',
+      posterUrl: null,
+      streamUrl: null,
+      speakerName: defaultSpeaker || 'Asatidzah',
+    };
+  } catch (err) {
+    console.warn(`[checkChannelLiveViaApi] Error for ${channelIdOrHandle}:`, err);
+    return null;
+  }
+}
 
 /**
  * Pengecekan status Live siaran YouTube via canonical endpoint (0 Quota)
@@ -556,11 +692,27 @@ export async function syncAllYoutubeChannels(): Promise<{
 
     const batchResults = await Promise.allSettled(
       batch.map(async (channel) => {
-        const check = await checkChannelLiveStatus(
-          channel.channel_handle,
-          channel.default_speaker_name,
-          channel.channel_id
-        );
+        let check: LiveDetectionResult | null = null;
+
+        // 1. Prioritaskan YouTube Data API v3 resmi jika API key tersedia di environment
+        const apiKey = process.env.YOUTUBE_API_KEY?.trim();
+        if (apiKey) {
+          check = await checkChannelLiveViaApi(
+            channel.channel_handle,
+            apiKey,
+            channel.default_speaker_name,
+            channel.channel_id
+          );
+        }
+
+        // 2. Fallback ke pengecekan zero-quota scraping / InnerTube jika API key tidak tersedia / gagal
+        if (!check) {
+          check = await checkChannelLiveStatus(
+            channel.channel_handle,
+            channel.default_speaker_name,
+            channel.channel_id
+          );
+        }
 
         const nowIso = new Date().toISOString();
 
