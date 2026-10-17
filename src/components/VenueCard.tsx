@@ -10,6 +10,7 @@ import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import KajianPreviewModal from '@/components/KajianPreviewModal';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
+import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 
 interface VenueCardProps {
   session: StudySession;
@@ -111,12 +112,13 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
       if (!isSessionReminded(session.id)) {
         toggleSessionReminder(session.id);
       }
+      triggerLoginNudge({ type: 'attendance', title: session.title });
     }
   };
 
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
-      <div className={`w-full max-h-[min(580px,calc(100vh-60px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom flex flex-col relative overflow-x-hidden ${
+      <div className={`w-full max-h-[min(520px,calc(100vh-120px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom flex flex-col relative overflow-x-hidden ${
         isPast ? 'border-surface-container-highest shadow-md' : 'border-surface-container-high/80'
       }`}>
         {/* Gambar Poster Header - Dapat diklik untuk membuka Preview Modal */}
@@ -149,7 +151,11 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  const willBookmark = !bookmarked;
                   toggleBookmark(session.id, session);
+                  if (willBookmark) {
+                    triggerLoginNudge({ type: 'bookmark', title: session.title });
+                  }
                 }}
                 className={`w-7 h-7 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
                   bookmarked
@@ -222,7 +228,13 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 <>
                   <button
                     type="button"
-                    onClick={() => toggleBookmark(session.id, session)}
+                    onClick={() => {
+                      const willBookmark = !bookmarked;
+                      toggleBookmark(session.id, session);
+                      if (willBookmark) {
+                        triggerLoginNudge({ type: 'bookmark', title: session.title });
+                      }
+                    }}
                     className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                       bookmarked
                         ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'

@@ -70,7 +70,12 @@ export default function MobileNavDrawer({
           : { href: '/kontributor/profile', label: 'Ajukan Jadi Kontributor', icon: 'volunteer_activism', desc: 'Daftar sebagai relawan dakwah' },
         { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
         { href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
-        { href: '/kontributor/profile', label: isContributorOrAdmin ? 'Profil Relawan' : 'Profil Saya', icon: 'account_circle', desc: 'Kelola akun & permohonan Anda' },
+        {
+          href: '/kontributor/profile',
+          label: isContributorOrAdmin ? 'Profil Relawan' : 'Buku Saku Saya',
+          icon: isContributorOrAdmin ? 'account_circle' : 'auto_stories',
+          desc: isContributorOrAdmin ? 'Kelola akun & permohonan Anda' : 'Agenda tersimpan & riwayat majelis',
+        },
       ]
     : [
         { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
@@ -169,6 +174,35 @@ export default function MobileNavDrawer({
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Buku Saku Jamaah Banner (Jika belum login) */}
+        {!currentUser && (
+          <div className="p-3.5 mx-3 mt-3 rounded-2xl bg-primary/5 dark:bg-primary/10 border border-primary/25 dark:border-primary/35 flex flex-col gap-2.5">
+            <div className="flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0 mt-0.5">
+                <span className="material-symbols-outlined text-[18px]">auto_stories</span>
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-on-surface">Buku Saku Penuntut Ilmu</h4>
+                <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">
+                  Simpan agenda kajian, catat riwayat majelis, & sinkronkan antar perangkat.
+                </p>
+              </div>
+            </div>
+
+            <Link
+              href="/login"
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-all shadow-2xs active:scale-95"
+            >
+              <img
+                src="https://www.svgrepo.com/show/475656/google-color.svg"
+                className="w-3.5 h-3.5 bg-white rounded-full p-0.5 shrink-0"
+                alt=""
+              />
+              <span>Masuk dengan Google (1-Klik)</span>
+            </Link>
           </div>
         )}
 
@@ -287,8 +321,12 @@ export default function MobileNavDrawer({
               href="/login"
               className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs font-semibold text-white bg-primary hover:bg-primary/90 transition-colors shadow-2xs"
             >
-              <span className="material-symbols-outlined text-[16px]">login</span>
-              <span>Masuk / Login</span>
+              <img
+                src="https://www.svgrepo.com/show/475656/google-color.svg"
+                className="w-3.5 h-3.5 bg-white rounded-full p-0.5 shrink-0"
+                alt=""
+              />
+              <span>Masuk dengan Google (1-Klik)</span>
             </Link>
           )}
         </div>

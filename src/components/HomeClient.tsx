@@ -14,6 +14,7 @@ import { useOnlineStatus, cacheFeedSnapshot, getFeedSnapshot, getCachedOfflineSe
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import RequestContributorModal from '@/components/RequestContributorModal';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
+import LoginNudgePrompt from '@/components/LoginNudgePrompt';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -588,16 +589,16 @@ export default function HomeClient() {
                 >
                   {/* Header Popover */}
                   <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="material-symbols-outlined text-[18px] text-amber-500 font-bold">
-                      auto_awesome
+                    <span className="material-symbols-outlined text-[18px] text-primary font-bold">
+                      auto_stories
                     </span>
                     <h4 className="font-bold text-xs sm:text-sm text-on-surface">
-                      Keuntungan Masuk Akun
+                      Buku Saku Penuntut Ilmu
                     </h4>
                   </div>
 
                   <p className="text-[11px] text-on-surface-variant mb-3 leading-relaxed">
-                    Nikmati kemudahan fitur dakwah dan agenda kajian berikut:
+                    Masuk dengan Google (1-Klik) untuk membuka fitur agenda & catatan majelis Anda:
                   </p>
 
                   {/* List Benefit */}
@@ -709,6 +710,7 @@ export default function HomeClient() {
                 userLocation={userLocation}
                 isRefreshing={isRefreshing}
                 onRefresh={() => refetchData(false)}
+                currentUser={currentUser}
               />
             </div>
           </div>
@@ -787,6 +789,9 @@ export default function HomeClient() {
         onSuccess={() => setIsRequestModalOpen(false)}
         userEmail={currentUser?.email || undefined}
       />
+
+      {/* Ajakan Login Kontekstual (Toast Bookmark & Modal Jejak Majelis) */}
+      <LoginNudgePrompt currentUser={currentUser} />
     </div>
   );
 }

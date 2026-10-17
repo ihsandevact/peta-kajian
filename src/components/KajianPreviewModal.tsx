@@ -13,6 +13,7 @@ import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import NotificationReminderToggle from '@/components/NotificationReminderToggle';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
+import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 
 interface KajianPreviewModalProps {
   isOpen: boolean;
@@ -81,6 +82,7 @@ export default function KajianPreviewModal({
       if (!isSessionReminded(session.id)) {
         toggleSessionReminder(session.id);
       }
+      triggerLoginNudge({ type: 'attendance', title: session.title });
     }
   };
 
@@ -492,7 +494,13 @@ export default function KajianPreviewModal({
                 {/* Tombol Bookmark */}
                 <button
                   type="button"
-                  onClick={() => toggleBookmark(session.id, session)}
+                  onClick={() => {
+                    const willBookmark = !bookmarked;
+                    toggleBookmark(session.id, session);
+                    if (willBookmark) {
+                      triggerLoginNudge({ type: 'bookmark', title: session.title });
+                    }
+                  }}
                   className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-semibold py-2 px-3 rounded-xl border transition-colors cursor-pointer ${
                     bookmarked
                       ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30'

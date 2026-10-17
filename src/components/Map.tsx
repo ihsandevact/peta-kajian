@@ -42,16 +42,15 @@ export default function AppMap({
   // Fungsi helper untuk terbang ke kajian dengan offset adaptif
   const flyToSession = React.useCallback((session: StudySession) => {
     if (!hasPhysicalLocation(session) || !mapRef.current) return;
-    let offsetY = 160;
+    let offsetY = 210;
     if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 768;
       if (isDesktop) {
-        // Desktop: offset Y positif (140px - 190px) agar card kompak pas di tengah
-        offsetY = Math.min(190, Math.max(140, Math.round(window.innerHeight * 0.22)));
+        // Desktop: offset Y positif (200px - 260px) agar card & poster berada aman di bawah pill info live
+        offsetY = Math.min(260, Math.max(200, Math.round(window.innerHeight * 0.28)));
       } else {
-        // Mobile: offset Y positif (80px - 115px) agar card & poster di atas marker
-        // tidak terpotong di tepi atas layar dan pas di ruang terbuka atas bottom sheet
-        offsetY = Math.min(115, Math.max(80, Math.round(window.innerHeight * 0.11)));
+        // Mobile: offset Y positif (130px - 180px) agar card tidak menutupi pill floating di atas
+        offsetY = Math.min(180, Math.max(130, Math.round(window.innerHeight * 0.22)));
       }
     }
 
@@ -153,7 +152,7 @@ export default function AppMap({
             closeButton={false}
             closeOnClick={false}
             className="z-50"
-            offset={20}
+            offset={12}
             maxWidth="none"
           >
             <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />

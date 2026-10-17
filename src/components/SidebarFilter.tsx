@@ -11,6 +11,7 @@ import { useBookmarks } from '@/utils/bookmarks';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
+import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -23,6 +24,7 @@ interface SidebarFilterProps {
   userLocation?: {lat: number, lng: number} | null;
   isRefreshing?: boolean;
   onRefresh?: () => void;
+  currentUser?: any;
 }
 
 export default function SidebarFilter({
@@ -36,6 +38,7 @@ export default function SidebarFilter({
   userLocation = null,
   isRefreshing = false,
   onRefresh,
+  currentUser,
 }: SidebarFilterProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -230,6 +233,32 @@ export default function SidebarFilter({
 
       {/* 3. Scrollable List of Kajian Items */}
       <div className="flex-1 overflow-y-auto" ref={listRef}>
+        {/* Banner Cloud Backup untuk Pengguna Anonim di Tab Tersimpan */}
+        {filters.time === 'tersimpan' && !currentUser && bookmarks.length > 0 && (
+          <div className="mx-3 mt-2.5 mb-1.5 p-3 rounded-2xl bg-amber-500/10 dark:bg-amber-950/40 border border-amber-500/30 text-on-surface flex items-start gap-2.5 animate-in fade-in duration-200">
+            <span className="material-symbols-outlined text-[20px] text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+              cloud_off
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-on-surface leading-tight">
+                Jadwal Tersimpan di Memori Perangkat
+              </p>
+              <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">
+                Masuk akun Google (1-Klik) agar kajian tersimpan otomatis dicadangkan ke cloud & tidak hilang saat ganti HP.
+              </p>
+              <div className="mt-2">
+                <Link
+                  href="/login?next=/?tab=tersimpan"
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-600 dark:bg-amber-500 text-white text-[11px] font-semibold hover:opacity-90 transition-all shadow-2xs active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[14px]">login</span>
+                  <span>Cadangkan ke Akun</span>
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
         ) : sessions.length === 0 ? (
@@ -330,7 +359,11 @@ export default function SidebarFilter({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
+                        const willBookmark = !isBookmarked(session.id);
                         toggleBookmark(session.id, session);
+                        if (willBookmark && !currentUser) {
+                          triggerLoginNudge({ type: 'bookmark', title: session.title });
+                        }
                       }}
                       className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                         isBookmarked(session.id)

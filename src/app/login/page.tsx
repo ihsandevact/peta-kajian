@@ -53,9 +53,28 @@ function LoginForm() {
         <h1 className="text-2xl font-bold text-on-surface mb-2 tracking-tight">
           Masuk ke Peta Kajian
         </h1>
-        <p className="text-xs sm:text-sm text-on-surface-variant mb-8 leading-relaxed">
+        <p className="text-xs sm:text-sm text-on-surface-variant mb-5 leading-relaxed">
           Simpan jadwal kajian favorit Anda, tandai kehadiran di majelis ilmu, atau berkontribusi menyiarkan dakwah ke seluruh Indonesia.
         </p>
+
+        {/* 3 Value Badges */}
+        <div className="grid grid-cols-3 gap-2 mb-6">
+          <div className="p-2.5 rounded-2xl bg-surface-container-low/80 border border-surface-container-high/60 flex flex-col items-center text-center">
+            <span className="material-symbols-outlined text-[20px] text-amber-500 mb-1">bookmark</span>
+            <span className="text-[11px] font-bold text-on-surface leading-tight">Simpan Cloud</span>
+            <span className="text-[9px] text-outline leading-tight mt-0.5">Jadwal anti hilang</span>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-surface-container-low/80 border border-surface-container-high/60 flex flex-col items-center text-center">
+            <span className="material-symbols-outlined text-[20px] text-emerald-600 dark:text-emerald-400 mb-1">how_to_reg</span>
+            <span className="text-[11px] font-bold text-on-surface leading-tight">Jejak Majelis</span>
+            <span className="text-[9px] text-outline leading-tight mt-0.5">Riwayat kehadiran</span>
+          </div>
+          <div className="p-2.5 rounded-2xl bg-surface-container-low/80 border border-surface-container-high/60 flex flex-col items-center text-center">
+            <span className="material-symbols-outlined text-[20px] text-primary mb-1">notifications_active</span>
+            <span className="text-[11px] font-bold text-on-surface leading-tight">Pengingat H-2</span>
+            <span className="text-[9px] text-outline leading-tight mt-0.5">Alarm otomatis</span>
+          </div>
+        </div>
 
         {/* Google OAuth Button */}
         <button
