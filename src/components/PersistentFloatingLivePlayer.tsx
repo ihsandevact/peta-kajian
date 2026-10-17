@@ -294,28 +294,47 @@ export default function PersistentFloatingLivePlayer() {
     return () => clearInterval(interval);
   }, [isOpen, isPipActive]);
 
-  // Sinkronisasi status & timestamp PiP dengan jendela pop-out
+  // Helper penanganan ketika jendela PiP ditutup / dikembalikan ke tab web
+  const handlePipClosedEvent = useCallback((time?: number) => {
+    setIsPipActive(false);
+
+    let resolvedTime = time;
+    if (typeof resolvedTime !== 'number' || resolvedTime <= 0) {
+      if (activeStream?.videoId) {
+        try {
+          const saved = localStorage.getItem(`peta_kajian_pip_time_${activeStream.videoId}`);
+          if (saved) {
+            const parsed = parseInt(saved, 10);
+            if (!isNaN(parsed) && parsed > 0) resolvedTime = parsed;
+          }
+        } catch {}
+      }
+    }
+
+    if (typeof resolvedTime === 'number' && resolvedTime > 0) {
+      currentPlaybackTimeRef.current = resolvedTime;
+      setResumeTime(resolvedTime);
+      playbackStartEpochRef.current = Date.now();
+    }
+
+    if (pipCheckIntervalRef.current) {
+      clearInterval(pipCheckIntervalRef.current);
+      pipCheckIntervalRef.current = null;
+    }
+    pipWindowRef.current = null;
+  }, [activeStream?.videoId, setIsPipActive]);
+
+  // Sinkronisasi status & timestamp PiP dengan jendela pop-out / Document PiP
   useEffect(() => {
     let broadcast: BroadcastChannel | null = null;
-
-    const handlePipClosedEvent = (time?: number) => {
-      setIsPipActive(false);
-      if (typeof time === 'number' && time > 0) {
-        currentPlaybackTimeRef.current = time;
-        setResumeTime(time);
-        playbackStartEpochRef.current = Date.now();
-      }
-      if (pipCheckIntervalRef.current) {
-        clearInterval(pipCheckIntervalRef.current);
-        pipCheckIntervalRef.current = null;
-      }
-      pipWindowRef.current = null;
-    };
 
     try {
       broadcast = new BroadcastChannel('peta_kajian_pip_channel');
       broadcast.onmessage = (event) => {
-        if (event.data?.type === 'PIP_CLOSED') {
+        if (event.data?.type === 'PIP_CLOSED' || event.data?.type === 'PIP_PULL_BACK') {
+          try {
+            window.focus();
+          } catch {}
           handlePipClosedEvent(event.data?.currentTime);
         } else if (event.data?.type === 'PIP_OPENED') {
           setIsPipActive(true);
@@ -326,7 +345,10 @@ export default function PersistentFloatingLivePlayer() {
     }
 
     const handleMessage = (e: MessageEvent) => {
-      if (e.data?.type === 'PIP_CLOSED') {
+      if (e.data?.type === 'PIP_CLOSED' || e.data?.type === 'PIP_PULL_BACK') {
+        try {
+          window.focus();
+        } catch {}
         handlePipClosedEvent(e.data?.currentTime);
       } else {
         // Pantau update waktu langsung dari iframe YouTube (postMessage API)
@@ -348,10 +370,14 @@ export default function PersistentFloatingLivePlayer() {
       } catch {}
       if (pipCheckIntervalRef.current) clearInterval(pipCheckIntervalRef.current);
     };
-  }, [setIsPipActive]);
+  }, [setIsPipActive, handlePipClosedEvent]);
 
-  // Handler Kembalikan Video dari Jendela PiP Pop-out ke Mini Player Web Ini
+  // Handler Kembalikan Video dari Jendela PiP ke Mini Player Tab Ini
   const handleRestoreFromPip = useCallback(() => {
+    try {
+      window.focus();
+    } catch {}
+
     try {
       const broadcast = new BroadcastChannel('peta_kajian_pip_channel');
       broadcast.postMessage({ type: 'PIP_PULL_BACK' });
@@ -369,11 +395,11 @@ export default function PersistentFloatingLivePlayer() {
       clearInterval(pipCheckIntervalRef.current);
       pipCheckIntervalRef.current = null;
     }
-    setIsPipActive(false);
-  }, [setIsPipActive]);
+    handlePipClosedEvent();
+  }, [handlePipClosedEvent]);
 
-  // Handler Buka / Kembalikan Pop-out Window (PiP Mandiri di Luar Browser)
-  const handleTogglePip = useCallback(() => {
+  // Handler Buka / Kembalikan Jendela PiP (Document PiP Always-on-Top seperti TikTok)
+  const handleTogglePip = useCallback(async () => {
     if (!activeStream) return;
 
     // Jika PiP sedang aktif, klik tombol ini akan mengembalikan player ke tab web ini
@@ -394,11 +420,94 @@ export default function PersistentFloatingLivePlayer() {
       currentTimestamp = resumeTime;
     }
 
-    // 3. Buka jendela pop-out mandiri di URL /live/pip dengan parameter detik waktu mulai (?t=...)
+    // 3. Tentukan ukuran & URL
     const width = Math.max(380, Math.min(640, playerWidth));
     const height = Math.round(width * (9 / 16)) + 44;
     const url = `/live/pip?v=${activeStream.videoId}&t=${currentTimestamp}&title=${encodeURIComponent(activeStream.title)}&channel=${encodeURIComponent(activeStream.channelName)}&speaker=${encodeURIComponent(activeStream.speakerName || '')}`;
 
+    // PRIORITAS 1: Modern Document Picture-in-Picture API (Standar Chrome 116+ / Edge 116+)
+    // Memberikan perilaku OS Always-on-Top (Topmost) persis seperti TikTok & YouTube!
+    if (typeof window !== 'undefined' && 'documentPictureInPicture' in window) {
+      try {
+        const pipWindow = await (window as any).documentPictureInPicture.requestWindow({
+          width,
+          height,
+        });
+
+        pipWindowRef.current = pipWindow;
+        setIsPipActive(true);
+
+        try {
+          pipWindow.focus();
+        } catch {}
+
+        // Styling body Document PiP
+        pipWindow.document.title = activeStream.title;
+        pipWindow.document.body.style.margin = '0';
+        pipWindow.document.body.style.padding = '0';
+        pipWindow.document.body.style.overflow = 'hidden';
+        pipWindow.document.body.style.backgroundColor = '#000000';
+
+        const iframe = pipWindow.document.createElement('iframe');
+        iframe.src = url;
+        iframe.style.position = 'absolute';
+        iframe.style.inset = '0';
+        iframe.style.width = '100%';
+        iframe.style.height = '100%';
+        iframe.style.border = 'none';
+        iframe.style.display = 'block';
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+        iframe.referrerPolicy = 'strict-origin-when-cross-origin';
+
+        pipWindow.document.body.appendChild(iframe);
+
+        // Langsung fokuskan iframe ketika selesai dimuat
+        iframe.addEventListener('load', () => {
+          try {
+            iframe.contentWindow?.focus();
+          } catch {}
+        });
+
+        // Teruskan klik atau interaksi apapun pada jendela PiP untuk mengaktifkan audio & autoplay
+        const forwardInteraction = () => {
+          try {
+            iframe.contentWindow?.postMessage(
+              JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+              '*'
+            );
+            iframe.contentWindow?.postMessage(
+              JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+              '*'
+            );
+          } catch {}
+        };
+        pipWindow.addEventListener('pointerdown', forwardInteraction, { once: true });
+        pipWindow.addEventListener('click', forwardInteraction, { once: true });
+
+        // Tangani penutupan jendela PiP (baik melalui tombol bawaan OS 'Back to tab' maupun tombol X)
+        pipWindow.addEventListener(
+          'pagehide',
+          () => {
+            try {
+              window.focus();
+            } catch {}
+            let lastTime: number | undefined;
+            try {
+              const saved = localStorage.getItem(`peta_kajian_pip_time_${activeStream.videoId}`);
+              if (saved) lastTime = parseInt(saved, 10);
+            } catch {}
+            handlePipClosedEvent(lastTime);
+          },
+          { once: true }
+        );
+
+        return;
+      } catch (err) {
+        console.warn('Document Picture-in-Picture gagal dibuka, fallback ke popup:', err);
+      }
+    }
+
+    // PRIORITAS 2: Fallback ke window.open popup (untuk browser yang belum mendukung Document PiP seperti Firefox)
     const popup = window.open(
       url,
       'peta_kajian_pip_window',
@@ -422,10 +531,18 @@ export default function PersistentFloatingLivePlayer() {
           pipCheckIntervalRef.current = null;
         }
         pipWindowRef.current = null;
-        setIsPipActive(false);
+        let lastTime: number | undefined;
+        try {
+          const saved = localStorage.getItem(`peta_kajian_pip_time_${activeStream.videoId}`);
+          if (saved) lastTime = parseInt(saved, 10);
+        } catch {}
+        try {
+          window.focus();
+        } catch {}
+        handlePipClosedEvent(lastTime);
       }
     }, 400);
-  }, [activeStream, currentUser, isPipActive, playerWidth, setIsPipActive, handleRestoreFromPip]);
+  }, [activeStream, currentUser, isPipActive, playerWidth, resumeTime, handlePipClosedEvent, handleRestoreFromPip]);
 
   // Handler Tutup Pemutar & Tutup PiP jika terbuka
   const handleClosePlayer = useCallback(() => {
@@ -569,10 +686,10 @@ export default function PersistentFloatingLivePlayer() {
               <button
                 type="button"
                 onClick={handleTogglePip}
-                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                className={`flex items-center justify-center transition-colors cursor-pointer p-1 ${
                   isPipActive
-                    ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/20 hover:bg-indigo-500/30 font-bold'
-                    : 'text-outline hover:text-indigo-600 hover:bg-surface-container'
+                    ? 'text-indigo-600 dark:text-indigo-400 font-bold'
+                    : 'text-outline hover:text-indigo-600 dark:hover:text-indigo-400'
                 }`}
                 title={
                   isPipActive
@@ -583,7 +700,7 @@ export default function PersistentFloatingLivePlayer() {
                 }
                 aria-label="Picture in Picture OS"
               >
-                <span className="material-symbols-outlined text-[15px]">picture_in_picture_alt</span>
+                <span className="material-symbols-outlined text-[18px]">picture_in_picture_alt</span>
               </button>
 
               <button
@@ -763,7 +880,7 @@ export default function PersistentFloatingLivePlayer() {
               <iframe
                 ref={iframeRef}
                 key={`${activeStream.videoId}-${resumeTime}`}
-                src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1`}
+                src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1`}
                 title={activeStream.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
@@ -819,10 +936,10 @@ export default function PersistentFloatingLivePlayer() {
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={handleTogglePip}
-              className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
+              className={`flex items-center justify-center shrink-0 transition-colors cursor-pointer p-1 ${
                 isPipActive
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-surface-container hover:bg-surface-container-high text-outline hover:text-indigo-600'
+                  ? 'text-indigo-600 dark:text-indigo-400 font-bold'
+                  : 'text-outline hover:text-indigo-600 dark:hover:text-indigo-400'
               }`}
               title={
                 isPipActive
@@ -833,7 +950,7 @@ export default function PersistentFloatingLivePlayer() {
               }
               aria-label="Picture in Picture OS"
             >
-              <span className="material-symbols-outlined text-[17px]">picture_in_picture_alt</span>
+              <span className="material-symbols-outlined text-[20px]">picture_in_picture_alt</span>
             </button>
 
             {/* Gagang Resize Sudut Kanan-Bawah (Bottom-Right) */}

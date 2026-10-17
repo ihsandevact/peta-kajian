@@ -42,6 +42,14 @@ export default function FloatingStudyNotes() {
   const [syncStatus, setSyncStatus] = useState<'saved' | 'saving' | 'offline'>('saved');
   const [copiedToast, setCopiedToast] = useState(false);
 
+  // Engine Undo / Redo
+  const historyRef = useRef<string[]>([]);
+  const historyIndexRef = useRef<number>(-1);
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const isHistoryActionRef = useRef<boolean>(false);
+  const lastHistorySaveTimeRef = useRef<number>(0);
+
   // Floating Position & Size
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -179,6 +187,107 @@ export default function FloatingStudyNotes() {
     }
   }, [isStudyNotesOpen, studySession, currentUser, authChecked, closeStudyNotes]);
 
+  // Inisialisasi Riwayat Histori
+  const initHistory = useCallback((initialVal: string) => {
+    historyRef.current = [initialVal];
+    historyIndexRef.current = 0;
+    setCanUndo(false);
+    setCanRedo(false);
+  }, []);
+
+  // Simpan Perubahan ke Supabase dan localStorage (Auto-save)
+  const triggerAutoSave = useCallback(
+    (val: string) => {
+      if (!studySession || !currentUser) return;
+      setSyncStatus('saving');
+      setLocalDraftNote(studySession.videoId, val);
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        const result = await upsertStudyNote({
+          user_id: currentUser.id,
+          video_id: studySession.videoId,
+          session_id: studySession.sessionId || null,
+          title: studySession.title,
+          speaker_name: studySession.speakerName || null,
+          channel_name: studySession.channelName || null,
+          content: val,
+        });
+
+        if (result) {
+          setSyncStatus('saved');
+        } else {
+          setSyncStatus('offline');
+        }
+      }, 450);
+    },
+    [studySession, currentUser]
+  );
+
+  // Catat Snapshot Riwayat untuk Undo & Redo
+  const pushToHistory = useCallback((newVal: string, immediate: boolean = false) => {
+    if (isHistoryActionRef.current) {
+      isHistoryActionRef.current = false;
+      return;
+    }
+
+    const now = Date.now();
+    const currentHist = historyRef.current;
+    const currentIdx = historyIndexRef.current;
+
+    if (currentIdx >= 0 && currentHist[currentIdx] === newVal) {
+      return;
+    }
+
+    // Jika perubahan beruntun akibat mengetik (< 700ms) dan bukan klik tombol format langsung,
+    // perbarui slot histori saat ini agar undo tidak berjalan karakter-per-karakter
+    if (!immediate && now - lastHistorySaveTimeRef.current < 700 && currentIdx > 0) {
+      currentHist[currentIdx] = newVal;
+      return;
+    }
+
+    lastHistorySaveTimeRef.current = now;
+    // Potong cabang masa depan jika ada perubahan baru setelah undo
+    const branch = currentHist.slice(0, currentIdx + 1);
+    branch.push(newVal);
+    if (branch.length > 60) {
+      branch.shift();
+    }
+    historyRef.current = branch;
+    historyIndexRef.current = branch.length - 1;
+    setCanUndo(historyIndexRef.current > 0);
+    setCanRedo(false);
+  }, []);
+
+  // Aksi Undo
+  const handleUndo = useCallback(() => {
+    if (historyIndexRef.current > 0) {
+      historyIndexRef.current -= 1;
+      const prevVal = historyRef.current[historyIndexRef.current];
+      isHistoryActionRef.current = true;
+      setNoteContent(prevVal);
+      setCanUndo(historyIndexRef.current > 0);
+      setCanRedo(true);
+      triggerAutoSave(prevVal);
+    }
+  }, [triggerAutoSave]);
+
+  // Aksi Redo
+  const handleRedo = useCallback(() => {
+    if (historyIndexRef.current < historyRef.current.length - 1) {
+      historyIndexRef.current += 1;
+      const nextVal = historyRef.current[historyIndexRef.current];
+      isHistoryActionRef.current = true;
+      setNoteContent(nextVal);
+      setCanUndo(true);
+      setCanRedo(historyIndexRef.current < historyRef.current.length - 1);
+      triggerAutoSave(nextVal);
+    }
+  }, [triggerAutoSave]);
+
   // 4. Muat Catatan Kajian Saat Sesi Dibuka
   useEffect(() => {
     if (!isStudyNotesOpen || !studySession || !currentUser) {
@@ -193,6 +302,7 @@ export default function FloatingStudyNotes() {
       const localDraft = getLocalDraftNote(studySession!.videoId);
       if (localDraft) {
         setNoteContent(localDraft);
+        initHistory(localDraft);
       }
 
       // 2. Ambil dari cloud Supabase
@@ -200,6 +310,7 @@ export default function FloatingStudyNotes() {
       if (isMounted) {
         if (cloudNote?.content) {
           setNoteContent(cloudNote.content);
+          initHistory(cloudNote.content);
           setSyncStatus('saved');
         } else if (!localDraft) {
           const defaultTemplate =
@@ -209,6 +320,7 @@ export default function FloatingStudyNotes() {
             `━━━━━━━━━━━━━━━━━━━━\n\n` +
             `• [Faidah 1]: `;
           setNoteContent(defaultTemplate);
+          initHistory(defaultTemplate);
           setSyncStatus('saved');
         } else {
           setSyncStatus('saved');
@@ -224,39 +336,14 @@ export default function FloatingStudyNotes() {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [isStudyNotesOpen, studySession, currentUser]);
+  }, [isStudyNotesOpen, studySession, currentUser, initHistory]);
 
-  // 5. Auto-save Debounced (450ms) ke Supabase dan localStorage
+  // 5. Perubahan Konten Input oleh Pengguna
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setNoteContent(val);
-    setSyncStatus('saving');
-
-    if (!studySession || !currentUser) return;
-
-    setLocalDraftNote(studySession.videoId, val);
-
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
-    }
-
-    saveTimeoutRef.current = setTimeout(async () => {
-      const result = await upsertStudyNote({
-        user_id: currentUser.id,
-        video_id: studySession.videoId,
-        session_id: studySession.sessionId || null,
-        title: studySession.title,
-        speaker_name: studySession.speakerName || null,
-        channel_name: studySession.channelName || null,
-        content: val,
-      });
-
-      if (result) {
-        setSyncStatus('saved');
-      } else {
-        setSyncStatus('offline');
-      }
-    }, 450);
+    pushToHistory(val, false);
+    triggerAutoSave(val);
   };
 
   // 6. Clamp Posisi agar Sticky Note selalu berada di dalam batas layar
@@ -441,42 +528,99 @@ export default function FloatingStudyNotes() {
     return () => window.removeEventListener('resize', handleResize);
   }, [clampPosition]);
 
-  // Helper Sisipkan Teks Pada Kursor
-  const insertTextAtCursor = useCallback((insertStr: string) => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
+  // Helper Sisipkan atau Bungkus Teks Pada Kursor (Selection-Aware)
+  const wrapOrInsertText = useCallback(
+    (prefix: string, suffix: string = '', defaultPlaceholder: string = '') => {
+      const textarea = textareaRef.current;
+      if (!textarea) return;
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const prev = textarea.value;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const prev = textarea.value;
+      const selected = prev.substring(start, end);
 
-    const nextValue = prev.substring(0, start) + insertStr + prev.substring(end);
-    setNoteContent(nextValue);
+      if (selected.length > 0) {
+        // Bungkus teks yang sedang diseleksi
+        const insertStr = `${prefix}${selected}${suffix}`;
+        const nextValue = prev.substring(0, start) + insertStr + prev.substring(end);
+        setNoteContent(nextValue);
+        pushToHistory(nextValue, true);
+        triggerAutoSave(nextValue);
 
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + insertStr.length, start + insertStr.length);
-    }, 10);
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+        }, 10);
+      } else {
+        // Sisipkan teks / placeholder di posisi kursor
+        const insertStr = `${prefix}${defaultPlaceholder}${suffix}`;
+        const nextValue = prev.substring(0, start) + insertStr + prev.substring(end);
+        setNoteContent(nextValue);
+        pushToHistory(nextValue, true);
+        triggerAutoSave(nextValue);
 
-    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-  }, []);
+        setTimeout(() => {
+          textarea.focus();
+          if (defaultPlaceholder.length > 0) {
+            textarea.setSelectionRange(start + prefix.length, start + prefix.length + defaultPlaceholder.length);
+          } else {
+            textarea.setSelectionRange(start + insertStr.length, start + insertStr.length);
+          }
+        }, 10);
+      }
+    },
+    [pushToHistory, triggerAutoSave]
+  );
 
   const handleInsertTimestamp = () => {
     const now = new Date();
     const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-    insertTextAtCursor(`\n[${timeStr} WIB] `);
-  };
-
-  const handleInsertDalil = () => {
-    insertTextAtCursor('\n> 📖 "Dalil / Hadits: "\n');
+    wrapOrInsertText(`\n[${timeStr} WIB] `, '', '');
   };
 
   const handleInsertPoint = () => {
-    insertTextAtCursor('\n• ');
+    wrapOrInsertText('\n• ', '', '');
+  };
+
+  const handleInsertNumbered = () => {
+    wrapOrInsertText('\n1. ', '', '');
+  };
+
+  const handleInsertHeading = () => {
+    wrapOrInsertText('\n### ', '', 'Judul Bab / Topik');
+  };
+
+  const handleInsertDalil = () => {
+    wrapOrInsertText('\n> 📖 "', '"\n', 'Tuliskan dalil / hadits di sini');
   };
 
   const handleInsertBold = () => {
-    insertTextAtCursor('**teks tebal**');
+    wrapOrInsertText('**', '**', 'teks tebal');
+  };
+
+  const handleInsertItalic = () => {
+    wrapOrInsertText('*', '*', 'teks miring');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+      if (e.shiftKey) {
+        e.preventDefault();
+        handleRedo();
+      } else {
+        e.preventDefault();
+        handleUndo();
+      }
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+      e.preventDefault();
+      handleRedo();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+      e.preventDefault();
+      handleInsertBold();
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') {
+      e.preventDefault();
+      handleInsertItalic();
+    }
   };
 
   const handleCopyWhatsApp = async () => {
@@ -760,20 +904,86 @@ export default function FloatingStudyNotes() {
 
             {/* 2. TOOLBAR FORMAT CEPAT */}
             <div
-              className="px-2.5 py-1.5 bg-surface-container-low/70 dark:bg-neutral-800/60 border-b border-surface-container-high/40 flex items-center justify-between gap-1 overflow-x-auto shrink-0 select-none"
+              className="px-2.5 py-1.5 bg-surface-container-low/70 dark:bg-neutral-800/60 border-b border-surface-container-high/40 flex items-center justify-between gap-1 overflow-x-auto shrink-0 select-none no-scrollbar"
               onPointerDown={(e) => e.stopPropagation()}
             >
               <div className="flex items-center gap-1 shrink-0">
+                {/* Tombol Undo */}
                 <button
                   type="button"
-                  onClick={handleInsertTimestamp}
-                  className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Sisipkan Stempel Waktu Saat Ini"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  className={`w-6 h-5 rounded-md flex items-center justify-center transition-colors ${
+                    canUndo
+                      ? 'hover:bg-surface-container text-on-surface cursor-pointer'
+                      : 'text-outline/30 cursor-not-allowed'
+                  }`}
+                  title="Urungkan (Ctrl+Z)"
+                  aria-label="Undo"
                 >
-                  <span className="material-symbols-outlined text-[12px]">schedule</span>
-                  <span>+ Waktu</span>
+                  <span className="material-symbols-outlined text-[14px]">undo</span>
                 </button>
 
+                {/* Tombol Redo */}
+                <button
+                  type="button"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  className={`w-6 h-5 rounded-md flex items-center justify-center transition-colors ${
+                    canRedo
+                      ? 'hover:bg-surface-container text-on-surface cursor-pointer'
+                      : 'text-outline/30 cursor-not-allowed'
+                  }`}
+                  title="Ulangi (Ctrl+Y)"
+                  aria-label="Redo"
+                >
+                  <span className="material-symbols-outlined text-[14px]">redo</span>
+                </button>
+
+                {/* Garis Pemisah */}
+                <div className="w-[1px] h-3.5 bg-surface-container-high/80 mx-0.5 shrink-0" />
+
+                {/* Bold */}
+                <button
+                  type="button"
+                  onClick={handleInsertBold}
+                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+                  title="Teks Tebal (Ctrl+B)"
+                >
+                  B
+                </button>
+
+                {/* Italic */}
+                <button
+                  type="button"
+                  onClick={handleInsertItalic}
+                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-serif italic font-bold flex items-center justify-center transition-colors cursor-pointer"
+                  title="Teks Miring (Ctrl+I)"
+                >
+                  I
+                </button>
+
+                {/* Heading (Sub-judul) */}
+                <button
+                  type="button"
+                  onClick={handleInsertHeading}
+                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+                  title="Sub-judul Bab (###)"
+                >
+                  H
+                </button>
+
+                {/* Nomor Urut (1.) */}
+                <button
+                  type="button"
+                  onClick={handleInsertNumbered}
+                  className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-bold transition-colors cursor-pointer"
+                  title="Daftar Nomor (1.)"
+                >
+                  1.
+                </button>
+
+                {/* Bullet Poin */}
                 <button
                   type="button"
                   onClick={handleInsertPoint}
@@ -783,6 +993,7 @@ export default function FloatingStudyNotes() {
                   • Poin
                 </button>
 
+                {/* Kutipan Dalil */}
                 <button
                   type="button"
                   onClick={handleInsertDalil}
@@ -792,23 +1003,15 @@ export default function FloatingStudyNotes() {
                   <span>📖 Dalil</span>
                 </button>
 
+                {/* Stempel Waktu */}
                 <button
                   type="button"
-                  onClick={handleInsertBold}
-                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                  title="Teks Tebal"
+                  onClick={handleInsertTimestamp}
+                  className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Sisipkan Stempel Waktu Saat Ini"
                 >
-                  B
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => insertTextAtCursor(`\n🔗 Tautan Rekaman: https://youtu.be/${studySession.videoId}\n`)}
-                  className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-semibold flex items-center gap-0.5 transition-colors cursor-pointer"
-                  title="Sisipkan Tautan Video YouTube ke Catatan"
-                >
-                  <span className="material-symbols-outlined text-[12px]">link</span>
-                  <span>+ Link</span>
+                  <span className="material-symbols-outlined text-[12px]">schedule</span>
+                  <span>+ Waktu</span>
                 </button>
               </div>
 
@@ -854,6 +1057,7 @@ export default function FloatingStudyNotes() {
                 ref={textareaRef}
                 value={noteContent}
                 onChange={handleContentChange}
+                onKeyDown={handleKeyDown}
                 placeholder="Tuliskan faidah penting, ayat, hadits, atau amalan di sini... (Mendukung Markdown)"
                 className="w-full h-full resize-none border-0 bg-transparent text-xs text-on-surface placeholder:text-outline/50 focus:outline-hidden leading-relaxed font-sans"
                 spellCheck={false}
