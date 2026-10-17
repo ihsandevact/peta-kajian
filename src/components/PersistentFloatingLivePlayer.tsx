@@ -20,7 +20,7 @@ export default function PersistentFloatingLivePlayer() {
   }
 
   return (
-    <div className="fixed bottom-4 right-3 sm:right-4 z-50 max-w-[calc(100vw-24px)] sm:max-w-[400px]">
+    <div className="fixed bottom-[72px] md:bottom-4 right-3 sm:right-4 z-50 max-w-[calc(100vw-24px)] sm:max-w-[400px]">
       {/* 
         PENTING: Iframe YouTube harus selalu berada di DOM 
         agar audio tetap berputar kontinu tanpa restart saat minimize/maximize.

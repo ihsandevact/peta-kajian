@@ -9,6 +9,7 @@ import NotificationReminderToggle from '@/components/NotificationReminderToggle'
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import KajianPreviewModal from '@/components/KajianPreviewModal';
 import { useLivePlayer } from '@/context/LivePlayerContext';
+import { extractYouTubeVideoId } from '@/utils/youtube';
 
 interface VenueCardProps {
   session: StudySession;
@@ -24,9 +25,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
 
-  const ytVideoId = session.stream_url
-    ? session.stream_url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)?.[1]
-    : null;
+  const ytVideoId = extractYouTubeVideoId(session.stream_url);
 
   const handleWatchLive = () => {
     if (ytVideoId) {

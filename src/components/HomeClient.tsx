@@ -552,8 +552,6 @@ export default function HomeClient() {
               selectedSession={selectedSession}
               onSelectSession={setSelectedSession}
               flyToRegion={filters.region}
-              isRefreshing={isRefreshing}
-              onRefresh={() => refetchData(false)}
             />
           </div>
           

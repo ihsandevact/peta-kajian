@@ -11,6 +11,8 @@ import { subscribeToPushNotifications } from '@/utils/webPushClient';
 import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import NotificationReminderToggle from '@/components/NotificationReminderToggle';
+import { useLivePlayer } from '@/context/LivePlayerContext';
+import { extractYouTubeVideoId } from '@/utils/youtube';
 
 interface KajianPreviewModalProps {
   isOpen: boolean;
@@ -33,6 +35,7 @@ export default function KajianPreviewModal({
 
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
+  const { playStream } = useLivePlayer();
 
   // Reset img error saat session berganti
   useEffect(() => {
@@ -324,23 +327,47 @@ export default function KajianPreviewModal({
                 )}
 
                 {/* Live Stream URL Link (Hanya jika belum selesai) */}
-                {hasLive && !isPast && (
-                  <div className="flex items-center justify-between pt-2 border-t border-surface-container-high/60">
-                    <div className="flex items-center gap-2 text-red-600 font-semibold text-xs">
-                      <span className="material-symbols-outlined text-[18px]">smart_display</span>
-                      <span>Siaran Langsung</span>
+                {hasLive && !isPast && (() => {
+                  const ytId = extractYouTubeVideoId(session.stream_url);
+                  return (
+                    <div className="flex items-center justify-between pt-2 border-t border-surface-container-high/60">
+                      <div className="flex items-center gap-2 text-red-600 font-semibold text-xs">
+                        <span className="material-symbols-outlined text-[18px]">smart_display</span>
+                        <span>Siaran Langsung</span>
+                      </div>
+                      {ytId ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playStream({
+                              videoId: ytId,
+                              title: session.title,
+                              speakerName: session.speaker_name,
+                              channelName: session.venues?.name || session.speaker_name,
+                            });
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-2xs transition-all active:scale-95 cursor-pointer"
+                          title="Tonton di Pemutar Mengambang"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">play_circle</span>
+                          <span>Tonton Siaran</span>
+                          <span className="material-symbols-outlined text-[13px] opacity-80">picture_in_picture_alt</span>
+                        </button>
+                      ) : (
+                        <a
+                          href={session.stream_url!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-2xs transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">play_circle</span>
+                          <span>Tonton Siaran</span>
+                          <span className="material-symbols-outlined text-[12px] opacity-80">open_in_new</span>
+                        </a>
+                      )}
                     </div>
-                    <a
-                      href={session.stream_url!}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-2xs transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">play_arrow</span>
-                      <span>Tonton Siaran</span>
-                    </a>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
 
               {/* Kehadiran Jamaah (RSVP) */}

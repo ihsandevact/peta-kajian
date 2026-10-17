@@ -9,6 +9,8 @@ import type { SelectedRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
+import { useLivePlayer } from '@/context/LivePlayerContext';
+import { extractYouTubeVideoId } from '@/utils/youtube';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -42,6 +44,7 @@ export default function SidebarFilter({
   const [sharingSession, setSharingSession] = useState<StudySession | null>(null);
 
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
+  const { playStream } = useLivePlayer();
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -378,20 +381,45 @@ export default function SidebarFilter({
                         <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                       </a>
                     )}
-                    {session.stream_url && !isPast && (
-                      <a 
-                        href={session.stream_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        onClick={e => e.stopPropagation()} 
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95"
-                        title="Buka Link Live Streaming di Tab Baru"
-                      >
-                        <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
-                        <span>Tonton Live</span>
-                        <span className="material-symbols-outlined text-[12px] opacity-60">open_in_new</span>
-                      </a>
-                    )}
+                    {session.stream_url && !isPast && (() => {
+                      const ytId = extractYouTubeVideoId(session.stream_url);
+                      if (ytId) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              playStream({
+                                videoId: ytId,
+                                title: session.title,
+                                speakerName: session.speaker_name,
+                                channelName: session.venues?.name || session.speaker_name,
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                            title="Tonton Live di Pemutar Mengambang"
+                          >
+                            <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
+                            <span>Tonton Live</span>
+                            <span className="material-symbols-outlined text-[12px] text-red-500">picture_in_picture_alt</span>
+                          </button>
+                        );
+                      }
+                      return (
+                        <a 
+                          href={session.stream_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          onClick={e => e.stopPropagation()} 
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95"
+                          title="Buka Link Live Streaming di Tab Baru"
+                        >
+                          <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
+                          <span>Tonton Live</span>
+                          <span className="material-symbols-outlined text-[12px] opacity-60">open_in_new</span>
+                        </a>
+                      );
+                    })()}
                     <button
                       type="button"
                       onClick={(e) => {

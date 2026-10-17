@@ -10,6 +10,8 @@ import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
 import NotificationReminderToggle from '@/components/NotificationReminderToggle';
 import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import KajianPreviewModal from '@/components/KajianPreviewModal';
+import { useLivePlayer } from '@/context/LivePlayerContext';
+import { extractYouTubeVideoId } from '@/utils/youtube';
 
 interface OnlineStreamingOverlayProps {
   session: StudySession;
@@ -17,6 +19,7 @@ interface OnlineStreamingOverlayProps {
 }
 
 export default function OnlineStreamingOverlay({ session, onClose }: OnlineStreamingOverlayProps) {
+  const { playStream } = useLivePlayer();
   const [imgError, setImgError] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -307,23 +310,60 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
           </div>
 
           {/* Primary CTA: Watch Live Button */}
-          {streamUrl ? (
-            <div className="space-y-1.5 pt-0.5">
-              <a
-                href={streamUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-red-600/25 hover:shadow-red-600/40 transition-all active:scale-[0.98]"
-              >
-                <span className="material-symbols-outlined text-[20px]">play_circle</span>
-                <span>Buka & Tonton {platformLabel}</span>
-                <span className="material-symbols-outlined text-[15px] opacity-75">open_in_new</span>
-              </a>
-              <p className="text-[10px] text-center text-outline truncate px-2">
-                Tautan: {streamUrl}
-              </p>
-            </div>
-          ) : (
+          {streamUrl ? (() => {
+            const ytId = extractYouTubeVideoId(streamUrl);
+            return (
+              <div className="space-y-1.5 pt-0.5">
+                {ytId ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playStream({
+                        videoId: ytId,
+                        title: session.title,
+                        speakerName: session.speaker_name,
+                        channelName: session.venues?.name || session.speaker_name,
+                      });
+                    }}
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-red-600/25 hover:shadow-red-600/40 transition-all active:scale-[0.98] cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">play_circle</span>
+                    <span>Tonton di Pemutar Mengambang</span>
+                    <span className="material-symbols-outlined text-[16px] opacity-80">picture_in_picture_alt</span>
+                  </button>
+                ) : (
+                  <a
+                    href={streamUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-xs sm:text-sm rounded-2xl flex items-center justify-center gap-2 shadow-md shadow-red-600/25 hover:shadow-red-600/40 transition-all active:scale-[0.98]"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">play_circle</span>
+                    <span>Buka & Tonton {platformLabel}</span>
+                    <span className="material-symbols-outlined text-[15px] opacity-75">open_in_new</span>
+                  </a>
+                )}
+                {ytId ? (
+                  <div className="flex items-center justify-between px-2 text-[10px] text-outline">
+                    <span className="truncate max-w-[170px] sm:max-w-[200px]">Tautan: {streamUrl}</span>
+                    <a
+                      href={streamUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 flex items-center gap-0.5 text-primary hover:underline ml-2 font-medium"
+                    >
+                      <span>Buka Web YouTube</span>
+                      <span className="material-symbols-outlined text-[11px]">open_in_new</span>
+                    </a>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-center text-outline truncate px-2">
+                    Tautan: {streamUrl}
+                  </p>
+                )}
+              </div>
+            );
+          })() : (
             <div className="p-3 bg-surface-container rounded-xl text-center text-xs text-outline">
               Tautan siaran langsung belum dicantumkan oleh kontributor.
             </div>

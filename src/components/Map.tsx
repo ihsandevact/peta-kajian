@@ -16,8 +16,6 @@ interface AppMapProps {
   selectedSession: StudySession | null;
   onSelectSession: (s: StudySession | null) => void;
   flyToRegion?: SelectedRegion | null;
-  isRefreshing?: boolean;
-  onRefresh?: () => void;
 }
 
 export default function AppMap({
@@ -25,8 +23,6 @@ export default function AppMap({
   selectedSession,
   onSelectSession,
   flyToRegion,
-  isRefreshing = false,
-  onRefresh,
 }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
   
@@ -103,23 +99,6 @@ export default function AppMap({
         mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`}
       >
         <NavigationControl position="bottom-right" showCompass={false} />
-
-        {/* Floating Refresh Control tepat di atas NavigationControl */}
-        {onRefresh && (
-          <div className="absolute right-[10px] bottom-[78px] z-20 hidden md:block">
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="w-[29px] h-[29px] bg-white dark:bg-neutral-800 rounded shadow-md border border-black/10 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-neutral-700 transition-all flex items-center justify-center text-gray-700 dark:text-gray-200 cursor-pointer disabled:opacity-50 active:scale-95"
-              title="Segarkan peta kajian"
-            >
-              <span className={`material-symbols-outlined text-[18px] ${isRefreshing ? 'animate-spin text-emerald-600 dark:text-emerald-400' : ''}`}>
-                refresh
-              </span>
-            </button>
-          </div>
-        )}
         
         {mappableSessions.map(session => {
           const isSelected = selectedSession?.id === session.id;
