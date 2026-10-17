@@ -41,6 +41,19 @@ export default function ContributorProfilePage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { bookmarks } = useBookmarks();
   const { attending, getExtraCount } = useAttendance();
+  const [showUserId, setShowUserId] = useState(false);
+  const [copiedUserId, setCopiedUserId] = useState(false);
+
+  const handleCopyUserId = async () => {
+    if (!user?.id) return;
+    try {
+      await navigator.clipboard.writeText(user.id);
+      setCopiedUserId(true);
+      setTimeout(() => setCopiedUserId(false), 2000);
+    } catch (err) {
+      console.error('Gagal menyalin User ID:', err);
+    }
+  };
 
   const fetchUserSessions = useCallback(async (userId: string, contributorName?: string) => {
     const supabase = createClient();
@@ -362,10 +375,54 @@ export default function ContributorProfilePage() {
             </p>
 
             <div className="flex items-center justify-center sm:justify-start gap-1.5 text-[11px] text-outline font-mono mb-3 flex-wrap">
-              <span>User ID:</span>
-              <span className="bg-surface-container px-2 py-0.5 rounded font-medium text-on-surface select-all cursor-pointer border border-surface-container-high max-w-[200px] sm:max-w-none truncate" title="User ID akun aktif Anda">
-                {user.id}
+              <span className="font-sans text-outline/80 leading-none">User ID:</span>
+              <span
+                onClick={() => setShowUserId((prev) => !prev)}
+                className={`inline-flex items-center h-5 px-1.5 rounded border border-surface-container-high cursor-pointer select-all max-w-[170px] sm:max-w-none truncate transition-colors leading-none ${
+                  showUserId
+                    ? 'bg-surface-container text-on-surface font-medium text-[11px]'
+                    : 'bg-surface-container-low text-outline hover:text-on-surface tracking-widest text-[10px]'
+                }`}
+                title={showUserId ? user?.id : "Klik untuk menampilkan / menyembunyikan User ID"}
+              >
+                {showUserId ? user?.id : '••••••••••••'}
               </span>
+
+              {/* Eye toggle button */}
+              <button
+                type="button"
+                onClick={() => setShowUserId((prev) => !prev)}
+                className="w-5 h-5 inline-flex items-center justify-center rounded text-outline hover:text-on-surface hover:bg-surface-container transition-colors active:scale-90"
+                title={showUserId ? "Sembunyikan User ID" : "Tampilkan User ID"}
+                aria-label={showUserId ? "Sembunyikan User ID" : "Tampilkan User ID"}
+              >
+                <span className="material-symbols-outlined text-[12px] leading-none select-none">
+                  {showUserId ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
+
+              {/* Copy button */}
+              <button
+                type="button"
+                onClick={handleCopyUserId}
+                className={`w-5 h-5 inline-flex items-center justify-center rounded transition-colors active:scale-90 ${
+                  copiedUserId
+                    ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60'
+                    : 'text-outline hover:text-primary hover:bg-surface-container'
+                }`}
+                title={copiedUserId ? "Berhasil disalin!" : "Salin User ID"}
+                aria-label="Salin User ID"
+              >
+                <span className="material-symbols-outlined text-[12px] leading-none select-none">
+                  {copiedUserId ? 'check' : 'content_copy'}
+                </span>
+              </button>
+
+              {copiedUserId && (
+                <span className="font-sans text-[10px] text-emerald-600 dark:text-emerald-400 font-medium leading-none animate-fadeIn select-none">
+                  Tersalin!
+                </span>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-4 text-xs text-outline">
