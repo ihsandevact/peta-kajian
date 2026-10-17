@@ -145,8 +145,11 @@ export default function PersistentFloatingLivePlayer() {
           PENTING: Iframe YouTube harus selalu berada di DOM 
           agar audio tetap berputar kontinu tanpa restart saat minimize/maximize.
         */}
-        {isMinimized ? (
-          /* MODE MINIMIZED / COMPACT AUDIO BAR (DRAGGABLE) */
+        {/* 
+          1. MODE MINIMIZED / COMPACT AUDIO BAR (DRAGGABLE)
+          Dirender saat isMinimized === true. 
+        */}
+        {isMinimized && (
           <div 
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -170,10 +173,10 @@ export default function PersistentFloatingLivePlayer() {
               </div>
             </div>
 
-            {/* Teks Judul & Pemateri Ringkas */}
+            {/* Teks Channel & Judul Ringkas */}
             <div className="min-w-0 max-w-[170px] sm:max-w-[220px]">
               <p className="text-[11px] font-bold text-on-surface truncate leading-tight">
-                {activeStream.speakerName || activeStream.channelName}
+                {activeStream.channelName}
               </p>
               <p className="text-[10px] text-outline truncate leading-tight">
                 {activeStream.title}
@@ -205,130 +208,124 @@ export default function PersistentFloatingLivePlayer() {
                 <span className="material-symbols-outlined text-[17px]">close</span>
               </button>
             </div>
-
-            {/* Hidden Iframe agar Audio Tetap Jalan */}
-            <div className="absolute w-1 h-1 opacity-0 pointer-events-none -z-10 overflow-hidden">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${activeStream.videoId}?autoplay=1&enablejsapi=1&rel=0`}
-                title={activeStream.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                className="w-full h-full border-0"
-              />
-            </div>
           </div>
-        ) : (
-          /* MODE NORMAL MINI PLAYER CARD (VIDEO 16:9) */
-          <div className="w-[320px] sm:w-[380px] rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border border-surface-container-high/80 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300">
-            {/* 
-              Header Card sebagai Pegangan Drag (Handle) 
-            */}
-            <div 
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-              style={{ touchAction: 'none' }}
-              className="px-3.5 py-2.5 bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none"
-              title="Klik dan tahan di sini untuk menggeser posisi video"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="relative flex h-2 w-2 shrink-0">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
-                </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-red-600 text-white shrink-0">
-                  LIVE
-                </span>
-                <span className="text-xs font-bold text-on-surface truncate min-w-0">
-                  {activeStream.channelName}
-                </span>
-              </div>
+        )}
 
-              {/* Kontrol Kanan (Mencegah event drag terpicu saat tombol diklik) */}
-              <div 
-                className="flex items-center gap-0.5 shrink-0"
-                onPointerDown={(e) => e.stopPropagation()}
-              >
-                {/* Tombol Minimize ke Audio Bar */}
-                <button
-                  type="button"
-                  onClick={minimizePlayer}
-                  className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer"
-                  title="Kecilkan ke Bar Audio"
-                  aria-label="Kecilkan ke Bar Audio"
-                >
-                  <span className="material-symbols-outlined text-[18px]">expand_more</span>
-                </button>
-
-                {/* Tombol Buka Halaman Penuh /live */}
-                <Link
-                  href="/live"
-                  className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors"
-                  title="Buka Halaman Live Streaming"
-                  aria-label="Buka Halaman Live"
-                >
-                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                </Link>
-
-                {/* Tombol Tutup */}
-                <button
-                  type="button"
-                  onClick={closePlayer}
-                  className="w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors cursor-pointer ml-0.5"
-                  title="Tutup Pemutar"
-                  aria-label="Tutup Pemutar"
-                >
-                  <span className="material-symbols-outlined text-[18px]">close</span>
-                </button>
-              </div>
+        {/* 
+          2. WADAH CARD UTAMA DENGAN SINGLE PERSISTENT IFRAME
+          PENTING: Iframe ini tidak pernah di-unmount saat minimize/maximize.
+          Ketika isMinimized === true, wadah ini diposisikan di latar belakang dengan opacity-0,
+          sehingga audio YouTube tetap berputar kontinu tanpa henti dan tanpa kena blokir autoplay.
+        */}
+        <div 
+          className={
+            isMinimized
+              ? "absolute bottom-0 right-0 w-[240px] h-[135px] opacity-0 pointer-events-none -z-50 overflow-hidden"
+              : "w-[320px] sm:w-[380px] rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border border-surface-container-high/80 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300"
+          }
+        >
+          {/* Header Card sebagai Pegangan Drag (Handle) */}
+          <div 
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{ touchAction: 'none' }}
+            className="px-3.5 py-2.5 bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none"
+            title="Klik dan tahan di sini untuk menggeser posisi video"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+              </span>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-red-600 text-white shrink-0">
+                LIVE
+              </span>
+              <span className="text-xs font-bold text-on-surface truncate min-w-0">
+                {activeStream.channelName}
+              </span>
             </div>
 
-            {/* Frame Video YouTube 16:9 */}
-            <div className="relative aspect-video w-full bg-black">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${activeStream.videoId}?autoplay=1&enablejsapi=1&rel=0`}
-                title={activeStream.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                className="w-full h-full border-0"
-              />
-            </div>
-
-            {/* Footer Info Judul & Pemateri (juga draggable handle jika diinginkan) */}
+            {/* Kontrol Kanan (Mencegah event drag terpicu saat tombol diklik) */}
             <div 
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
-              style={{ touchAction: 'none' }}
-              className="p-3 bg-surface-container-lowest/90 dark:bg-neutral-900/90 hover:bg-surface-container-low transition-colors flex items-start justify-between gap-2.5 cursor-move select-none"
-              title="Klik dan tahan untuk menggeser posisi"
+              className="flex items-center gap-0.5 shrink-0"
+              onPointerDown={(e) => e.stopPropagation()}
             >
-              <div className="min-w-0 flex-1">
-                <h4 className="text-xs font-semibold text-on-surface line-clamp-2 leading-snug">
-                  {activeStream.title}
-                </h4>
-                {activeStream.speakerName && (
-                  <p className="text-[11px] text-outline truncate mt-1 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[13px] text-primary">person</span>
-                    <span>{activeStream.speakerName}</span>
-                  </p>
-                )}
-              </div>
-
+              {/* Tombol Minimize ke Audio Bar */}
               <button
                 type="button"
-                onPointerDown={(e) => e.stopPropagation()}
                 onClick={minimizePlayer}
-                className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-[10px] font-semibold flex items-center gap-1 shrink-0 transition-colors cursor-pointer mt-0.5"
-                title="Kecilkan ke Bar Audio sambil membaca"
+                className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer"
+                title="Kecilkan ke Bar Audio"
+                aria-label="Kecilkan ke Bar Audio"
               >
-                <span className="material-symbols-outlined text-[12px]">headphones</span>
-                <span>Audio</span>
+                <span className="material-symbols-outlined text-[18px]">expand_more</span>
+              </button>
+
+              {/* Tombol Buka Halaman Penuh /live */}
+              <Link
+                href="/live"
+                className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors"
+                title="Buka Halaman Live Streaming"
+                aria-label="Buka Halaman Live"
+              >
+                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+              </Link>
+
+              {/* Tombol Tutup */}
+              <button
+                type="button"
+                onClick={closePlayer}
+                className="w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors cursor-pointer ml-0.5"
+                title="Tutup Pemutar"
+                aria-label="Tutup Pemutar"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
           </div>
-        )}
+
+          {/* Frame Video YouTube 16:9 (SINGLE PERSISTENT IFRAME) */}
+          <div className="relative aspect-video w-full bg-black">
+            <iframe
+              key={activeStream.videoId}
+              src={`https://www.youtube-nocookie.com/embed/${activeStream.videoId}?autoplay=1&enablejsapi=1&rel=0`}
+              title={activeStream.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+              className="w-full h-full border-0"
+            />
+          </div>
+
+          {/* Footer Info Judul & Tombol Audio */}
+          <div 
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{ touchAction: 'none' }}
+            className="p-3 bg-surface-container-lowest/90 dark:bg-neutral-900/90 hover:bg-surface-container-low transition-colors flex items-start justify-between gap-2.5 cursor-move select-none"
+            title="Klik dan tahan untuk menggeser posisi"
+          >
+            <div className="min-w-0 flex-1">
+              <h4 className="text-xs font-semibold text-on-surface line-clamp-2 leading-snug">
+                {activeStream.title}
+              </h4>
+            </div>
+
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={minimizePlayer}
+              className="px-2.5 py-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface text-[10px] font-semibold flex items-center gap-1 shrink-0 transition-colors cursor-pointer mt-0.5"
+              title="Kecilkan ke Bar Audio sambil membaca"
+            >
+              <span className="material-symbols-outlined text-[12px]">headphones</span>
+              <span>Audio</span>
+            </button>
+          </div>
+        </div>
       </div>
     </>
   );

@@ -446,11 +446,6 @@ export default function LiveStreamingPage() {
                                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                                 <span>LIVE</span>
                               </div>
-
-                              {/* Kota / Jangkauan */}
-                              <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white text-[10px] font-medium">
-                                {channel.default_city || 'Nasional'}
-                              </div>
                             </div>
 
                             {/* Video Details */}
@@ -477,9 +472,6 @@ export default function LiveStreamingPage() {
                                 >
                                   {title}
                                 </h4>
-                                <p className="text-xs text-outline mt-1 truncate">
-                                  Pemateri: <span className="text-on-surface font-medium">{speaker}</span>
-                                </p>
                               </div>
 
                               {/* Action Buttons */}
@@ -686,11 +678,6 @@ export default function LiveStreamingPage() {
                               <span className="material-symbols-outlined text-[13px]">alarm</span>
                               <span>{timeBadge}</span>
                             </div>
-
-                            {/* Kota / Jangkauan */}
-                            <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white text-[10px] font-medium">
-                              {item.channel.default_city || 'Nasional'}
-                            </div>
                           </div>
 
                           {/* Video Details */}
@@ -717,9 +704,6 @@ export default function LiveStreamingPage() {
                               >
                                 {title}
                               </h4>
-                              <p className="text-xs text-outline mt-1 truncate">
-                                Pemateri: <span className="text-on-surface font-medium">{speaker}</span>
-                              </p>
                             </div>
 
                             {/* Action Buttons */}
@@ -968,11 +952,6 @@ export default function LiveStreamingPage() {
             <div className="p-4 bg-surface-container-lowest flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <span className="text-xs font-bold text-red-600">{selectedVideo.channelName}</span>
-                {selectedVideo.speakerName && (
-                  <p className="text-xs text-outline mt-0.5">
-                    Pemateri: <strong className="text-on-surface">{selectedVideo.speakerName}</strong>
-                  </p>
-                )}
               </div>
 
               <div className="flex items-center gap-2">
