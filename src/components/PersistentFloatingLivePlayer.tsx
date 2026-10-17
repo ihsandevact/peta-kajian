@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 import { createClient } from '@/utils/supabase/client';
+import { FEATURE_FLAGS } from '@/config/features';
 
 export default function PersistentFloatingLivePlayer() {
   const {
@@ -12,11 +13,13 @@ export default function PersistentFloatingLivePlayer() {
     isOpen,
     isMinimized,
     isPipActive,
+    initialResumeTime,
     closePlayer,
     toggleMinimize,
     maximizePlayer,
     minimizePlayer,
     setIsPipActive,
+    updateStoredPlaybackTime,
     openStudyMode,
     isStudyModeOpen,
     isStudyNotesOpen,
@@ -32,6 +35,7 @@ export default function PersistentFloatingLivePlayer() {
   const [resumeTime, setResumeTime] = useState<number>(0);
   const currentPlaybackTimeRef = useRef<number>(0);
   const playbackStartEpochRef = useRef<number>(Date.now());
+  const lastStorageSyncRef = useRef<number>(Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
@@ -267,14 +271,27 @@ export default function PersistentFloatingLivePlayer() {
     };
   }, []);
 
+  // Inisialisasi & sinkronkan resumeTime saat sesi dipulihkan dari sessionStorage
+  useEffect(() => {
+    if (initialResumeTime > 0) {
+      currentPlaybackTimeRef.current = initialResumeTime;
+      setResumeTime(initialResumeTime);
+    }
+  }, [initialResumeTime]);
+
   // Reset timestamp playback saat video berganti
   useEffect(() => {
     if (activeStream?.videoId) {
       playbackStartEpochRef.current = Date.now();
-      currentPlaybackTimeRef.current = 0;
-      setResumeTime(0);
+      if (initialResumeTime > 0) {
+        currentPlaybackTimeRef.current = initialResumeTime;
+        setResumeTime(initialResumeTime);
+      } else {
+        currentPlaybackTimeRef.current = 0;
+        setResumeTime(0);
+      }
     }
-  }, [activeStream?.videoId]);
+  }, [activeStream?.videoId, initialResumeTime]);
 
   // Handshake berkala ke YouTube iframe agar secara kontinu mengirimkan telemetry infoDelivery (termasuk saat user seek)
   useEffect(() => {
@@ -356,7 +373,14 @@ export default function PersistentFloatingLivePlayer() {
           const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
           const time = data?.info?.currentTime ?? data?.currentTime;
           if (typeof time === 'number' && !isNaN(time)) {
-            currentPlaybackTimeRef.current = Math.floor(time);
+            const roundedTime = Math.floor(time);
+            currentPlaybackTimeRef.current = roundedTime;
+            // Sinkronkan berkala ke sessionStorage setiap 1,5 detik
+            const now = Date.now();
+            if (now - lastStorageSyncRef.current > 1500) {
+              lastStorageSyncRef.current = now;
+              updateStoredPlaybackTime(roundedTime);
+            }
           }
         } catch {}
       }
@@ -370,7 +394,23 @@ export default function PersistentFloatingLivePlayer() {
       } catch {}
       if (pipCheckIntervalRef.current) clearInterval(pipCheckIntervalRef.current);
     };
-  }, [setIsPipActive, handlePipClosedEvent]);
+  }, [setIsPipActive, handlePipClosedEvent, updateStoredPlaybackTime]);
+
+  // Simpan playback time secara presisi saat pengguna berpindah halaman / redirect ke Google OAuth
+  useEffect(() => {
+    const handleFlushTime = () => {
+      if (currentPlaybackTimeRef.current > 0) {
+        updateStoredPlaybackTime(currentPlaybackTimeRef.current);
+      }
+    };
+
+    window.addEventListener('pagehide', handleFlushTime);
+    window.addEventListener('beforeunload', handleFlushTime);
+    return () => {
+      window.removeEventListener('pagehide', handleFlushTime);
+      window.removeEventListener('beforeunload', handleFlushTime);
+    };
+  }, [updateStoredPlaybackTime]);
 
   // Handler Kembalikan Video dari Jendela PiP ke Mini Player Tab Ini
   const handleRestoreFromPip = useCallback(() => {
@@ -401,6 +441,11 @@ export default function PersistentFloatingLivePlayer() {
   // Handler Buka / Kembalikan Jendela PiP (Document PiP Always-on-Top seperti TikTok)
   const handleTogglePip = useCallback(async () => {
     if (!activeStream) return;
+
+    // PiP OS tidak didukung / dinonaktifkan di perangkat mobile (hp sudah memiliki PiP bawaan OS)
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return;
+    }
 
     // Jika PiP sedang aktif, klik tombol ini akan mengembalikan player ke tab web ini
     if (isPipActive) {
@@ -671,7 +716,9 @@ export default function PersistentFloatingLivePlayer() {
                     });
                   }
                 }}
-                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                className={`${
+                  FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
+                } w-7 h-7 rounded-full items-center justify-center transition-colors cursor-pointer ${
                   isStudyNotesOpen
                     ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 font-bold'
                     : 'text-outline hover:text-emerald-600 hover:bg-surface-container'
@@ -682,11 +729,11 @@ export default function PersistentFloatingLivePlayer() {
                 <span className="material-symbols-outlined text-[15px]">edit_note</span>
               </button>
 
-              {/* Tombol PiP OS (Pop-out di Luar Browser) */}
+              {/* Tombol PiP OS (Pop-out di Luar Browser - Hanya Desktop) */}
               <button
                 type="button"
                 onClick={handleTogglePip}
-                className={`flex items-center justify-center transition-colors cursor-pointer p-1 ${
+                className={`hidden md:flex items-center justify-center transition-colors cursor-pointer p-1 ${
                   isPipActive
                     ? 'text-indigo-600 dark:text-indigo-400 font-bold'
                     : 'text-outline hover:text-indigo-600 dark:hover:text-indigo-400'
@@ -820,7 +867,9 @@ export default function PersistentFloatingLivePlayer() {
                     });
                   }
                 }}
-                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                className={`${
+                  FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
+                } w-7 h-7 rounded-lg items-center justify-center transition-colors cursor-pointer ${
                   isStudyNotesOpen
                     ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 font-bold'
                     : 'text-outline hover:text-emerald-600 hover:bg-emerald-500/10'
@@ -931,12 +980,12 @@ export default function PersistentFloatingLivePlayer() {
               </h4>
             </div>
 
-            {/* Tombol PiP OS (Pop-out di Luar Browser) */}
+            {/* Tombol PiP OS (Pop-out di Luar Browser - Hanya Desktop) */}
             <button
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={handleTogglePip}
-              className={`flex items-center justify-center shrink-0 transition-colors cursor-pointer p-1 ${
+              className={`hidden md:flex items-center justify-center shrink-0 transition-colors cursor-pointer p-1 ${
                 isPipActive
                   ? 'text-indigo-600 dark:text-indigo-400 font-bold'
                   : 'text-outline hover:text-indigo-600 dark:hover:text-indigo-400'

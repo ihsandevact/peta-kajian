@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
 
 export interface LoginNudgeEventDetail {
   type: 'bookmark' | 'attendance' | 'pip';
@@ -25,7 +27,8 @@ interface LoginNudgePromptProps {
   currentUser?: any;
 }
 
-export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps) {
+export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePromptProps) {
+  const [currentUser, setCurrentUser] = useState<any>(propUser || null);
   const [toastData, setToastData] = useState<{ title?: string } | null>(null);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
   const [attendanceSessionTitle, setAttendanceSessionTitle] = useState<string>('');
@@ -33,10 +36,41 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
   const [pipSessionTitle, setPipSessionTitle] = useState<string>('');
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Pantau status login secara mandiri jika propUser tidak dioper (misal saat dipasang global di layout.tsx)
+  useEffect(() => {
+    if (propUser !== undefined) {
+      setCurrentUser(propUser);
+      return;
+    }
+
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUser(data?.user || null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [propUser]);
+
+  const pathname = usePathname();
+
+  // Tutup semua dialog & toast saat berpindah halaman
+  useEffect(() => {
+    setIsPipModalOpen(false);
+    setIsAttendanceModalOpen(false);
+    setToastData(null);
+  }, [pathname]);
+
   useEffect(() => {
     const handleEvent = (e: CustomEvent<LoginNudgeEventDetail>) => {
-      // Jika pengguna sudah login, jangan tampilkan ajakan login
+      // Jika pengguna sudah login atau sedang di halaman auth, jangan tampilkan ajakan login
       if (currentUser) return;
+      if (pathname === '/login' || pathname === '/kontributor/login' || pathname?.startsWith('/auth')) return;
 
       const detail = e.detail;
       if (!detail) return;
@@ -66,10 +100,30 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
         clearTimeout(toastTimerRef.current);
       }
     };
-  }, [currentUser]);
+  }, [currentUser, pathname]);
 
-  // Jika sudah login, tidak merender apa-apa
-  if (currentUser) return null;
+  const isAuthPage = pathname === '/login' || pathname === '/kontributor/login' || pathname?.startsWith('/auth');
+
+  // Jika sudah login atau sedang berada di halaman login/auth, tidak merender apa-apa
+  if (currentUser || isAuthPage) return null;
+
+  const loginUrl = pathname && pathname !== '/' && !isAuthPage
+    ? `/login?next=${encodeURIComponent(pathname)}`
+    : '/login';
+
+  const closeAllPrompts = () => {
+    setIsPipModalOpen(false);
+    setIsAttendanceModalOpen(false);
+    setToastData(null);
+    if (pathname && pathname !== '/' && !isAuthPage) {
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      document.cookie = `peta_kajian_auth_next=${encodeURIComponent(pathname)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+      try {
+        sessionStorage.setItem('peta_kajian_auth_next', pathname);
+        sessionStorage.setItem('peta_kajian_auth_in_progress', 'true');
+      } catch {}
+    }
+  };
 
   return (
     <>
@@ -100,7 +154,8 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
 
               <div className="mt-2.5 flex items-center gap-2">
                 <Link
-                  href="/login"
+                  href={loginUrl}
+                  onClick={closeAllPrompts}
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-primary text-white text-[11px] font-semibold hover:bg-primary/90 transition-all shadow-2xs active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[14px]">login</span>
@@ -161,7 +216,8 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
 
             <div className="flex flex-col gap-2 mt-4">
               <Link
-                href="/login"
+                href={loginUrl}
+                onClick={closeAllPrompts}
                 className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
               >
                 <img
@@ -228,7 +284,8 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
 
             <div className="flex flex-col gap-2 mt-4">
               <Link
-                href="/login"
+                href={loginUrl}
+                onClick={closeAllPrompts}
                 className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
               >
                 <img

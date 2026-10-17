@@ -14,6 +14,7 @@ import {
   clearPendingStudySession,
   type PendingStudySession,
 } from '@/utils/studyNotes';
+import { FEATURE_FLAGS } from '@/config/features';
 
 export default function FloatingStudyNotes() {
   const {
@@ -733,7 +734,9 @@ export default function FloatingStudyNotes() {
           maxHeight: 'calc(100vh - 40px)',
           touchAction: 'none',
         }}
-        className="font-geist transition-shadow"
+        className={`font-geist transition-shadow ${
+          FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? '' : 'hidden md:block'
+        }`}
       >
         {/* ========================================================
             KONDISI A: MINIMIZED FLOATING PILL (Pill Catatan Mengambang)
@@ -1059,7 +1062,7 @@ export default function FloatingStudyNotes() {
                 onChange={handleContentChange}
                 onKeyDown={handleKeyDown}
                 placeholder="Tuliskan faidah penting, ayat, hadits, atau amalan di sini... (Mendukung Markdown)"
-                className="w-full h-full resize-none border-0 bg-transparent text-xs text-on-surface placeholder:text-outline/50 focus:outline-hidden leading-relaxed font-sans"
+                className="w-full h-full resize-none border-0 bg-transparent text-base md:text-xs text-on-surface placeholder:text-outline/50 focus:outline-hidden leading-relaxed font-sans"
                 spellCheck={false}
               />
 

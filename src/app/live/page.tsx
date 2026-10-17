@@ -13,6 +13,7 @@ import ShareModal from '@/components/ShareModal';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
 import { checkIsAdmin } from '@/lib/services/admin';
 import { useLivePlayer } from '@/context/LivePlayerContext';
+import { FEATURE_FLAGS } from '@/config/features';
 
 export default function LiveStreamingPage() {
   const { playStream, openStudyMode } = useLivePlayer();
@@ -33,6 +34,14 @@ export default function LiveStreamingPage() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // Bersihkan flag auth redirect saat berada di halaman live
+    try {
+      sessionStorage.removeItem('peta_kajian_auth_in_progress');
+      sessionStorage.removeItem('peta_kajian_auth_next');
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      document.cookie = `peta_kajian_auth_next=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT${isHttps ? '; Secure' : ''}`;
+    } catch {}
+
     loadData();
     initUser();
   }, []);
@@ -522,7 +531,9 @@ export default function LiveStreamingPage() {
                                       sessionId: channel.current_session_id || undefined,
                                     })
                                   }
-                                  className="w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                  className={`${
+                                    FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
+                                  } w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 items-center justify-center transition-colors cursor-pointer shrink-0`}
                                   title="Mode Belajar & Catat Faidah (Wajib Login)"
                                   aria-label="Mode Belajar"
                                 >

@@ -12,6 +12,7 @@ import ShareModal, { shareSessionNative } from '@/components/ShareModal';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
+import { FEATURE_FLAGS } from '@/config/features';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -430,7 +431,9 @@ export default function SidebarFilter({
                                   sessionId: session.id,
                                 });
                               }}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                              className={`${
+                                FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'inline-flex' : 'hidden md:inline-flex'
+                              } items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer`}
                               title="Buka Mode Belajar & Catat Faidah"
                             >
                               <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>

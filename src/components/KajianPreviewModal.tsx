@@ -14,6 +14,7 @@ import NotificationReminderToggle from '@/components/NotificationReminderToggle'
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
+import { FEATURE_FLAGS } from '@/config/features';
 
 interface KajianPreviewModalProps {
   isOpen: boolean;
@@ -351,7 +352,9 @@ export default function KajianPreviewModal({
                               });
                               onClose();
                             }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            className={`items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs transition-all active:scale-95 cursor-pointer ${
+                              !FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'hidden md:inline-flex' : 'inline-flex'
+                            }`}
                             title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
                           >
                             <span className="material-symbols-outlined text-[15px]">edit_note</span>

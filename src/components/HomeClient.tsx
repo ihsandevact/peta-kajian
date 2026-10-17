@@ -14,7 +14,6 @@ import { useOnlineStatus, cacheFeedSnapshot, getFeedSnapshot, getCachedOfflineSe
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import RequestContributorModal from '@/components/RequestContributorModal';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
-import LoginNudgePrompt from '@/components/LoginNudgePrompt';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -131,6 +130,37 @@ export default function HomeClient() {
     return () => {
       subscription.unsubscribe();
     };
+  }, []);
+
+  // Handler redirect pasca-login OAuth: jika pengguna baru saja kembali dari Google OAuth
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const inProgress = sessionStorage.getItem('peta_kajian_auth_in_progress');
+      const targetNext = sessionStorage.getItem('peta_kajian_auth_next');
+
+      // Segera konsumsi (hapus) flag agar hanya berjalan satu kali dan tidak menghalangi tombol '<- Peta Kajian'
+      if (inProgress || targetNext) {
+        sessionStorage.removeItem('peta_kajian_auth_in_progress');
+        sessionStorage.removeItem('peta_kajian_auth_next');
+        const isHttps = window.location.protocol === 'https:';
+        document.cookie = `peta_kajian_auth_next=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT${isHttps ? '; Secure' : ''}`;
+      }
+
+      if (targetNext && targetNext !== '/' && targetNext.startsWith('/') && !targetNext.startsWith('//')) {
+        const targetUrl = new URL(targetNext, window.location.origin);
+        // Teruskan query param code jika ada (PKCE flow) agar halaman tujuan dapat mendeteksi auth
+        if (window.location.search.includes('code=')) {
+          const currentParams = new URLSearchParams(window.location.search);
+          const code = currentParams.get('code');
+          if (code) {
+            targetUrl.searchParams.set('code', code);
+          }
+        }
+        window.location.replace(targetUrl.pathname + targetUrl.search);
+      }
+    } catch {}
   }, []);
 
   // Minta lokasi pengguna saat aplikasi dimuat
@@ -792,9 +822,6 @@ export default function HomeClient() {
         onSuccess={() => setIsRequestModalOpen(false)}
         userEmail={currentUser?.email || undefined}
       />
-
-      {/* Ajakan Login Kontekstual (Toast Bookmark & Modal Jejak Majelis) */}
-      <LoginNudgePrompt currentUser={currentUser} />
     </div>
   );
 }

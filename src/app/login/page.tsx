@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
@@ -10,15 +10,33 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const next = searchParams.get('next') || '/';
 
+  // Simpan tujuan return URL di cookie & sessionStorage saat halaman login dimuat
+  useEffect(() => {
+    if (next && next !== '/' && next.startsWith('/') && !next.startsWith('//')) {
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      document.cookie = `peta_kajian_auth_next=${encodeURIComponent(next)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+      try {
+        sessionStorage.setItem('peta_kajian_auth_next', next);
+      } catch {}
+    }
+  }, [next]);
+
   const handleLogin = async () => {
     setLoading(true);
     const supabase = createClient();
 
-    // Callback URL dengan parameter 'next'
-    const callbackUrl = new URL('/auth/callback', window.location.origin);
-    if (next && next !== '/') {
-      callbackUrl.searchParams.set('next', next);
+    // Tandai proses login sedang berjalan dan pastikan return URL tersimpan
+    if (next && next !== '/' && next.startsWith('/') && !next.startsWith('//')) {
+      const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+      document.cookie = `peta_kajian_auth_next=${encodeURIComponent(next)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+      try {
+        sessionStorage.setItem('peta_kajian_auth_next', next);
+        sessionStorage.setItem('peta_kajian_auth_in_progress', 'true');
+      } catch {}
     }
+
+    // Callback URL bersih tanpa searchParams agar cocok 100% dengan whitelist redirect URL di Supabase Dashboard
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -29,6 +47,9 @@ function LoginForm() {
 
     if (error) {
       console.error('Error logging in:', error.message);
+      try {
+        sessionStorage.removeItem('peta_kajian_auth_in_progress');
+      } catch {}
       setLoading(false);
     }
   };

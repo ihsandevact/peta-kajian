@@ -194,7 +194,18 @@ export default function MobileNavDrawer({
             </div>
 
             <Link
-              href="/login"
+              href={pathname && pathname !== '/' ? `/login?next=${encodeURIComponent(pathname)}` : '/login'}
+              onClick={() => {
+                onClose();
+                if (pathname && pathname !== '/') {
+                  const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+                  document.cookie = `peta_kajian_auth_next=${encodeURIComponent(pathname)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+                  try {
+                    sessionStorage.setItem('peta_kajian_auth_next', pathname);
+                    sessionStorage.setItem('peta_kajian_auth_in_progress', 'true');
+                  } catch {}
+                }
+              }}
               className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-all shadow-2xs active:scale-95"
             >
               <img

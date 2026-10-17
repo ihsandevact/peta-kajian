@@ -5,6 +5,7 @@ import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { LivePlayerProvider } from "@/context/LivePlayerContext";
 import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePlayer";
 import FloatingStudyNotes from "@/components/FloatingStudyNotes";
+import LoginNudgePrompt from "@/components/LoginNudgePrompt";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -68,6 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <PersistentFloatingLivePlayer />
           <FloatingStudyNotes />
+          <LoginNudgePrompt />
           <PWAInstallPrompt />
         </LivePlayerProvider>
       </body>

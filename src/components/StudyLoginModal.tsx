@@ -25,10 +25,19 @@ export default function StudyLoginModal({
       // Simpan session kajian yang ingin dibuka ke sessionStorage
       setPendingStudySession(pendingSession);
 
-      const supabase = createClient();
       const currentPath = window.location.pathname + window.location.search;
+      if (currentPath && currentPath !== '/' && currentPath.startsWith('/') && !currentPath.startsWith('//')) {
+        const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+        document.cookie = `peta_kajian_auth_next=${encodeURIComponent(currentPath)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+        try {
+          sessionStorage.setItem('peta_kajian_auth_next', currentPath);
+          sessionStorage.setItem('peta_kajian_auth_in_progress', 'true');
+        } catch {}
+      }
+
+      const supabase = createClient();
+      // Callback URL bersih tanpa searchParams agar cocok 100% dengan whitelist redirect URL di Supabase Dashboard
       const callbackUrl = new URL('/auth/callback', window.location.origin);
-      callbackUrl.searchParams.set('next', currentPath);
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -39,10 +48,16 @@ export default function StudyLoginModal({
 
       if (error) {
         console.error('Login error:', error.message);
+        try {
+          sessionStorage.removeItem('peta_kajian_auth_in_progress');
+        } catch {}
         setLoading(false);
       }
     } catch (err) {
       console.error('Unexpected login error:', err);
+      try {
+        sessionStorage.removeItem('peta_kajian_auth_in_progress');
+      } catch {}
       setLoading(false);
     }
   };
