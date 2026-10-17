@@ -15,6 +15,13 @@ import { useBookmarks } from '@/utils/bookmarks';
 import RequestContributorModal from '@/components/RequestContributorModal';
 import ProposeTelegramModal from '@/components/ProposeTelegramModal';
 import { fetchUserTelegramChannels, type TelegramChannel } from '@/lib/services/telegram';
+import {
+  fetchUserStudyNotes,
+  deleteStudyNote,
+  formatNoteForWhatsApp,
+  type StudyNote,
+} from '@/utils/studyNotes';
+import { useLivePlayer } from '@/context/LivePlayerContext';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -43,6 +50,54 @@ export default function ContributorProfilePage() {
   const { attending, getExtraCount } = useAttendance();
   const [showUserId, setShowUserId] = useState(false);
   const [copiedUserId, setCopiedUserId] = useState(false);
+
+  // Study Mode Notes State
+  const { openStudyMode } = useLivePlayer();
+  const [studyNotes, setStudyNotes] = useState<StudyNote[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [deletingNoteId, setDeletingNoteId] = useState<string | null>(null);
+
+  const loadStudyNotes = useCallback(async (userId: string) => {
+    setLoadingNotes(true);
+    try {
+      const data = await fetchUserStudyNotes(userId);
+      setStudyNotes(data);
+    } catch (e) {
+      console.error('Error fetching study notes:', e);
+    } finally {
+      setLoadingNotes(false);
+    }
+  }, []);
+
+  const handleCopyNoteWhatsApp = async (note: StudyNote) => {
+    const text = formatNoteForWhatsApp({
+      title: note.title,
+      speaker_name: note.speaker_name,
+      channel_name: note.channel_name,
+      video_id: note.video_id,
+      content: note.content,
+    });
+    try {
+      await navigator.clipboard.writeText(text);
+      setToastMessage('Catatan berhasil disalin dengan format WhatsApp');
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch {
+      console.error('Gagal menyalin catatan');
+    }
+  };
+
+  const handleDeleteStudyNote = async (noteId: string) => {
+    if (!user?.id) return;
+    if (!confirm('Apakah Anda yakin ingin menghapus catatan faidah ini?')) return;
+    setDeletingNoteId(noteId);
+    const ok = await deleteStudyNote(user.id, noteId);
+    setDeletingNoteId(null);
+    if (ok) {
+      setStudyNotes((prev) => prev.filter((n) => n.id !== noteId));
+      setToastMessage('Catatan berhasil dihapus');
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
 
   const handleCopyUserId = async () => {
     if (!user?.id) return;
@@ -135,6 +190,7 @@ export default function ContributorProfilePage() {
       await Promise.all([
         fetchUserSessions(currentUser.id, name),
         loadProposedChannels(currentUser.id),
+        loadStudyNotes(currentUser.id),
       ]);
       if (mounted) setLoading(false);
     }
@@ -539,44 +595,64 @@ export default function ContributorProfilePage() {
               </Link>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               {/* Card Bookmark */}
-              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-[24px]">bookmark</span>
+              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[22px]">bookmark</span>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-on-surface">Jadwal Tersimpan</h3>
-                    <p className="text-xs text-on-surface-variant mt-0.5">
-                      Kajian yang Anda simpan untuk dihadiri
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-on-surface truncate">Jadwal Tersimpan</h3>
+                    <p className="text-[11px] text-on-surface-variant truncate mt-0.5">
+                      Kajian tersimpan
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <span className="text-2xl font-black text-primary">{bookmarks.length}</span>
+                  <span className="text-xl sm:text-2xl font-black text-primary">{bookmarks.length}</span>
                   <span className="block text-[10px] text-outline font-medium">Kajian</span>
                 </div>
               </div>
 
               {/* Card RSVP / Hadir */}
-              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-[24px]">how_to_reg</span>
+              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[22px]">how_to_reg</span>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-on-surface">Kehadiran Saya</h3>
-                    <p className="text-xs text-on-surface-variant mt-0.5">
-                      Kajian yang Anda tandai &quot;Saya Hadir&quot;
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-on-surface truncate">Kehadiran Saya</h3>
+                    <p className="text-[11px] text-on-surface-variant truncate mt-0.5">
+                      Jejak majelis hadir
                     </p>
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
-                  <span className="text-2xl font-black text-emerald-600">{attending.length}</span>
+                  <span className="text-xl sm:text-2xl font-black text-emerald-600">{attending.length}</span>
                   <span className="block text-[10px] text-outline font-medium">Kajian</span>
+                </div>
+              </div>
+
+              {/* Card Buku Saku Faidah */}
+              <div className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-teal-500/10 text-teal-600 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[22px]">edit_note</span>
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-xs sm:text-sm font-bold text-on-surface truncate">Buku Saku Faidah</h3>
+                    <p className="text-[11px] text-on-surface-variant truncate mt-0.5">
+                      Catatan kajian ditulis
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-xl sm:text-2xl font-black text-teal-600">{studyNotes.length}</span>
+                  <span className="block text-[10px] text-outline font-medium">Catatan</span>
                 </div>
               </div>
             </div>
@@ -590,6 +666,161 @@ export default function ContributorProfilePage() {
             </div>
           </div>
         )}
+
+        {/* ================= SECTION BUKU SAKU FAIDAH (CATATAN KAJIAN) ================= */}
+        <div className="flex flex-col gap-4 animate-in fade-in duration-300">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
+              <span className="material-symbols-outlined text-emerald-600 text-[22px]">auto_stories</span>
+              <span>Buku Saku Faidah</span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
+                {studyNotes.length}
+              </span>
+            </h2>
+            <Link
+              href="/live"
+              className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+            >
+              <span>Mencatat dari Siaran Live</span>
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
+          </div>
+
+          {loadingNotes ? (
+            <div className="p-8 rounded-3xl bg-surface-container-lowest border border-surface-container-high/60 text-center animate-pulse text-xs text-outline">
+              Memuat catatan faidah Anda...
+            </div>
+          ) : studyNotes.length === 0 ? (
+            <div className="p-6 sm:p-8 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 text-center shadow-xs">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <span className="material-symbols-outlined text-[28px]">edit_note</span>
+              </div>
+              <h3 className="text-sm font-bold text-on-surface">Belum Ada Catatan Kajian</h3>
+              <p className="text-xs text-outline mt-1.5 max-w-sm mx-auto leading-relaxed">
+                Ikat faidah penting dengan menuliskannya. Buka siaran live atau rekaman kajian di peta, lalu tekan tombol <strong>&ldquo;Mode Belajar&rdquo;</strong> untuk mulai mencatat.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <Link
+                  href="/live"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold transition-all shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[16px]">live_tv</span>
+                  <span>Siaran Live</span>
+                </Link>
+                <Link
+                  href="/"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">map</span>
+                  <span>Peta Kajian</span>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {studyNotes.map((note) => {
+                const noteDate = note.updated_at
+                  ? new Date(note.updated_at).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '';
+
+                return (
+                  <div
+                    key={note.id || note.video_id}
+                    className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs hover:border-emerald-500/40 transition-all flex flex-col justify-between gap-3 group"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-2 mb-1.5">
+                        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60">
+                          Catatan Faidah
+                        </span>
+                        {noteDate && (
+                          <span className="text-[11px] text-outline font-medium">
+                            {noteDate}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="text-sm font-bold text-on-surface line-clamp-1 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
+                        {note.title}
+                      </h3>
+
+                      {note.speaker_name && (
+                        <p className="text-[11px] text-outline truncate mt-0.5">
+                          {note.speaker_name}
+                        </p>
+                      )}
+
+                      {/* Snippet Preview */}
+                      <p className="text-xs text-on-surface-variant font-mono bg-surface-container-low/50 dark:bg-neutral-800/40 p-2.5 rounded-xl border border-surface-container-high/40 line-clamp-3 mt-2.5 whitespace-pre-line leading-relaxed">
+                        {note.content || '(Catatan masih kosong)'}
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-surface-container-high/50 text-xs">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openStudyMode({
+                              videoId: note.video_id,
+                              title: note.title,
+                              speakerName: note.speaker_name || undefined,
+                              channelName: note.channel_name || undefined,
+                              sessionId: note.session_id || undefined,
+                            })
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-semibold transition-all shadow-2xs active:scale-95 cursor-pointer text-xs"
+                          title="Buka kembali Mode Belajar untuk membaca & menyimak video"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">edit_note</span>
+                          <span>Buka Catatan</span>
+                        </button>
+
+                        <a
+                          href={`https://youtu.be/${note.video_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-surface-container-high/80 hover:bg-surface-container text-outline hover:text-red-600 transition-colors text-xs font-semibold"
+                          title="Tonton Ulang Rekaman di YouTube"
+                        >
+                          <span className="material-symbols-outlined text-[15px] text-red-600">smart_display</span>
+                          <span className="hidden sm:inline">YouTube</span>
+                          <span className="material-symbols-outlined text-[11px]">open_in_new</span>
+                        </a>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyNoteWhatsApp(note)}
+                          className="p-1.5 rounded-xl text-outline hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors cursor-pointer"
+                          title="Salin Format WhatsApp"
+                        >
+                          <span className="material-symbols-outlined text-[17px]">share</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={deletingNoteId === note.id}
+                          onClick={() => note.id && handleDeleteStudyNote(note.id)}
+                          className="p-1.5 rounded-xl text-outline hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer disabled:opacity-50"
+                          title="Hapus Catatan"
+                        >
+                          <span className="material-symbols-outlined text-[17px]">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Khusus Kontributor & Admin: Statistik & Riwayat Publikasi */}
         {isContributorOrAdmin && (

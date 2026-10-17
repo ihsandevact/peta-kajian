@@ -13,6 +13,10 @@ export default function PersistentFloatingLivePlayer() {
     toggleMinimize,
     maximizePlayer,
     minimizePlayer,
+    openStudyMode,
+    isStudyModeOpen,
+    isStudyNotesOpen,
+    toggleMinimizeStudyNotes,
   } = useLivePlayer();
 
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -325,6 +329,32 @@ export default function PersistentFloatingLivePlayer() {
               className="flex items-center gap-1 shrink-0 ml-1"
               onPointerDown={(e) => e.stopPropagation()}
             >
+              {/* Tombol Catatan Faidah dari Bar Audio */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isStudyNotesOpen) {
+                    toggleMinimizeStudyNotes();
+                  } else {
+                    openStudyMode({
+                      videoId: activeStream.videoId,
+                      title: activeStream.title,
+                      speakerName: activeStream.speakerName,
+                      channelName: activeStream.channelName,
+                    });
+                  }
+                }}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                  isStudyNotesOpen
+                    ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 font-bold'
+                    : 'text-outline hover:text-emerald-600 hover:bg-surface-container'
+                }`}
+                title={isStudyNotesOpen ? 'Sembunyikan / Tampilkan Catatan' : 'Buka Catatan Faidah (Sticky Note)'}
+                aria-label="Catatan Faidah"
+              >
+                <span className="material-symbols-outlined text-[15px]">edit_note</span>
+              </button>
+
               <button
                 type="button"
                 onClick={maximizePlayer}
@@ -425,6 +455,32 @@ export default function PersistentFloatingLivePlayer() {
                 aria-label="Kecilkan ke Bar Audio"
               >
                 <span className="material-symbols-outlined text-[18px]">expand_more</span>
+              </button>
+
+              {/* Tombol Mode Belajar (Buku Saku Faidah) */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (isStudyNotesOpen) {
+                    toggleMinimizeStudyNotes();
+                  } else {
+                    openStudyMode({
+                      videoId: activeStream.videoId,
+                      title: activeStream.title,
+                      speakerName: activeStream.speakerName,
+                      channelName: activeStream.channelName,
+                    });
+                  }
+                }}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                  isStudyNotesOpen
+                    ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 font-bold'
+                    : 'text-outline hover:text-emerald-600 hover:bg-emerald-500/10'
+                }`}
+                title={isStudyNotesOpen ? 'Sembunyikan / Tampilkan Catatan' : 'Buka Catatan Faidah (Sticky Note)'}
+                aria-label="Mode Belajar"
+              >
+                <span className="material-symbols-outlined text-[17px]">edit_note</span>
               </button>
 
               {/* Tombol Buka Halaman Penuh /live */}

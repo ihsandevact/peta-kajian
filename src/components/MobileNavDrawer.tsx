@@ -63,14 +63,15 @@ export default function MobileNavDrawer({
 
   const mainNavLinks = currentUser
     ? [
-        { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
-        { href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
+        { id: 'nav-map', href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
+        { id: 'nav-live', href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
         isContributorOrAdmin
-          ? { href: '/kontributor/dashboard', label: 'Kirim Info Kajian', icon: 'add_circle', desc: 'Bagikan info kajian baru' }
-          : { href: '/kontributor/profile', label: 'Ajukan Jadi Kontributor', icon: 'volunteer_activism', desc: 'Daftar sebagai relawan dakwah' },
-        { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
-        { href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
+          ? { id: 'nav-contribute', href: '/kontributor/dashboard', label: 'Kirim Info Kajian', icon: 'add_circle', desc: 'Bagikan info kajian baru' }
+          : { id: 'nav-request-contributor', href: '/kontributor/profile?action=request', label: 'Ajukan Jadi Kontributor', icon: 'volunteer_activism', desc: 'Daftar sebagai relawan dakwah' },
+        { id: 'nav-leaderboard', href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
+        { id: 'nav-faq', href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
         {
+          id: 'nav-profile',
           href: '/kontributor/profile',
           label: isContributorOrAdmin ? 'Profil Relawan' : 'Buku Saku Saya',
           icon: isContributorOrAdmin ? 'account_circle' : 'auto_stories',
@@ -78,18 +79,18 @@ export default function MobileNavDrawer({
         },
       ]
     : [
-        { href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
-        { href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
-        { href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
-        { href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
+        { id: 'nav-map', href: '/', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
+        { id: 'nav-live', href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
+        { id: 'nav-leaderboard', href: '/leaderboard', label: 'Papan Peringkat', icon: 'workspace_premium', desc: 'Leaderboard kontributor dakwah' },
+        { id: 'nav-faq', href: '/faq', label: 'Pusat Bantuan & FAQ', icon: 'help', desc: 'Panduan penggunaan & tanya jawab' },
       ];
 
   const adminNavLinks = [
-    { href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', desc: 'Tinjau & setujui kiriman kajian' },
-    { href: '/admin/users', label: 'Kelola Relawan', icon: 'group', desc: 'Daftar pengguna & hak akses' },
-    { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed', desc: 'Kelola sumber data scraper' },
-    { href: '/admin/youtube', label: 'YouTube Live Channels', icon: 'smart_display', desc: 'Kelola & pantau siaran live kajian' },
-    { href: '/admin/cron', label: 'Status Otomatisasi (Cron)', icon: 'schedule', desc: 'Pantau scheduler background worker' },
+    { id: 'admin-mod', href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', desc: 'Tinjau & setujui kiriman kajian' },
+    { id: 'admin-users', href: '/admin/users', label: 'Kelola Relawan', icon: 'group', desc: 'Daftar pengguna & hak akses' },
+    { id: 'admin-telegram', href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed', desc: 'Kelola sumber data scraper' },
+    { id: 'admin-youtube', href: '/admin/youtube', label: 'YouTube Live Channels', icon: 'smart_display', desc: 'Kelola & pantau siaran live kajian' },
+    { id: 'admin-cron', href: '/admin/cron', label: 'Status Otomatisasi (Cron)', icon: 'schedule', desc: 'Pantau scheduler background worker' },
   ];
 
   const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Relawan';
@@ -220,7 +221,7 @@ export default function MobileNavDrawer({
                   const isActive = pathname === item.href;
                   return (
                     <Link
-                      key={item.href}
+                      key={item.id}
                       href={item.href}
                       className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                         isActive
@@ -251,10 +252,10 @@ export default function MobileNavDrawer({
             </p>
             <div className="space-y-1">
               {mainNavLinks.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = item.id === 'nav-request-contributor' ? false : pathname === item.href;
                 return (
                   <Link
-                    key={item.href}
+                    key={item.id}
                     href={item.href}
                     className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
                       isActive

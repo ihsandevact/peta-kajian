@@ -15,7 +15,7 @@ import { checkIsAdmin } from '@/lib/services/admin';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 
 export default function LiveStreamingPage() {
-  const { playStream } = useLivePlayer();
+  const { playStream, openStudyMode } = useLivePlayer();
   const [channels, setChannels] = useState<YoutubeChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'live' | 'upcoming'>('live');
@@ -510,6 +510,25 @@ export default function LiveStreamingPage() {
                                   <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
                                 </button>
 
+                                {/* Tombol Mode Belajar & Catat Faidah */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    openStudyMode({
+                                      videoId,
+                                      title,
+                                      channelName: channel.channel_name,
+                                      speakerName: speaker,
+                                      sessionId: channel.current_session_id || undefined,
+                                    })
+                                  }
+                                  className="w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                  title="Mode Belajar & Catat Faidah (Wajib Login)"
+                                  aria-label="Mode Belajar"
+                                >
+                                  <span className="material-symbols-outlined text-[19px]">edit_note</span>
+                                </button>
+
                                 {/* Share Button */}
                                 <button
                                   onClick={() =>
@@ -955,6 +974,25 @@ export default function LiveStreamingPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Tombol Mode Belajar */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    openStudyMode({
+                      videoId: selectedVideo.videoId,
+                      title: selectedVideo.title,
+                      channelName: selectedVideo.channelName,
+                      speakerName: selectedVideo.speakerName || '',
+                    });
+                    setSelectedVideo(null);
+                  }}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                  <span>Mode Belajar</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => {

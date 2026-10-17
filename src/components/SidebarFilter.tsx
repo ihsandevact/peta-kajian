@@ -47,7 +47,7 @@ export default function SidebarFilter({
   const [sharingSession, setSharingSession] = useState<StudySession | null>(null);
 
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
-  const { playStream } = useLivePlayer();
+  const { playStream, openStudyMode } = useLivePlayer();
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -418,24 +418,42 @@ export default function SidebarFilter({
                       const ytId = extractYouTubeVideoId(session.stream_url);
                       if (ytId) {
                         return (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              playStream({
-                                videoId: ytId,
-                                title: session.title,
-                                speakerName: session.speaker_name,
-                                channelName: session.venues?.name || session.speaker_name,
-                              });
-                            }}
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
-                            title="Tonton Live di Pemutar Mengambang"
-                          >
-                            <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
-                            <span>Tonton Live</span>
-                            <span className="material-symbols-outlined text-[12px] text-red-500">picture_in_picture_alt</span>
-                          </button>
+                          <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openStudyMode({
+                                  videoId: ytId,
+                                  title: session.title,
+                                  speakerName: session.speaker_name,
+                                  channelName: session.venues?.name || session.speaker_name,
+                                  sessionId: session.id,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                              title="Buka Mode Belajar & Catat Faidah"
+                            >
+                              <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>
+                              <span>Belajar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playStream({
+                                  videoId: ytId,
+                                  title: session.title,
+                                  speakerName: session.speaker_name,
+                                  channelName: session.venues?.name || session.speaker_name,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
+                              title="Tonton Live di Pemutar Mengambang"
+                            >
+                              <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
+                              <span>Live</span>
+                            </button>
+                          </div>
                         );
                       }
                       return (

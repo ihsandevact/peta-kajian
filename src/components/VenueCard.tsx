@@ -18,7 +18,7 @@ interface VenueCardProps {
 }
 
 export default function VenueCard({ session, onClose }: VenueCardProps) {
-  const { playStream } = useLivePlayer();
+  const { playStream, openStudyMode } = useLivePlayer();
   const [imgError, setImgError] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
@@ -415,6 +415,27 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
                 </button>
               </div>
 
+              {ytVideoId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openStudyMode({
+                      videoId: ytVideoId,
+                      title: session.title,
+                      speakerName: session.speaker_name,
+                      channelName: session.venues?.name || session.speaker_name,
+                      sessionId: session.id,
+                    });
+                    if (onClose) onClose();
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>
+                  <span>Mode Belajar & Catat Faidah</span>
+                </button>
+              )}
+
               {hasCalendar && (
                 <a
                   href={gCalUrl.toString()}
@@ -452,25 +473,48 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             </div>
           ) : hasLive && hasCalendar ? (
             /* Skenario 3: Murni Online Streaming (Ada Live + Kalender, Tanpa Masjid Fisik) */
-            <div className="grid grid-cols-2 gap-1.5 w-full">
-              <button
-                type="button"
-                onClick={handleWatchLive}
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
-                <span>Tonton Live</span>
-              </button>
+            <div className="flex flex-col gap-1.5 w-full">
+              <div className="grid grid-cols-2 gap-1.5 w-full">
+                <button
+                  type="button"
+                  onClick={handleWatchLive}
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
+                  <span>Tonton Live</span>
+                </button>
 
-              <a
-                href={gCalUrl.toString()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
-              >
-                <span className="material-symbols-outlined text-[15px]">event_available</span>
-                <span>Simpan Kalender</span>
-              </a>
+                <a
+                  href={gCalUrl.toString()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[15px]">event_available</span>
+                  <span>Simpan Kalender</span>
+                </a>
+              </div>
+
+              {ytVideoId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    openStudyMode({
+                      videoId: ytVideoId,
+                      title: session.title,
+                      speakerName: session.speaker_name,
+                      channelName: session.venues?.name || session.speaker_name,
+                      sessionId: session.id,
+                    });
+                    if (onClose) onClose();
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
+                >
+                  <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>
+                  <span>Mode Belajar & Catat Faidah</span>
+                </button>
+              )}
             </div>
           ) : (
             /* Skenario 4: Sisa tombol tunggal jika yang lain tidak tersedia */

@@ -36,7 +36,7 @@ export default function KajianPreviewModal({
 
   const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
-  const { playStream } = useLivePlayer();
+  const { playStream, openStudyMode } = useLivePlayer();
 
   // Reset img error saat session berganti
   useEffect(() => {
@@ -338,23 +338,43 @@ export default function KajianPreviewModal({
                         <span>Siaran Langsung</span>
                       </div>
                       {ytId ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            playStream({
-                              videoId: ytId,
-                              title: session.title,
-                              speakerName: session.speaker_name,
-                              channelName: session.venues?.name || session.speaker_name,
-                            });
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-2xs transition-all active:scale-95 cursor-pointer"
-                          title="Tonton di Pemutar Mengambang"
-                        >
-                          <span className="material-symbols-outlined text-[15px]">play_circle</span>
-                          <span>Tonton Siaran</span>
-                          <span className="material-symbols-outlined text-[13px] opacity-80">picture_in_picture_alt</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              openStudyMode({
+                                videoId: ytId,
+                                title: session.title,
+                                speakerName: session.speaker_name,
+                                channelName: session.venues?.name || session.speaker_name,
+                                sessionId: session.id,
+                              });
+                              onClose();
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white shadow-2xs transition-all active:scale-95 cursor-pointer"
+                            title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
+                          >
+                            <span className="material-symbols-outlined text-[15px]">edit_note</span>
+                            <span>Mode Belajar</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playStream({
+                                videoId: ytId,
+                                title: session.title,
+                                speakerName: session.speaker_name,
+                                channelName: session.venues?.name || session.speaker_name,
+                              });
+                            }}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-surface-container hover:bg-surface-container-high text-on-surface transition-all active:scale-95 cursor-pointer"
+                            title="Tonton di Pemutar Mengambang (PiP)"
+                          >
+                            <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
+                            <span className="hidden sm:inline">Mini</span>
+                          </button>
+                        </div>
                       ) : (
                         <a
                           href={session.stream_url!}

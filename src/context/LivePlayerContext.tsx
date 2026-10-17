@@ -10,6 +10,14 @@ export interface ActiveLiveStream {
   handle?: string;
 }
 
+export interface ActiveStudySession {
+  videoId: string;
+  title: string;
+  speakerName?: string;
+  channelName?: string;
+  sessionId?: string;
+}
+
 interface LivePlayerContextType {
   activeStream: ActiveLiveStream | null;
   isOpen: boolean;
@@ -19,6 +27,17 @@ interface LivePlayerContextType {
   toggleMinimize: () => void;
   minimizePlayer: () => void;
   maximizePlayer: () => void;
+  // Floating Study Sticky Notes
+  studySession: ActiveStudySession | null;
+  isStudyModeOpen: boolean;
+  isStudyNotesOpen: boolean;
+  isStudyNotesMinimized: boolean;
+  openStudyMode: (session: ActiveStudySession) => void;
+  closeStudyMode: () => void;
+  closeStudyNotes: () => void;
+  toggleMinimizeStudyNotes: () => void;
+  minimizeStudyNotes: () => void;
+  maximizeStudyNotes: () => void;
 }
 
 const LivePlayerContext = createContext<LivePlayerContextType | undefined>(undefined);
@@ -27,6 +46,10 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   const [activeStream, setActiveStream] = useState<ActiveLiveStream | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+
+  const [studySession, setStudySession] = useState<ActiveStudySession | null>(null);
+  const [isStudyNotesOpen, setIsStudyNotesOpen] = useState(false);
+  const [isStudyNotesMinimized, setIsStudyNotesMinimized] = useState(false);
 
   const playStream = useCallback((stream: ActiveLiveStream) => {
     setActiveStream(stream);
@@ -51,6 +74,43 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     setIsMinimized(false);
   }, []);
 
+  const openStudyMode = useCallback((session: ActiveStudySession) => {
+    setStudySession(session);
+    setIsStudyNotesOpen(true);
+    setIsStudyNotesMinimized(false);
+
+    // Otomatis nyalakan floating video player jika belum memutar video ini
+    setActiveStream((current) => {
+      if (!current || current.videoId !== session.videoId) {
+        return {
+          videoId: session.videoId,
+          title: session.title,
+          speakerName: session.speakerName || '',
+          channelName: session.channelName || '',
+        };
+      }
+      return current;
+    });
+    setIsOpen(true);
+  }, []);
+
+  const closeStudyMode = useCallback(() => {
+    setIsStudyNotesOpen(false);
+    setStudySession(null);
+  }, []);
+
+  const toggleMinimizeStudyNotes = useCallback(() => {
+    setIsStudyNotesMinimized((prev) => !prev);
+  }, []);
+
+  const minimizeStudyNotes = useCallback(() => {
+    setIsStudyNotesMinimized(true);
+  }, []);
+
+  const maximizeStudyNotes = useCallback(() => {
+    setIsStudyNotesMinimized(false);
+  }, []);
+
   const value = useMemo(
     () => ({
       activeStream,
@@ -61,8 +121,35 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       toggleMinimize,
       minimizePlayer,
       maximizePlayer,
+      studySession,
+      isStudyModeOpen: isStudyNotesOpen,
+      isStudyNotesOpen,
+      isStudyNotesMinimized,
+      openStudyMode,
+      closeStudyMode,
+      closeStudyNotes: closeStudyMode,
+      toggleMinimizeStudyNotes,
+      minimizeStudyNotes,
+      maximizeStudyNotes,
     }),
-    [activeStream, isOpen, isMinimized, playStream, closePlayer, toggleMinimize, minimizePlayer, maximizePlayer]
+    [
+      activeStream,
+      isOpen,
+      isMinimized,
+      playStream,
+      closePlayer,
+      toggleMinimize,
+      minimizePlayer,
+      maximizePlayer,
+      studySession,
+      isStudyNotesOpen,
+      isStudyNotesMinimized,
+      openStudyMode,
+      closeStudyMode,
+      toggleMinimizeStudyNotes,
+      minimizeStudyNotes,
+      maximizeStudyNotes,
+    ]
   );
 
   return <LivePlayerContext.Provider value={value}>{children}</LivePlayerContext.Provider>;
