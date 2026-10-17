@@ -65,13 +65,31 @@ export default function HomeClient() {
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
   const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
+  const [showLoginBenefits, setShowLoginBenefits] = useState<boolean>(false);
+  const loginBenefitsRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Tutup popover benefit saat klik di luar
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (loginBenefitsRef.current && !loginBenefitsRef.current.contains(e.target as Node)) {
+        setShowLoginBenefits(false);
+      }
+    }
+    if (showLoginBenefits) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showLoginBenefits]);
   const lastFetchTimeRef = useRef<number>(Date.now());
   const isFetchingRef = useRef<boolean>(false);
 
@@ -510,18 +528,123 @@ export default function HomeClient() {
               </Link>
             </>
           ) : (
-            <Link
-              href="/login"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-semibold ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary/10 text-primary hover:bg-primary/20`}
+            <div
+              ref={loginBenefitsRef}
+              onMouseEnter={() => {
+                if (closeTimerRef.current) {
+                  clearTimeout(closeTimerRef.current);
+                  closeTimerRef.current = null;
+                }
+                setShowLoginBenefits(true);
+              }}
+              onMouseLeave={() => {
+                closeTimerRef.current = setTimeout(() => {
+                  setShowLoginBenefits(false);
+                }, 200);
+              }}
+              className="relative"
             >
-              <span className="material-symbols-outlined text-[20px]">login</span>
-              {!isSidebarCollapsed && <span>Masuk / Login</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Masuk / Login
-                </span>
+              <div
+                className={`flex items-center rounded-xl border border-primary/35 bg-primary/5 text-primary hover:bg-primary hover:text-white hover:border-primary shadow-2xs transition-all group ${
+                  isSidebarCollapsed ? 'justify-center p-1' : 'p-1'
+                }`}
+              >
+                <Link
+                  href="/login"
+                  className={`flex items-center flex-1 text-xs font-semibold rounded-lg transition-colors ${
+                    isSidebarCollapsed ? 'justify-center p-2.5' : 'px-2.5 py-1.5 gap-2'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[20px] shrink-0">login</span>
+                  {!isSidebarCollapsed && <span>Masuk</span>}
+                </Link>
+
+                {/* Tombol Info Benefit */}
+                {!isSidebarCollapsed && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowLoginBenefits((prev) => !prev);
+                    }}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 group-hover:hover:bg-white/20 text-primary group-hover:text-white/90 group-hover:hover:text-white transition-colors shrink-0"
+                    title="Lihat keuntungan masuk akun"
+                    aria-label="Lihat keuntungan masuk akun"
+                  >
+                    <span className="material-symbols-outlined text-[17px]">info</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Popover / Tooltip Keuntungan Login */}
+              {showLoginBenefits && (
+                <div
+                  className={`absolute z-50 w-72 sm:w-80 bg-surface-container-lowest text-on-surface p-4 rounded-2xl shadow-xl border border-surface-container-high transition-all animate-fadeIn ${
+                    isSidebarCollapsed
+                      ? 'left-full ml-3 bottom-0'
+                      : 'left-full ml-3 bottom-0'
+                  }`}
+                >
+                  {/* Header Popover */}
+                  <div className="flex items-center gap-1.5 mb-2.5">
+                    <span className="material-symbols-outlined text-[18px] text-amber-500 font-bold">
+                      auto_awesome
+                    </span>
+                    <h4 className="font-bold text-xs sm:text-sm text-on-surface">
+                      Keuntungan Masuk Akun
+                    </h4>
+                  </div>
+
+                  <p className="text-[11px] text-on-surface-variant mb-3 leading-relaxed">
+                    Nikmati kemudahan fitur dakwah dan agenda kajian berikut:
+                  </p>
+
+                  {/* List Benefit */}
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2.5 text-xs">
+                      <div className="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-[13px]">bookmark</span>
+                      </div>
+                      <div className="text-[11px]">
+                        <span className="font-semibold text-on-surface">Simpan Kajian (Cloud Sync)</span>
+                        <p className="text-outline text-[10px] leading-tight">Akses kajian tersimpan di semua perangkat Anda.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 text-xs">
+                      <div className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-[13px]">front_hand</span>
+                      </div>
+                      <div className="text-[11px]">
+                        <span className="font-semibold text-on-surface">Tandai Hadir (InsyaAllah)</span>
+                        <p className="text-outline text-[10px] leading-tight">Rekap rencana hadir kajian Anda & bantu estimasi jamaah.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 text-xs">
+                      <div className="w-5 h-5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-[13px]">campaign</span>
+                      </div>
+                      <div className="text-[11px]">
+                        <span className="font-semibold text-on-surface">Input Jadwal Kajian</span>
+                        <p className="text-outline text-[10px] leading-tight">Bantu sebar jadwal kajian masjid terdekat sebagai relawan.</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 text-xs">
+                      <div className="w-5 h-5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="material-symbols-outlined text-[13px]">notifications_active</span>
+                      </div>
+                      <div className="text-[11px]">
+                        <span className="font-semibold text-on-surface">Pengingat Otomatis</span>
+                        <p className="text-outline text-[10px] leading-tight">Notifikasi sebelum kajian dimulai agar tidak terlewat.</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
-            </Link>
+            </div>
           )}
         </div>
       </aside>
@@ -647,10 +770,10 @@ export default function HomeClient() {
             ) : (
               <Link
                 href="/login"
-                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary hover:text-primary transition-colors font-semibold"
+                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary font-bold hover:opacity-90 transition-opacity"
               >
                 <span className="material-symbols-outlined text-[22px]">login</span>
-                <span className="text-[10px] mt-0.5 tracking-tight">Masuk</span>
+                <span className="text-[10px] mt-0.5 tracking-tight font-bold">Masuk</span>
               </Link>
             )}
           </div>
