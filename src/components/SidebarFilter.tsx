@@ -19,6 +19,8 @@ interface SidebarFilterProps {
   onSelectSession: (s: StudySession | null) => void;
   isLoading?: boolean;
   userLocation?: {lat: number, lng: number} | null;
+  isRefreshing?: boolean;
+  onRefresh?: () => void;
 }
 
 export default function SidebarFilter({
@@ -30,6 +32,8 @@ export default function SidebarFilter({
   onSelectSession,
   isLoading = false,
   userLocation = null,
+  isRefreshing = false,
+  onRefresh,
 }: SidebarFilterProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -202,9 +206,23 @@ export default function SidebarFilter({
 
       {/* 2. Result Count Subtext Bar */}
       <div className="flex px-4 py-1.5 bg-surface-container-low/70 items-center justify-between text-outline text-[11px] font-medium shrink-0">
-        <span>
+        <span className="truncate pr-2">
           Menampilkan {sessions.length} kajian{filters.time === 'selesai' ? ' (Arsip Selesai)' : ''}{filters.region ? ` di ${filters.region.name}` : ''}
         </span>
+        {onRefresh && (
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1 hover:text-on-surface text-outline transition-colors px-1.5 py-0.5 rounded hover:bg-surface-container-high/60 cursor-pointer shrink-0 disabled:opacity-50"
+            title="Perbarui data kajian terbaru"
+          >
+            <span className={`material-symbols-outlined text-[13px] ${isRefreshing ? 'animate-spin text-primary' : ''}`}>
+              refresh
+            </span>
+            <span className="text-[10px] hidden xs:inline">{isRefreshing ? 'Memperbarui...' : 'Segarkan'}</span>
+          </button>
+        )}
       </div>
 
       {/* 3. Scrollable List of Kajian Items */}

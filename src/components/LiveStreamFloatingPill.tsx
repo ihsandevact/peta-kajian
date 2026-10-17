@@ -65,8 +65,23 @@ export default function LiveStreamFloatingPill({
 
     checkLiveCount();
     // Poll every 2 minutes
-    const interval = setInterval(checkLiveCount, 120000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        checkLiveCount();
+      }
+    }, 120000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkLiveCount();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, []);
 
   if (liveCount <= 0 || dismissed || isOpen) {

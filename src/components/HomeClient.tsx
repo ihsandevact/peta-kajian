@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import SidebarFilter from '@/components/SidebarFilter';
@@ -67,10 +67,13 @@ export default function HomeClient() {
   const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
+  const lastFetchTimeRef = useRef<number>(Date.now());
+  const isFetchingRef = useRef<boolean>(false);
 
   // Periksa status login dan role pengguna
   useEffect(() => {
@@ -127,46 +130,111 @@ export default function HomeClient() {
     }
   }, []);
 
-  useEffect(() => {
-    async function loadData() {
-      setIsLoading(true);
+  const refetchData = useCallback(async (isSilent = false) => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
 
+    if (!isSilent) {
+      setIsRefreshing(true);
+    }
+
+    try {
       if (isOffline) {
         const cached = getFeedSnapshot();
         const offlineBookmarked = getCachedOfflineSessions();
         const map = new Map<string, StudySession>();
         [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
-        setSessions(Array.from(map.values()));
-        setIsLoading(false);
+        const merged = Array.from(map.values());
+        setSessions(merged);
+        setSelectedSession((prev) => {
+          if (!prev) return null;
+          return merged.find((s) => s.id === prev.id) || prev;
+        });
         return;
       }
 
-      try {
-        const data = await fetchActiveSessions();
-        if (data && data.length > 0) {
-          setSessions(data);
-          cacheFeedSnapshot(data);
-        } else {
-          const cached = getFeedSnapshot();
-          const offlineBookmarked = getCachedOfflineSessions();
-          const map = new Map<string, StudySession>();
-          [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
-          setSessions(Array.from(map.values()));
-        }
-      } catch (e) {
-        console.warn('Gagal memuat kajian online, beralih ke offline cache:', e);
+      const startTime = Date.now();
+      const data = await fetchActiveSessions();
+      if (data && data.length > 0) {
+        setSessions(data);
+        cacheFeedSnapshot(data);
+        // Pertahankan selectedSession agar tidak tertutup saat background refresh
+        setSelectedSession((prev) => {
+          if (!prev) return null;
+          return data.find((s) => s.id === prev.id) || prev;
+        });
+      } else {
         const cached = getFeedSnapshot();
         const offlineBookmarked = getCachedOfflineSessions();
         const map = new Map<string, StudySession>();
         [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
-        setSessions(Array.from(map.values()));
-      } finally {
-        setIsLoading(false);
+        const merged = Array.from(map.values());
+        setSessions(merged);
+        setSelectedSession((prev) => {
+          if (!prev) return null;
+          return merged.find((s) => s.id === prev.id) || prev;
+        });
       }
-    }
+      lastFetchTimeRef.current = Date.now();
 
-    loadData();
+      // Jika manual refresh, pastikan animasi spin berputar setidaknya 400ms agar user merasakan responnya
+      if (!isSilent) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < 400) {
+          await new Promise((res) => setTimeout(res, 400 - elapsed));
+        }
+      }
+    } catch (e) {
+      console.warn('Gagal memuat kajian terbaru, beralih ke offline cache:', e);
+      const cached = getFeedSnapshot();
+      const offlineBookmarked = getCachedOfflineSessions();
+      const map = new Map<string, StudySession>();
+      [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
+      const merged = Array.from(map.values());
+      setSessions(merged);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+      isFetchingRef.current = false;
+    }
   }, [isOffline]);
+
+  // Initial load
+  useEffect(() => {
+    refetchData(true);
+  }, [refetchData]);
+
+  // 1. Auto-refresh saat kembali ke tab/layar (Window Focus & Visibility Change)
+  // Dilengkapi throttle 30 detik agar tidak spam jika berpindah cepat
+  useEffect(() => {
+    const handleReentry = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        if (now - lastFetchTimeRef.current > 30000) {
+          refetchData(true);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleReentry);
+    window.addEventListener('focus', handleReentry);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleReentry);
+      window.removeEventListener('focus', handleReentry);
+    };
+  }, [refetchData]);
+
+  // 2. Periodic background polling setiap 3 menit (hanya ketika tab sedang aktif dilihat)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refetchData(true);
+      }
+    }, 180000); // 3 menit (180.000 ms)
+
+    return () => clearInterval(interval);
+  }, [refetchData]);
 
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
@@ -484,6 +552,8 @@ export default function HomeClient() {
               selectedSession={selectedSession}
               onSelectSession={setSelectedSession}
               flyToRegion={filters.region}
+              isRefreshing={isRefreshing}
+              onRefresh={() => refetchData(false)}
             />
           </div>
           
@@ -516,6 +586,8 @@ export default function HomeClient() {
                 }}
                 isLoading={isLoading}
                 userLocation={userLocation}
+                isRefreshing={isRefreshing}
+                onRefresh={() => refetchData(false)}
               />
             </div>
           </div>
