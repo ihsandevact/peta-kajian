@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 
 export interface LoginNudgeEventDetail {
-  type: 'bookmark' | 'attendance';
+  type: 'bookmark' | 'attendance' | 'pip';
   title?: string;
 }
 
@@ -29,6 +29,8 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
   const [toastData, setToastData] = useState<{ title?: string } | null>(null);
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
   const [attendanceSessionTitle, setAttendanceSessionTitle] = useState<string>('');
+  const [isPipModalOpen, setIsPipModalOpen] = useState(false);
+  const [pipSessionTitle, setPipSessionTitle] = useState<string>('');
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,9 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
       } else if (detail.type === 'attendance') {
         setAttendanceSessionTitle(detail.title || '');
         setIsAttendanceModalOpen(true);
+      } else if (detail.type === 'pip') {
+        setPipSessionTitle(detail.title || '');
+        setIsPipModalOpen(true);
       }
     };
 
@@ -173,6 +178,73 @@ export default function LoginNudgePrompt({ currentUser }: LoginNudgePromptProps)
                 className="w-full py-2 px-4 rounded-xl text-xs font-medium text-outline hover:text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer"
               >
                 Nanti Saja (Tetap Anonim)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL AJAKAN LOGIN: PICTURE-IN-PICTURE (OS-LEVEL) */}
+      {isPipModalOpen && (
+        <div 
+          className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onClick={() => setIsPipModalOpen(false)}
+        >
+          <div 
+            className="w-full max-w-sm rounded-3xl bg-surface-container-lowest dark:bg-neutral-900 border border-surface-container-high/80 dark:border-neutral-800 p-5 sm:p-6 shadow-2xl relative animate-in zoom-in-95 duration-200 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Ikon Header */}
+            <div className="w-14 h-14 mx-auto mb-3.5 rounded-2xl bg-indigo-500/15 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs">
+              <span className="material-symbols-outlined text-[28px]">picture_in_picture_alt</span>
+            </div>
+
+            <span className="inline-block px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-wider mb-2 border border-indigo-300 dark:border-indigo-800">
+              Fitur Eksklusif Masuk Akun
+            </span>
+
+            <h3 className="text-base sm:text-lg font-bold text-on-surface tracking-tight leading-snug">
+              Putar Melayang di Luar Browser
+            </h3>
+
+            <p className="text-xs text-on-surface-variant mt-2 leading-relaxed">
+              Ingin menyimak siaran <strong>{pipSessionTitle || 'kajian'}</strong> sambil multitasking membuka aplikasi lain di komputer Anda (Word, Excel, Notion, atau kerjaan)?
+            </p>
+
+            <div className="p-3 my-3.5 rounded-2xl bg-surface-container-low/70 dark:bg-neutral-800/60 border border-surface-container-high/60 text-left space-y-1.5">
+              <div className="flex items-center gap-2 text-[11px] text-on-surface">
+                <span className="material-symbols-outlined text-[15px] text-primary">layers</span>
+                <span>Jendela video selalu berada di paling depan (*Always on Top*)</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-on-surface">
+                <span className="material-symbols-outlined text-[15px] text-amber-500">desktop_windows</span>
+                <span>Tetap terlihat walau browser diminimize atau buka tab lain</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-on-surface">
+                <span className="material-symbols-outlined text-[15px] text-indigo-600">volunteer_activism</span>
+                <span>100% Gratis untuk seluruh jamaah terdaftar</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 mt-4">
+              <Link
+                href="/login"
+                className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
+              >
+                <img
+                  src="https://www.svgrepo.com/show/475656/google-color.svg"
+                  className="w-4 h-4 bg-white rounded-full p-0.5"
+                  alt="Google"
+                />
+                <span>Masuk Sekarang untuk Mengaktifkan</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setIsPipModalOpen(false)}
+                className="w-full py-2 px-4 rounded-xl text-xs font-medium text-outline hover:text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer"
+              >
+                Nanti Saja (Putar di Dalam Web)
               </button>
             </div>
           </div>

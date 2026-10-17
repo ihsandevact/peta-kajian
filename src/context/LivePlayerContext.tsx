@@ -22,11 +22,13 @@ interface LivePlayerContextType {
   activeStream: ActiveLiveStream | null;
   isOpen: boolean;
   isMinimized: boolean;
+  isPipActive: boolean;
   playStream: (stream: ActiveLiveStream) => void;
   closePlayer: () => void;
   toggleMinimize: () => void;
   minimizePlayer: () => void;
   maximizePlayer: () => void;
+  setIsPipActive: (active: boolean) => void;
   // Floating Study Sticky Notes
   studySession: ActiveStudySession | null;
   isStudyModeOpen: boolean;
@@ -46,6 +48,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   const [activeStream, setActiveStream] = useState<ActiveLiveStream | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isPipActive, setIsPipActive] = useState(false);
 
   const [studySession, setStudySession] = useState<ActiveStudySession | null>(null);
   const [isStudyNotesOpen, setIsStudyNotesOpen] = useState(false);
@@ -55,11 +58,13 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     setActiveStream(stream);
     setIsOpen(true);
     setIsMinimized(false);
+    setIsPipActive(false);
   }, []);
 
   const closePlayer = useCallback(() => {
     setIsOpen(false);
     setActiveStream(null);
+    setIsPipActive(false);
   }, []);
 
   const toggleMinimize = useCallback(() => {
@@ -116,11 +121,13 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       activeStream,
       isOpen,
       isMinimized,
+      isPipActive,
       playStream,
       closePlayer,
       toggleMinimize,
       minimizePlayer,
       maximizePlayer,
+      setIsPipActive,
       studySession,
       isStudyModeOpen: isStudyNotesOpen,
       isStudyNotesOpen,
@@ -136,11 +143,13 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       activeStream,
       isOpen,
       isMinimized,
+      isPipActive,
       playStream,
       closePlayer,
       toggleMinimize,
       minimizePlayer,
       maximizePlayer,
+      setIsPipActive,
       studySession,
       isStudyNotesOpen,
       isStudyNotesMinimized,
