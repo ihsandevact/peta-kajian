@@ -118,7 +118,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
 
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
-      <div className={`w-full max-h-[min(520px,calc(100vh-120px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom flex flex-col relative overflow-x-hidden ${
+      <div className={`w-full max-h-[min(430px,calc(100vh-250px))] md:max-h-[min(520px,calc(100vh-120px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom flex flex-col relative overflow-x-hidden ${
         isPast ? 'border-surface-container-highest shadow-md' : 'border-surface-container-high/80'
       }`}>
         {/* Gambar Poster Header - Dapat diklik untuk membuka Preview Modal */}

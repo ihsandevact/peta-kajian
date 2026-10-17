@@ -49,8 +49,8 @@ export default function AppMap({
         // Desktop: offset Y positif (200px - 260px) agar card & poster berada aman di bawah pill info live
         offsetY = Math.min(260, Math.max(200, Math.round(window.innerHeight * 0.28)));
       } else {
-        // Mobile: offset Y positif (130px - 180px) agar card tidak menutupi pill floating di atas
-        offsetY = Math.min(180, Math.max(130, Math.round(window.innerHeight * 0.22)));
+        // Mobile: naikkan posisi card secara adaptif (45px - 85px) agar berada di tengah area pandang aktif dan aman di atas bottom sheet (224px)
+        offsetY = Math.min(85, Math.max(45, Math.round(window.innerHeight * 0.085)));
       }
     }
 

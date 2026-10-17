@@ -674,7 +674,10 @@ export default function HomeClient() {
             <MapComponent 
               sessions={sortedSessions} 
               selectedSession={selectedSession}
-              onSelectSession={setSelectedSession}
+              onSelectSession={(session) => {
+                setSelectedSession(session);
+                if (session) setIsSheetExpanded(false);
+              }}
               flyToRegion={filters.region}
             />
           </div>
