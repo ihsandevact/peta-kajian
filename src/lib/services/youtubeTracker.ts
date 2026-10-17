@@ -2,6 +2,16 @@ import * as cheerio from 'cheerio';
 import { supabase } from '@/lib/supabase';
 import { createAdminClient } from '@/utils/supabase/admin';
 
+export interface UpcomingStreamItem {
+  videoId: string;
+  title: string;
+  scheduledStartTime: string; // Format ISO 8601
+  posterUrl: string;
+  streamUrl: string;
+  speakerName: string;
+  channelName?: string;
+}
+
 export interface YoutubeChannel {
   id: string;
   channel_name: string;
@@ -15,6 +25,7 @@ export interface YoutubeChannel {
   current_video_id?: string | null;
   current_video_title?: string | null;
   current_session_id?: string | null;
+  upcoming_streams?: UpcomingStreamItem[] | null;
   last_checked_at?: string | null;
   last_live_at?: string | null;
   created_at: string;
@@ -30,6 +41,7 @@ export interface LiveDetectionResult {
   posterUrl: string | null;
   streamUrl: string | null;
   speakerName: string;
+  upcomingStreams?: UpcomingStreamItem[];
   error?: string | null;
 }
 
@@ -41,6 +53,7 @@ export interface ChannelSyncReport {
   videoId?: string | null;
   title?: string | null;
   sessionId?: string | null;
+  upcomingCount?: number;
   message?: string;
 }
 
@@ -206,16 +219,57 @@ export function extractSpeakerFromTitle(title: string, defaultSpeaker = 'Asatidz
 }
 
 /**
+ * Format string tanggal waktu ISO ke teks ramah bahasa Indonesia untuk siaran upcoming
+ * Contoh: "Hari ini, 18:15 WIB", "Besok, 13:00 WIB", atau "Ahad, 19 Okt • 09:00 WIB"
+ */
+export function formatUpcomingTime(isoDate: string): string {
+  try {
+    const d = new Date(isoDate);
+    const now = new Date();
+
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const isTomorrow =
+      d.getDate() === tomorrow.getDate() &&
+      d.getMonth() === tomorrow.getMonth() &&
+      d.getFullYear() === tomorrow.getFullYear();
+
+    const timeStr = d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Jakarta',
+    });
+
+    if (isToday) return `Hari ini, ${timeStr} WIB`;
+    if (isTomorrow) return `Besok, ${timeStr} WIB`;
+
+    const dayName = d.toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' });
+    const dateStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+    return `${dayName}, ${dateStr} • ${timeStr} WIB`;
+  } catch {
+    return 'Segera Tayang';
+  }
+}
+
+/**
  * Mengecek status live sebuah video ID secara presisi menggunakan YouTube InnerTube Player API (JSON).
  * Endpoint ini tidak membutuhkan API key, sangat cepat (~200ms), dan tidak pernah dicegat
  * oleh Bot Captcha di datacenter cloud (seperti server Vercel/AWS).
  */
 export async function verifyVideoLiveStatusInnerTube(videoId: string): Promise<{
   isLive: boolean;
+  isUpcoming?: boolean;
+  scheduledStartTime?: string | null;
   title?: string;
   playerDetails?: any;
 }> {
-  if (!videoId || videoId.length !== 11) return { isLive: false };
+  if (!videoId || videoId.length !== 11) return { isLive: false, isUpcoming: false };
 
   try {
     const res = await fetch('https://www.youtube.com/youtubei/v1/player', {
@@ -237,7 +291,7 @@ export async function verifyVideoLiveStatusInnerTube(videoId: string): Promise<{
       signal: AbortSignal.timeout(5000),
     });
 
-    if (!res.ok) return { isLive: false };
+    if (!res.ok) return { isLive: false, isUpcoming: false };
     const data = await res.json();
 
     const playabilityStatus = data?.playabilityStatus;
@@ -257,13 +311,38 @@ export async function verifyVideoLiveStatusInnerTube(videoId: string): Promise<{
 
     const isLive = !isOffline && Boolean(hasLiveMarker);
 
+    // Deteksi Upcoming Stream via InnerTube
+    const isUpcoming =
+      !isLive &&
+      Boolean(
+        liveBroadcast?.startTimestamp ||
+        playabilityStatus?.liveStreamability?.liveStreamabilityRenderer?.offlineSlate?.liveStreamOfflineSlateRenderer?.scheduledStartTime ||
+        videoDetails?.isUpcoming === true
+      ) &&
+      !playabilityStatus?.reason?.toLowerCase().includes('ended') &&
+      !playabilityStatus?.reason?.toLowerCase().includes('berakhir');
+
+    let scheduledStartTime: string | null = null;
+    if (isUpcoming) {
+      if (liveBroadcast?.startTimestamp) {
+        scheduledStartTime = liveBroadcast.startTimestamp;
+      } else if (playabilityStatus?.liveStreamability?.liveStreamabilityRenderer?.offlineSlate?.liveStreamOfflineSlateRenderer?.scheduledStartTime) {
+        const sec = Number(playabilityStatus.liveStreamability.liveStreamabilityRenderer.offlineSlate.liveStreamOfflineSlateRenderer.scheduledStartTime);
+        if (!isNaN(sec) && sec > 0) {
+          scheduledStartTime = new Date(sec * 1000).toISOString();
+        }
+      }
+    }
+
     return {
       isLive,
+      isUpcoming,
+      scheduledStartTime,
       title: videoDetails?.title || undefined,
       playerDetails: data,
     };
   } catch {
-    return { isLive: false };
+    return { isLive: false, isUpcoming: false };
   }
 }
 
@@ -302,9 +381,9 @@ export async function checkChannelLiveViaApi(
 
     if (!uploadsPlaylistId) return null;
 
-    // 1. Ambil 2 video terbaru dari playlist Uploads channel (1 kuota)
+    // 1. Ambil hingga 6 video terbaru dari playlist Uploads channel (1 kuota)
     const playlistRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=2&key=${apiKey}`,
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=6&key=${apiKey}`,
       { cache: 'no-store', signal: AbortSignal.timeout(6000) }
     );
 
@@ -324,6 +403,7 @@ export async function checkChannelLiveViaApi(
         posterUrl: null,
         streamUrl: null,
         speakerName: defaultSpeaker || 'Asatidzah',
+        upcomingStreams: [],
       };
     }
 
@@ -341,10 +421,11 @@ export async function checkChannelLiveViaApi(
         posterUrl: null,
         streamUrl: null,
         speakerName: defaultSpeaker || 'Asatidzah',
+        upcomingStreams: [],
       };
     }
 
-    // 2. Periksa status live siaran pada video terbaru (1 kuota untuk multiple ID)
+    // 2. Periksa status live & upcoming siaran pada video terbaru (1 kuota untuk multiple ID)
     const videosRes = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=snippet,liveStreamingDetails&id=${videoIds.join(',')}&key=${apiKey}`,
       { cache: 'no-store', signal: AbortSignal.timeout(6000) }
@@ -353,6 +434,19 @@ export async function checkChannelLiveViaApi(
     if (!videosRes.ok) return null;
     const videosData = await videosRes.json();
     const videoItems = videosData.items || [];
+
+    let activeLiveStream: {
+      videoId: string;
+      title: string;
+      speakerName: string;
+      posterUrl: string;
+      streamUrl: string;
+      channelTitle?: string;
+    } | null = null;
+
+    const upcomingStreams: UpcomingStreamItem[] = [];
+    const nowMs = Date.now();
+    const maxFutureMs = nowMs + 48 * 60 * 60 * 1000; // Siaran 48 jam ke depan
 
     for (const vid of videoItems) {
       const snippet = vid.snippet;
@@ -365,7 +459,7 @@ export async function checkChannelLiveViaApi(
         liveBroadcastContent === 'live' ||
         (Boolean(liveDetails?.actualStartTime) && !liveDetails?.actualEndTime);
 
-      if (isCurrentlyLive) {
+      if (isCurrentlyLive && !activeLiveStream) {
         const videoId = vid.id;
         const title = cleanHtmlEntities(snippet?.title || '');
         const speakerName = extractSpeakerFromTitle(title, defaultSpeaker || 'Asatidzah');
@@ -375,17 +469,59 @@ export async function checkChannelLiveViaApi(
           snippet?.thumbnails?.default?.url ||
           `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
-        return {
-          handle: snippet?.channelTitle || channelIdOrHandle,
-          channelId,
-          isLive: true,
+        activeLiveStream = {
           videoId,
           title,
+          speakerName,
           posterUrl,
           streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
-          speakerName,
+          channelTitle: snippet?.channelTitle,
         };
+      } else if (
+        liveBroadcastContent === 'upcoming' &&
+        liveDetails?.scheduledStartTime
+      ) {
+        const schedMs = new Date(liveDetails.scheduledStartTime).getTime();
+        // Rentang hingga 48 jam ke depan (atau toleransi 15 menit jika sedikit terlambat mulai)
+        if (schedMs >= nowMs - 15 * 60 * 1000 && schedMs <= maxFutureMs) {
+          const videoId = vid.id;
+          const title = cleanHtmlEntities(snippet?.title || '');
+          const speakerName = extractSpeakerFromTitle(title, defaultSpeaker || 'Asatidzah');
+          const posterUrl =
+            snippet?.thumbnails?.maxres?.url ||
+            snippet?.thumbnails?.high?.url ||
+            snippet?.thumbnails?.default?.url ||
+            `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+          upcomingStreams.push({
+            videoId,
+            title,
+            scheduledStartTime: liveDetails.scheduledStartTime,
+            posterUrl,
+            streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            speakerName,
+          });
+        }
       }
+    }
+
+    // Urutkan siaran upcoming berdasarkan jadwal terdekat
+    upcomingStreams.sort(
+      (a, b) => new Date(a.scheduledStartTime).getTime() - new Date(b.scheduledStartTime).getTime()
+    );
+
+    if (activeLiveStream) {
+      return {
+        handle: activeLiveStream.channelTitle || channelIdOrHandle,
+        channelId,
+        isLive: true,
+        videoId: activeLiveStream.videoId,
+        title: activeLiveStream.title,
+        posterUrl: activeLiveStream.posterUrl,
+        streamUrl: activeLiveStream.streamUrl,
+        speakerName: activeLiveStream.speakerName,
+        upcomingStreams,
+      };
     }
 
     return {
@@ -397,6 +533,7 @@ export async function checkChannelLiveViaApi(
       posterUrl: null,
       streamUrl: null,
       speakerName: defaultSpeaker || 'Asatidzah',
+      upcomingStreams,
     };
   } catch (err) {
     console.warn(`[checkChannelLiveViaApi] Error for ${channelIdOrHandle}:`, err);
@@ -485,6 +622,10 @@ export async function checkChannelLiveStatus(
     // 1. Evaluasi status siaran LIVE secara deterministik (Scoped ke Player Utama)
     let isLive = false;
 
+    const upcomingStreams: UpcomingStreamItem[] = [];
+    const nowMs = Date.now();
+    const maxFutureMs = nowMs + 48 * 60 * 60 * 1000;
+
     if (playerObj && videoId) {
       const videoDetails = playerObj.videoDetails;
       const playabilityStatus = playerObj.playabilityStatus;
@@ -500,6 +641,28 @@ export async function checkChannelLiveStatus(
       // Validasi: Status player harus OK, konten live aktif, dan bukan berstatus offline/ended
       if (!isPlayerEnded && isStatusOk && (hasLiveStreamability || liveBroadcast?.isLiveNow === true || videoDetails?.isLive === true)) {
         isLive = true;
+      } else {
+        // Cek apakah video ini adalah siaran Upcoming
+        const startTs =
+          liveBroadcast?.startTimestamp ||
+          (playabilityStatus?.liveStreamability?.liveStreamabilityRenderer?.offlineSlate?.liveStreamOfflineSlateRenderer?.scheduledStartTime
+            ? new Date(Number(playabilityStatus.liveStreamability.liveStreamabilityRenderer.offlineSlate.liveStreamOfflineSlateRenderer.scheduledStartTime) * 1000).toISOString()
+            : null);
+
+        if (startTs) {
+          const schedMs = new Date(startTs).getTime();
+          if (schedMs >= nowMs - 15 * 60 * 1000 && schedMs <= maxFutureMs) {
+            const upTitle = cleanHtmlEntities(videoDetails?.title || '');
+            upcomingStreams.push({
+              videoId,
+              title: upTitle || 'Kajian Mendatang',
+              scheduledStartTime: startTs,
+              posterUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+              streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
+              speakerName: extractSpeakerFromTitle(upTitle, defaultSpeaker || 'Asatidzah'),
+            });
+          }
+        }
       }
     } else if (videoId) {
       // Fallback jika ytInitialPlayerResponse gagal di-parse:
@@ -508,12 +671,25 @@ export async function checkChannelLiveStatus(
       if (innerCheck.isLive) {
         isLive = true;
         playerObj = innerCheck.playerDetails;
+      } else if (innerCheck.isUpcoming && innerCheck.scheduledStartTime) {
+        const schedMs = new Date(innerCheck.scheduledStartTime).getTime();
+        if (schedMs >= nowMs - 15 * 60 * 1000 && schedMs <= maxFutureMs) {
+          const upTitle = cleanHtmlEntities(innerCheck.title || '');
+          upcomingStreams.push({
+            videoId,
+            title: upTitle || 'Kajian Mendatang',
+            scheduledStartTime: innerCheck.scheduledStartTime,
+            posterUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
+            streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
+            speakerName: extractSpeakerFromTitle(upTitle, defaultSpeaker || 'Asatidzah'),
+          });
+        }
       }
     }
 
     // 2. Fallback tangguh via YouTube Atom RSS Feed + InnerTube API
     // YouTube RSS feed & InnerTube API tidak pernah diblokir captcha di IP server cloud manapun (Vercel/AWS)
-    if (!isLive && channelId) {
+    if (channelId) {
       try {
         const rssRes = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
           headers: { 'User-Agent': YOUTUBE_FETCH_HEADERS['User-Agent'] },
@@ -522,9 +698,9 @@ export async function checkChannelLiveStatus(
         });
         if (rssRes.ok) {
           const rssText = await rssRes.text();
-          // Ambil hingga 3 entry video terbaru untuk memastikan siaran langsung yang baru dimulai tertangkap
+          // Ambil hingga 5 entry video terbaru untuk memeriksa live & upcoming
           const entryMatches = rssText.match(/<entry>[\s\S]*?<\/entry>/g) || [];
-          for (const entryXml of entryMatches.slice(0, 3)) {
+          for (const entryXml of entryMatches.slice(0, 5)) {
             const rssVidMatch = entryXml.match(/<yt:videoId>([a-zA-Z0-9_-]{11})<\/yt:videoId>/);
             const rssTitleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
             const entryTitle = rssTitleMatch ? cleanHtmlEntities(rssTitleMatch[1]) : '';
@@ -532,7 +708,7 @@ export async function checkChannelLiveStatus(
 
             if (entryVideoId) {
               const innerCheck = await verifyVideoLiveStatusInnerTube(entryVideoId);
-              if (innerCheck.isLive) {
+              if (innerCheck.isLive && !isLive) {
                 videoId = entryVideoId;
                 playerObj = innerCheck.playerDetails;
                 isLive = true;
@@ -541,7 +717,21 @@ export async function checkChannelLiveStatus(
                   if (!playerObj.videoDetails) playerObj.videoDetails = {};
                   playerObj.videoDetails.title = entryTitle;
                 }
-                break;
+              } else if (innerCheck.isUpcoming && innerCheck.scheduledStartTime) {
+                const schedMs = new Date(innerCheck.scheduledStartTime).getTime();
+                if (schedMs >= nowMs - 15 * 60 * 1000 && schedMs <= maxFutureMs) {
+                  const streamTitle = cleanHtmlEntities(innerCheck.title || entryTitle || '');
+                  if (!upcomingStreams.some(u => u.videoId === entryVideoId)) {
+                    upcomingStreams.push({
+                      videoId: entryVideoId,
+                      title: streamTitle || 'Kajian Mendatang',
+                      scheduledStartTime: innerCheck.scheduledStartTime,
+                      posterUrl: `https://i.ytimg.com/vi/${entryVideoId}/hqdefault.jpg`,
+                      streamUrl: `https://www.youtube.com/watch?v=${entryVideoId}`,
+                      speakerName: extractSpeakerFromTitle(streamTitle, defaultSpeaker || 'Asatidzah'),
+                    });
+                  }
+                }
               }
             }
           }
@@ -550,6 +740,11 @@ export async function checkChannelLiveStatus(
         // Fallback RSS error diabaikan agar tidak mengganggu alur utama
       }
     }
+
+    // Urutkan upcoming streams berdasarkan jadwal terdekat
+    upcomingStreams.sort(
+      (a, b) => new Date(a.scheduledStartTime).getTime() - new Date(b.scheduledStartTime).getTime()
+    );
 
     if (!isLive || !videoId) {
       return {
@@ -561,6 +756,7 @@ export async function checkChannelLiveStatus(
         posterUrl: null,
         streamUrl: null,
         speakerName: defaultSpeaker || 'Asatidzah',
+        upcomingStreams,
       };
     }
 
@@ -596,6 +792,7 @@ export async function checkChannelLiveStatus(
       posterUrl,
       streamUrl,
       speakerName,
+      upcomingStreams: upcomingStreams.filter((u) => u.videoId !== videoId),
     };
   } catch (err: any) {
     console.error(`Error checking YouTube Live for ${handle}:`, err);
@@ -608,6 +805,7 @@ export async function checkChannelLiveStatus(
       posterUrl: null,
       streamUrl: null,
       speakerName: defaultSpeaker || 'Asatidzah',
+      upcomingStreams: [],
       error: err.message,
     };
   }
@@ -677,11 +875,13 @@ export async function fetchAdminYoutubeChannels(): Promise<YoutubeChannel[]> {
 export async function syncAllYoutubeChannels(): Promise<{
   totalChannels: number;
   liveCount: number;
+  upcomingCount: number;
   reports: ChannelSyncReport[];
 }> {
   const channels = await fetchActiveYoutubeChannels();
   const reports: ChannelSyncReport[] = [];
   let liveCount = 0;
+  let upcomingCount = 0;
 
   const supabaseServer = createAdminClient();
 
@@ -776,6 +976,8 @@ export async function syncAllYoutubeChannels(): Promise<{
               sessionId = newSession.id;
             }
 
+            const upcomingClean = (check.upcomingStreams || []).filter((u) => u.videoId !== check.videoId);
+
             // Perbarui metadata tabel youtube_channels
             await supabaseServer
               .from('youtube_channels')
@@ -784,6 +986,7 @@ export async function syncAllYoutubeChannels(): Promise<{
                 current_video_id: check.videoId,
                 current_video_title: check.title,
                 current_session_id: sessionId,
+                upcoming_streams: upcomingClean,
                 last_live_at: nowIso,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
@@ -799,10 +1002,14 @@ export async function syncAllYoutubeChannels(): Promise<{
                 videoId: check.videoId,
                 title: check.title,
                 sessionId,
+                upcomingCount: upcomingClean.length,
               },
               isLive: true,
+              upcomingCount: upcomingClean.length,
             };
           } else {
+            const upcomingClean = (check.upcomingStreams || []).filter((u) => u.videoId !== check.videoId);
+
             // Sesi sudah ada sebelumnya di database
             await supabaseServer
               .from('youtube_channels')
@@ -811,6 +1018,7 @@ export async function syncAllYoutubeChannels(): Promise<{
                 current_video_id: check.videoId,
                 current_video_title: check.title,
                 current_session_id: sessionId,
+                upcoming_streams: upcomingClean,
                 last_live_at: nowIso,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
@@ -826,12 +1034,16 @@ export async function syncAllYoutubeChannels(): Promise<{
                 videoId: check.videoId,
                 title: check.title,
                 sessionId,
+                upcomingCount: upcomingClean.length,
               },
               isLive: true,
+              upcomingCount: upcomingClean.length,
             };
           }
         } else {
           // Channel sedang OFFLINE
+          const upcomings = check.upcomingStreams || [];
+
           if (channel.is_currently_live) {
             // Bersihkan row study_sessions buatan bot jika ada agar tidak meninggalkan data menggantung
             if (channel.current_session_id) {
@@ -852,6 +1064,7 @@ export async function syncAllYoutubeChannels(): Promise<{
                 current_video_id: null,
                 current_video_title: null,
                 current_session_id: null,
+                upcoming_streams: upcomings,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
               })
@@ -863,15 +1076,18 @@ export async function syncAllYoutubeChannels(): Promise<{
                 channelName: channel.channel_name,
                 handle: channel.channel_handle,
                 status: 'offline' as const,
+                upcomingCount: upcomings.length,
                 message: 'Siaran langsung baru saja berakhir.',
               },
               isLive: false,
+              upcomingCount: upcomings.length,
             };
           } else {
-            // Update waktu pengecekan saja
+            // Update waktu pengecekan dan upcoming streams
             await supabaseServer
               .from('youtube_channels')
               .update({
+                upcoming_streams: upcomings,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
               })
@@ -883,9 +1099,11 @@ export async function syncAllYoutubeChannels(): Promise<{
                 channelName: channel.channel_name,
                 handle: channel.channel_handle,
                 status: 'offline' as const,
+                upcomingCount: upcomings.length,
                 message: 'Offline (tidak sedang live)',
               },
               isLive: false,
+              upcomingCount: upcomings.length,
             };
           }
         }
@@ -896,6 +1114,7 @@ export async function syncAllYoutubeChannels(): Promise<{
       if (res.status === 'fulfilled') {
         reports.push(res.value.report);
         if (res.value.isLive) liveCount++;
+        upcomingCount += res.value.upcomingCount || 0;
       }
     }
 
@@ -908,6 +1127,7 @@ export async function syncAllYoutubeChannels(): Promise<{
   return {
     totalChannels: channels.length,
     liveCount,
+    upcomingCount,
     reports,
   };
 }

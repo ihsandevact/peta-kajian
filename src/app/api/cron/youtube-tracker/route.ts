@@ -46,6 +46,7 @@ async function handleYoutubeCron(req: NextRequest) {
       summary: {
         totalChannels: syncResult.totalChannels,
         liveCount: syncResult.liveCount,
+        upcomingCount: syncResult.upcomingCount,
       },
     });
 
@@ -55,6 +56,7 @@ async function handleYoutubeCron(req: NextRequest) {
       durationMs,
       totalChannels: syncResult.totalChannels,
       liveCount: syncResult.liveCount,
+      upcomingCount: syncResult.upcomingCount,
       reports: syncResult.reports,
     });
   } catch (err: any) {

@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
-import type { YoutubeChannel } from '@/lib/services/youtubeTracker';
+import {
+  type YoutubeChannel,
+  type UpcomingStreamItem,
+  formatUpcomingTime,
+} from '@/lib/services/youtubeTracker';
 import type { StudySession } from '@/lib/services/kajian';
 import ShareModal from '@/components/ShareModal';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
@@ -14,6 +18,7 @@ export default function LiveStreamingPage() {
   const { playStream } = useLivePlayer();
   const [channels, setChannels] = useState<YoutubeChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'live' | 'upcoming'>('live');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<{
     videoId: string;
@@ -75,6 +80,42 @@ export default function LiveStreamingPage() {
     return Array.from(map.values());
   }, [channels]);
 
+  // Daftar siaran mendatang (upcoming/premiere) yang dijadwalkan dari seluruh channel
+  const upcomingStreams = useMemo(() => {
+    const items: Array<UpcomingStreamItem & { channel: YoutubeChannel; channelName: string }> = [];
+    const seenVideoIds = new Set<string>();
+
+    channels.forEach((channel) => {
+      if (Array.isArray(channel.upcoming_streams)) {
+        channel.upcoming_streams.forEach((item) => {
+          if (item?.videoId && !seenVideoIds.has(item.videoId)) {
+            // Pastikan video tidak sedang berstatus live aktif di channel mana pun
+            const isAlreadyLive = channels.some(
+              (c) => c.is_currently_live && c.current_video_id === item.videoId
+            );
+            if (!isAlreadyLive) {
+              seenVideoIds.add(item.videoId);
+              items.push({
+                ...item,
+                channelName: item.channelName || channel.channel_name,
+                channel,
+              });
+            }
+          }
+        });
+      }
+    });
+
+    // Urutkan berdasarkan jadwal tayang paling dekat (ascending)
+    items.sort((a, b) => {
+      const timeA = a.scheduledStartTime ? new Date(a.scheduledStartTime).getTime() : Infinity;
+      const timeB = b.scheduledStartTime ? new Date(b.scheduledStartTime).getTime() : Infinity;
+      return timeA - timeB;
+    });
+
+    return items;
+  }, [channels]);
+
   // Filter pencarian khusus untuk siaran live yang sedang tayang
   const filteredLiveChannels = useMemo(() => {
     return liveChannels.filter((c) => {
@@ -88,6 +129,20 @@ export default function LiveStreamingPage() {
       );
     });
   }, [liveChannels, searchQuery]);
+
+  // Filter pencarian untuk siaran mendatang
+  const filteredUpcomingStreams = useMemo(() => {
+    return upcomingStreams.filter((item) => {
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return true;
+      return (
+        item.title.toLowerCase().includes(q) ||
+        item.channelName.toLowerCase().includes(q) ||
+        (item.speakerName && item.speakerName.toLowerCase().includes(q)) ||
+        item.channel.channel_handle.toLowerCase().includes(q)
+      );
+    });
+  }, [upcomingStreams, searchQuery]);
 
   // Filter pencarian untuk channel (khusus admin, deduplikasi handle)
   const filteredAllChannels = useMemo(() => {
@@ -138,12 +193,17 @@ export default function LiveStreamingPage() {
                 <div className="flex items-center gap-1.5">
                   <h1 className="font-bold text-xs sm:text-base leading-tight truncate">Live Kajian</h1>
                   {/* Badge Live Ringkas di Layar Mobile */}
-                  {liveChannels.length > 0 && (
+                  {liveChannels.length > 0 ? (
                     <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                       {liveChannels.length} Live
                     </span>
-                  )}
+                  ) : upcomingStreams.length > 0 ? (
+                    <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-[9px] font-bold shrink-0">
+                      <span className="material-symbols-outlined text-[11px]">schedule</span>
+                      {upcomingStreams.length} Terjadwal
+                    </span>
+                  ) : null}
                 </div>
                 <p className="text-[10px] sm:text-[11px] text-outline truncate hidden xs:block">
                   Siaran Langsung Kajian Islam
@@ -159,6 +219,11 @@ export default function LiveStreamingPage() {
               <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600 text-white text-xs font-bold shadow-xs animate-pulse">
                 <span className="w-2 h-2 rounded-full bg-white animate-ping" />
                 <span>{liveChannels.length} Sedang Live</span>
+              </div>
+            ) : upcomingStreams.length > 0 ? (
+              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-xs font-bold shadow-xs">
+                <span className="material-symbols-outlined text-[14px]">schedule</span>
+                <span>{upcomingStreams.length} Siaran Terjadwal</span>
               </div>
             ) : (
               <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-xs font-medium text-outline">
@@ -197,13 +262,13 @@ export default function LiveStreamingPage() {
           <div className="max-w-2xl">
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-[11px] sm:text-xs font-semibold mb-2 sm:mb-3 border border-red-200 dark:border-red-900/50">
               <span className="material-symbols-outlined text-[15px] sm:text-[16px] text-red-600">live_tv</span>
-              <span>Pusat Siaran Live Kajian</span>
+              <span>Pusat Siaran Live & Jadwal Tayang</span>
             </div>
             <h2 className="text-xl sm:text-3xl font-extrabold text-on-surface tracking-tight">
               Kajian Islam Live Langsung dari Rumah
             </h2>
             <p className="text-xs sm:text-sm text-outline mt-1.5 sm:mt-2 leading-relaxed">
-              Pantau dan simak siaran langsung kajian dari channel-channel dakwah dan asatidzah secara real-time tanpa perlu mencari manual satu per satu.
+              Pantau siaran langsung kajian dan jadwal tayang mendatang (Premiere) dari channel dakwah dan asatidzah secara real-time.
             </p>
           </div>
 
@@ -215,7 +280,13 @@ export default function LiveStreamingPage() {
               </span>
               <input
                 type="text"
-                placeholder={isAdmin ? "Cari channel, ustadz, atau judul..." : "Cari siaran live atau ustadz..."}
+                placeholder={
+                  activeTab === 'upcoming'
+                    ? 'Cari jadwal tayang atau ustadz...'
+                    : isAdmin
+                    ? 'Cari channel, ustadz, atau judul...'
+                    : 'Cari siaran live atau ustadz...'
+                }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-8 py-2 sm:py-2.5 rounded-xl bg-surface-container-lowest border border-surface-container-high text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all shadow-xs"
@@ -230,9 +301,13 @@ export default function LiveStreamingPage() {
               )}
             </div>
             <p className="text-[10px] sm:text-[11px] text-outline px-1">
-              {liveChannels.length > 0
-                ? `${liveChannels.length} siaran langsung tersedia saat ini`
-                : 'Tidak ada siaran live berlangsung'}
+              {activeTab === 'live'
+                ? liveChannels.length > 0
+                  ? `${liveChannels.length} siaran langsung tersedia saat ini`
+                  : 'Tidak ada siaran live berlangsung'
+                : upcomingStreams.length > 0
+                ? `${upcomingStreams.length} siaran terjadwal dalam 24–48 jam`
+                : 'Belum ada siaran terjadwal'}
             </p>
           </div>
         </div>
@@ -255,38 +330,330 @@ export default function LiveStreamingPage() {
           </div>
         ) : (
           <>
-            {/* BAGIAN 1: SEDANG LIVE SEKARANG (TERLIHAT OLEH SEMUA USER) */}
-            {liveChannels.length > 0 ? (
+            {/* TAB NAVIGATION: SEDANG LIVE vs AKAN TAYANG */}
+            <div className="flex items-center gap-2 border-b border-surface-container-high pb-px mb-6 overflow-x-auto no-scrollbar">
+              <button
+                type="button"
+                onClick={() => setActiveTab('live')}
+                className={`flex items-center gap-2 px-4 py-3 font-bold text-xs sm:text-sm border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'live'
+                    ? 'border-red-600 text-red-600 dark:text-red-400'
+                    : 'border-transparent text-outline hover:text-on-surface'
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    liveChannels.length > 0 ? 'bg-red-600 animate-pulse' : 'bg-outline/50'
+                  }`}
+                />
+                <span>Sedang Live</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition-colors ${
+                    activeTab === 'live'
+                      ? 'bg-red-100 text-red-700 dark:bg-red-950/70 dark:text-red-300'
+                      : 'bg-surface-container text-outline'
+                  }`}
+                >
+                  {liveChannels.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('upcoming')}
+                className={`flex items-center gap-2 px-4 py-3 font-bold text-xs sm:text-sm border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                  activeTab === 'upcoming'
+                    ? 'border-amber-600 text-amber-600 dark:text-amber-400'
+                    : 'border-transparent text-outline hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[17px]">schedule</span>
+                <span>Akan Tayang</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition-colors ${
+                    activeTab === 'upcoming'
+                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/70 dark:text-amber-300'
+                      : 'bg-surface-container text-outline'
+                  }`}
+                >
+                  {upcomingStreams.length}
+                </span>
+              </button>
+            </div>
+
+            {/* TAB CONTENT 1: SEDANG LIVE */}
+            {activeTab === 'live' && (
+              liveChannels.length > 0 ? (
+                <div>
+                  <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
+                      <h3 className="font-extrabold text-lg sm:text-xl text-on-surface tracking-tight">
+                        Sedang Tayang Langsung ({filteredLiveChannels.length})
+                      </h3>
+                    </div>
+                    <span className="text-xs text-outline hidden sm:inline">Diperbarui otomatis</span>
+                  </div>
+
+                  {filteredLiveChannels.length === 0 ? (
+                    <div className="text-center py-12 px-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/60">
+                      <span className="material-symbols-outlined text-[32px] text-outline mb-2">search_off</span>
+                      <p className="text-sm font-semibold text-on-surface">Tidak ada siaran live yang cocok</p>
+                      <p className="text-xs text-outline mt-1">Coba kata kunci pencarian yang lain.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {filteredLiveChannels.map((channel) => {
+                        const videoId = channel.current_video_id!;
+                        const title = channel.current_video_title || `Live Streaming ${channel.channel_name}`;
+                        const posterUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                        const streamUrl = `https://www.youtube.com/watch?v=${videoId}`;
+                        const speaker = channel.default_speaker_name || 'Asatidzah';
+
+                        return (
+                          <div
+                            key={channel.id}
+                            className="group relative rounded-2xl bg-surface-container-lowest border-2 border-red-500/40 hover:border-red-500 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden"
+                          >
+                            {/* Video Thumbnail Area */}
+                            <div
+                              className="relative aspect-video w-full bg-black cursor-pointer overflow-hidden"
+                              onClick={() =>
+                                setSelectedVideo({
+                                  videoId,
+                                  title,
+                                  channelName: channel.channel_name,
+                                  speakerName: speaker,
+                                })
+                              }
+                            >
+                              <img
+                                src={posterUrl}
+                                alt={title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 flex items-center justify-center opacity-90 group-hover:opacity-100 transition-opacity">
+                                {/* Play Button Overlay */}
+                                <div className="w-14 h-14 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                                  <span className="material-symbols-outlined text-[32px] ml-0.5">
+                                    play_arrow
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Live Badge */}
+                              <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-600 text-white text-[11px] font-bold shadow-md tracking-wider">
+                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                <span>LIVE</span>
+                              </div>
+
+                              {/* Kota / Jangkauan */}
+                              <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white text-[10px] font-medium">
+                                {channel.default_city || 'Nasional'}
+                              </div>
+                            </div>
+
+                            {/* Video Details */}
+                            <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <span className="material-symbols-outlined text-[16px] text-red-600">
+                                    verified
+                                  </span>
+                                  <span className="text-xs font-bold text-on-surface-variant truncate">
+                                    {channel.channel_name}
+                                  </span>
+                                </div>
+                                <h4
+                                  className="font-bold text-sm sm:text-base text-on-surface line-clamp-2 leading-snug cursor-pointer hover:text-red-600 transition-colors"
+                                  onClick={() =>
+                                    setSelectedVideo({
+                                      videoId,
+                                      title,
+                                      channelName: channel.channel_name,
+                                      speakerName: speaker,
+                                    })
+                                  }
+                                >
+                                  {title}
+                                </h4>
+                                <p className="text-xs text-outline mt-1 truncate">
+                                  Pemateri: <span className="text-on-surface font-medium">{speaker}</span>
+                                </p>
+                              </div>
+
+                              {/* Action Buttons */}
+                              <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-container-high/60">
+                                <button
+                                  onClick={() =>
+                                    setSelectedVideo({
+                                      videoId,
+                                      title,
+                                      channelName: channel.channel_name,
+                                      speakerName: speaker,
+                                    })
+                                  }
+                                  className="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">play_circle</span>
+                                  <span>Tonton</span>
+                                </button>
+
+                                {/* Tombol Putar Mini Player (PiP) */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    playStream({
+                                      videoId,
+                                      title,
+                                      channelName: channel.channel_name,
+                                      speakerName: speaker,
+                                      handle: channel.channel_handle,
+                                    })
+                                  }
+                                  className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                  title="Putar di Mini Player (PiP pojok bawah)"
+                                  aria-label="Putar di Mini Player"
+                                >
+                                  <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
+                                </button>
+
+                                {/* Share Button */}
+                                <button
+                                  onClick={() =>
+                                    setShareSession({
+                                      id: channel.current_session_id || channel.id,
+                                      venue_id: null,
+                                      title,
+                                      speaker_name: speaker,
+                                      is_online: true,
+                                      stream_url: streamUrl,
+                                      poster_url: posterUrl,
+                                      status: 'confirmed',
+                                      audience_type: 'umum',
+                                      is_recurring: false,
+                                      start_datetime: new Date().toISOString(),
+                                    })
+                                  }
+                                  className="p-2 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
+                                  title="Bagikan Kajian"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">share</span>
+                                </button>
+
+                                {/* External YouTube Link */}
+                                <a
+                                  href={streamUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 rounded-xl text-outline hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                  title="Buka di YouTube"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* EMPTY STATE JIKA TIDAK ADA YANG LIVE */
+                <div className="text-center py-16 px-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/60 max-w-lg mx-auto">
+                  <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto text-outline mb-4">
+                    <span className="material-symbols-outlined text-[32px]">live_tv</span>
+                  </div>
+                  <h3 className="font-bold text-lg text-on-surface">Belum Ada Kajian Live Saat Ini</h3>
+                  <p className="text-xs text-outline mt-1.5 leading-relaxed">
+                    Saat ini belum ada siaran langsung kajian yang sedang berlangsung. Silakan periksa kembali saat waktu kajian tiba atau lihat siaran yang akan tayang.
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5">
+                    {upcomingStreams.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('upcoming')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">schedule</span>
+                        <span>Lihat Jadwal Akan Tayang ({upcomingStreams.length})</span>
+                      </button>
+                    )}
+                    <Link
+                      href="/"
+                      className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-all shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">map</span>
+                      <span>Jelajahi Peta Kajian</span>
+                    </Link>
+                  </div>
+                </div>
+              )
+            )}
+
+            {/* TAB CONTENT 2: AKAN TAYANG (UPCOMING) */}
+            {activeTab === 'upcoming' && (
               <div>
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-red-600 animate-ping" />
+                    <span className="material-symbols-outlined text-amber-600 text-[22px]">schedule</span>
                     <h3 className="font-extrabold text-lg sm:text-xl text-on-surface tracking-tight">
-                      Sedang Tayang Langsung ({filteredLiveChannels.length})
+                      Siaran Terjadwal Mendatang ({filteredUpcomingStreams.length})
                     </h3>
                   </div>
-                  <span className="text-xs text-outline hidden sm:inline">Diperbarui otomatis</span>
+                  <span className="text-xs text-outline hidden sm:inline">Terjadwal 24–48 jam ke depan</span>
                 </div>
 
-                {filteredLiveChannels.length === 0 ? (
-                  <div className="text-center py-12 px-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/60">
-                    <span className="material-symbols-outlined text-[32px] text-outline mb-2">search_off</span>
-                    <p className="text-sm font-semibold text-on-surface">Tidak ada siaran live yang cocok</p>
-                    <p className="text-xs text-outline mt-1">Coba kata kunci pencarian yang lain.</p>
-                  </div>
+                {filteredUpcomingStreams.length === 0 ? (
+                  upcomingStreams.length === 0 ? (
+                    <div className="text-center py-16 px-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/60 max-w-lg mx-auto">
+                      <div className="w-16 h-16 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center mx-auto mb-4">
+                        <span className="material-symbols-outlined text-[32px]">event_upcoming</span>
+                      </div>
+                      <h3 className="font-bold text-lg text-on-surface">Belum Ada Jadwal Siaran Mendatang</h3>
+                      <p className="text-xs text-outline mt-1.5 leading-relaxed">
+                        Belum ada channel dakwah yang menjadwalkan siaran langsung atau premiere dalam waktu 24–48 jam ke depan. Cek siaran yang sedang live atau jelajahi peta kajian.
+                      </p>
+                      <div className="flex flex-wrap items-center justify-center gap-2.5 mt-5">
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('live')}
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">live_tv</span>
+                          <span>Lihat Siaran Live ({liveChannels.length})</span>
+                        </button>
+                        <Link
+                          href="/"
+                          className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-all shadow-xs"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">map</span>
+                          <span>Peta Kajian</span>
+                        </Link>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 px-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/60">
+                      <span className="material-symbols-outlined text-[32px] text-outline mb-2">search_off</span>
+                      <p className="text-sm font-semibold text-on-surface">Tidak ada jadwal siaran yang cocok</p>
+                      <p className="text-xs text-outline mt-1">Coba kata kunci pencarian yang lain.</p>
+                    </div>
+                  )
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredLiveChannels.map((channel) => {
-                      const videoId = channel.current_video_id!;
-                      const title = channel.current_video_title || `Live Streaming ${channel.channel_name}`;
-                      const posterUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+                    {filteredUpcomingStreams.map((item) => {
+                      const videoId = item.videoId;
+                      const title = item.title;
+                      const posterUrl = item.posterUrl || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
                       const streamUrl = `https://www.youtube.com/watch?v=${videoId}`;
-                      const speaker = channel.default_speaker_name || 'Asatidzah';
+                      const speaker = item.speakerName || item.channel.default_speaker_name || 'Asatidzah';
+                      const timeBadge = formatUpcomingTime(item.scheduledStartTime);
 
                       return (
                         <div
-                          key={channel.id}
-                          className="group relative rounded-2xl bg-surface-container-lowest border-2 border-red-500/40 hover:border-red-500 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden"
+                          key={`${item.channel.id}-${videoId}`}
+                          className="group relative rounded-2xl bg-surface-container-lowest border-2 border-amber-500/30 hover:border-amber-500 shadow-md hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden"
                         >
                           {/* Video Thumbnail Area */}
                           <div
@@ -295,7 +662,7 @@ export default function LiveStreamingPage() {
                               setSelectedVideo({
                                 videoId,
                                 title,
-                                channelName: channel.channel_name,
+                                channelName: item.channelName,
                                 speakerName: speaker,
                               })
                             }
@@ -307,22 +674,22 @@ export default function LiveStreamingPage() {
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20 flex items-center justify-center opacity-90 group-hover:opacity-100 transition-opacity">
                               {/* Play Button Overlay */}
-                              <div className="w-14 h-14 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
+                              <div className="w-14 h-14 rounded-full bg-amber-600 text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
                                 <span className="material-symbols-outlined text-[32px] ml-0.5">
-                                  play_arrow
+                                  schedule
                                 </span>
                               </div>
                             </div>
 
-                            {/* Live Badge */}
-                            <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-600 text-white text-[11px] font-bold shadow-md tracking-wider">
-                              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                              <span>LIVE</span>
+                            {/* Scheduled Time Badge */}
+                            <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-600 text-white text-[11px] font-bold shadow-md tracking-wide">
+                              <span className="material-symbols-outlined text-[13px]">alarm</span>
+                              <span>{timeBadge}</span>
                             </div>
 
                             {/* Kota / Jangkauan */}
                             <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-md text-white text-[10px] font-medium">
-                              {channel.default_city || 'Nasional'}
+                              {item.channel.default_city || 'Nasional'}
                             </div>
                           </div>
 
@@ -330,20 +697,20 @@ export default function LiveStreamingPage() {
                           <div className="p-4 flex-1 flex flex-col justify-between gap-3">
                             <div>
                               <div className="flex items-center gap-2 mb-1.5">
-                                <span className="material-symbols-outlined text-[16px] text-red-600">
+                                <span className="material-symbols-outlined text-[16px] text-amber-600">
                                   verified
                                 </span>
                                 <span className="text-xs font-bold text-on-surface-variant truncate">
-                                  {channel.channel_name}
+                                  {item.channelName}
                                 </span>
                               </div>
                               <h4
-                                className="font-bold text-sm sm:text-base text-on-surface line-clamp-2 leading-snug cursor-pointer hover:text-red-600 transition-colors"
+                                className="font-bold text-sm sm:text-base text-on-surface line-clamp-2 leading-snug cursor-pointer hover:text-amber-600 transition-colors"
                                 onClick={() =>
                                   setSelectedVideo({
                                     videoId,
                                     title,
-                                    channelName: channel.channel_name,
+                                    channelName: item.channelName,
                                     speakerName: speaker,
                                   })
                                 }
@@ -362,14 +729,14 @@ export default function LiveStreamingPage() {
                                   setSelectedVideo({
                                     videoId,
                                     title,
-                                    channelName: channel.channel_name,
+                                    channelName: item.channelName,
                                     speakerName: speaker,
                                   })
                                 }
-                                className="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                                className="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                               >
                                 <span className="material-symbols-outlined text-[18px]">play_circle</span>
-                                <span>Tonton</span>
+                                <span>Waiting Room</span>
                               </button>
 
                               {/* Tombol Putar Mini Player (PiP) */}
@@ -379,14 +746,14 @@ export default function LiveStreamingPage() {
                                   playStream({
                                     videoId,
                                     title,
-                                    channelName: channel.channel_name,
+                                    channelName: item.channelName,
                                     speakerName: speaker,
-                                    handle: channel.channel_handle,
+                                    handle: item.channel.channel_handle,
                                   })
                                 }
-                                className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                                title="Putar di Mini Player (PiP pojok bawah)"
-                                aria-label="Putar di Mini Player"
+                                className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-amber-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                title="Buka di Mini Player (PiP pojok bawah)"
+                                aria-label="Buka di Mini Player"
                               >
                                 <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
                               </button>
@@ -395,7 +762,7 @@ export default function LiveStreamingPage() {
                               <button
                                 onClick={() =>
                                   setShareSession({
-                                    id: channel.current_session_id || channel.id,
+                                    id: `upcoming-${videoId}`,
                                     venue_id: null,
                                     title,
                                     speaker_name: speaker,
@@ -405,11 +772,11 @@ export default function LiveStreamingPage() {
                                     status: 'confirmed',
                                     audience_type: 'umum',
                                     is_recurring: false,
-                                    start_datetime: new Date().toISOString(),
+                                    start_datetime: item.scheduledStartTime || new Date().toISOString(),
                                   })
                                 }
                                 className="p-2 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
-                                title="Bagikan Kajian"
+                                title="Bagikan Jadwal Kajian"
                               >
                                 <span className="material-symbols-outlined text-[18px]">share</span>
                               </button>
@@ -419,7 +786,7 @@ export default function LiveStreamingPage() {
                                 href={streamUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="p-2 rounded-xl text-outline hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                                className="p-2 rounded-xl text-outline hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
                                 title="Buka di YouTube"
                               >
                                 <span className="material-symbols-outlined text-[18px]">open_in_new</span>
@@ -431,24 +798,6 @@ export default function LiveStreamingPage() {
                     })}
                   </div>
                 )}
-              </div>
-            ) : (
-              /* EMPTY STATE JIKA TIDAK ADA YANG LIVE */
-              <div className="text-center py-16 px-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high/60 max-w-lg mx-auto">
-                <div className="w-16 h-16 rounded-full bg-surface-container flex items-center justify-center mx-auto text-outline mb-4">
-                  <span className="material-symbols-outlined text-[32px]">live_tv</span>
-                </div>
-                <h3 className="font-bold text-lg text-on-surface">Belum Ada Kajian Live Saat Ini</h3>
-                <p className="text-xs text-outline mt-1.5 leading-relaxed">
-                  Saat ini belum ada siaran langsung kajian yang sedang berlangsung. Silakan periksa kembali saat waktu kajian tiba atau jelajahi jadwal kajian di Peta.
-                </p>
-                <Link
-                  href="/"
-                  className="inline-flex items-center gap-1.5 mt-5 px-4 py-2.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-all shadow-xs"
-                >
-                  <span className="material-symbols-outlined text-[16px]">map</span>
-                  <span>Jelajahi Peta Kajian</span>
-                </Link>
               </div>
             )}
 
@@ -508,16 +857,24 @@ export default function LiveStreamingPage() {
                             </div>
                           </div>
 
-                          {channel.is_currently_live ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold shrink-0 animate-pulse">
-                              <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                              LIVE
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-outline text-[10px] font-medium shrink-0">
-                              Offline
-                            </span>
-                          )}
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            {channel.is_currently_live ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold animate-pulse">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                LIVE
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-outline text-[10px] font-medium">
+                                Offline
+                              </span>
+                            )}
+                            {channel.upcoming_streams && channel.upcoming_streams.length > 0 && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[9px] font-bold">
+                                <span className="material-symbols-outlined text-[11px]">schedule</span>
+                                <span>{channel.upcoming_streams.length} Terjadwal</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-container-high/40 text-xs">

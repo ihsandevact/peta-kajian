@@ -24,6 +24,7 @@ export default function AdminYoutubeChannelsPage() {
   const [syncReport, setSyncReport] = useState<{
     totalChannels: number;
     liveCount: number;
+    upcomingCount?: number;
     reports: ChannelSyncReport[];
   } | null>(null);
 
@@ -92,9 +93,12 @@ export default function AdminYoutubeChannelsPage() {
         setSyncReport({
           totalChannels: res.totalChannels,
           liveCount: res.liveCount,
+          upcomingCount: res.upcomingCount,
           reports: res.reports,
         });
-        showToast(`Sinkronisasi selesai! Ditemukan ${res.liveCount} channel sedang LIVE.`);
+        showToast(
+          `Sinkronisasi selesai! Ditemukan ${res.liveCount} LIVE & ${res.upcomingCount || 0} Terjadwal.`
+        );
         await loadChannels();
       } else {
         alert(res.error || 'Gagal menyinkronkan channel.');
@@ -174,6 +178,13 @@ export default function AdminYoutubeChannelsPage() {
     return channels.filter((c) => c.is_currently_live).length;
   }, [channels]);
 
+  const upcomingTotal = useMemo(() => {
+    return channels.reduce(
+      (acc, c) => acc + (Array.isArray(c.upcoming_streams) ? c.upcoming_streams.length : 0),
+      0
+    );
+  }, [channels]);
+
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center min-h-[50vh]">
@@ -221,7 +232,7 @@ export default function AdminYoutubeChannelsPage() {
             </div>
             <div className="flex flex-wrap items-center gap-1.5 mt-1">
               <p className="text-xs text-outline">
-                Pantau siaran langsung channel dakwah kajian secara otomatis (0 Quota API).
+                Pantau siaran langsung & jadwal tayang channel dakwah kajian secara otomatis (0 Quota API).
               </p>
               <span className="text-outline/40 hidden sm:inline">•</span>
               <Link
@@ -263,7 +274,7 @@ export default function AdminYoutubeChannelsPage() {
       {/* MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full flex flex-col gap-6">
         {/* STATS OVERVIEW */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 flex items-center justify-center font-bold">
               <span className="material-symbols-outlined text-[20px]">live_tv</span>
@@ -272,6 +283,18 @@ export default function AdminYoutubeChannelsPage() {
               <p className="text-[11px] text-outline font-medium">Sedang Live</p>
               <h3 className="text-lg font-bold text-on-surface">
                 {liveCount} <span className="text-xs font-normal text-outline">Channel</span>
+              </h3>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center font-bold">
+              <span className="material-symbols-outlined text-[20px]">schedule</span>
+            </div>
+            <div>
+              <p className="text-[11px] text-outline font-medium">Akan Tayang</p>
+              <h3 className="text-lg font-bold text-on-surface">
+                {upcomingTotal} <span className="text-xs font-normal text-outline">Siaran</span>
               </h3>
             </div>
           </div>
@@ -290,7 +313,7 @@ export default function AdminYoutubeChannelsPage() {
 
           <div className="p-4 rounded-2xl bg-surface-container-lowest border border-surface-container-high flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center font-bold">
-              <span className="material-symbols-outlined text-[20px]">schedule</span>
+              <span className="material-symbols-outlined text-[20px]">check_circle</span>
             </div>
             <div>
               <p className="text-[11px] text-outline font-medium">Status Cron Tracker</p>
@@ -308,7 +331,7 @@ export default function AdminYoutubeChannelsPage() {
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-red-600 text-[20px]">check_circle</span>
                 <h4 className="font-bold text-sm text-red-900 dark:text-red-200">
-                  Laporan Hasil Sinkronisasi ({syncReport.liveCount} Siaran Live Ditemukan)
+                  Laporan Hasil Sinkronisasi ({syncReport.liveCount} Siaran Live, {syncReport.upcomingCount || 0} Terjadwal Ditemukan)
                 </h4>
               </div>
               <button
@@ -426,32 +449,44 @@ export default function AdminYoutubeChannelsPage() {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          {isLive ? (
-                            <div className="flex flex-col gap-1 max-w-xs">
-                              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold w-fit animate-pulse">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                                SEDANG LIVE
+                          <div className="flex flex-col gap-1.5 max-w-xs">
+                            {isLive ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-bold w-fit animate-pulse">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                                  SEDANG LIVE
+                                </span>
+                                {channel.current_video_title && (
+                                  <p className="text-[11px] text-on-surface line-clamp-1 font-medium">
+                                    {channel.current_video_title}
+                                  </p>
+                                )}
+                                <a
+                                  href={liveUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-[10px] text-red-600 hover:underline flex items-center gap-0.5"
+                                >
+                                  <span>Buka Video</span>
+                                  <span className="material-symbols-outlined text-[11px]">videocam</span>
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-outline text-[10px] font-medium w-fit">
+                                Offline
                               </span>
-                              {channel.current_video_title && (
-                                <p className="text-[11px] text-on-surface line-clamp-1 font-medium">
-                                  {channel.current_video_title}
-                                </p>
-                              )}
-                              <a
-                                href={liveUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] text-red-600 hover:underline flex items-center gap-0.5"
+                            )}
+
+                            {channel.upcoming_streams && channel.upcoming_streams.length > 0 && (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-bold w-fit"
+                                title={channel.upcoming_streams.map((u) => u.title).join('\n')}
                               >
-                                <span>Buka Video</span>
-                                <span className="material-symbols-outlined text-[11px]">videocam</span>
-                              </a>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container text-outline text-[10px] font-medium">
-                              Offline
-                            </span>
-                          )}
+                                <span className="material-symbols-outlined text-[12px]">schedule</span>
+                                <span>{channel.upcoming_streams.length} Terjadwal</span>
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="py-3.5 px-4 text-on-surface font-medium">
