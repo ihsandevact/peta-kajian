@@ -1,18 +1,14 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { FilterState } from '@/app/page';
-import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
+import { type StudySession } from '@/lib/services/kajian';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
 import RegionPickerModal from './RegionPickerModal';
 import type { SelectedRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
-import ShareModal, { shareSessionNative } from '@/components/ShareModal';
-import { useLivePlayer } from '@/context/LivePlayerContext';
-import { extractYouTubeVideoId } from '@/utils/youtube';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
-import { FEATURE_FLAGS } from '@/config/features';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -26,6 +22,8 @@ interface SidebarFilterProps {
   isRefreshing?: boolean;
   onRefresh?: () => void;
   currentUser?: any;
+  hasConnectionError?: boolean;
+  isOffline?: boolean;
 }
 
 export default function SidebarFilter({
@@ -40,15 +38,15 @@ export default function SidebarFilter({
   isRefreshing = false,
   onRefresh,
   currentUser,
+  hasConnectionError = false,
+  isOffline = false,
 }: SidebarFilterProps) {
   const listRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
   const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
-  const [sharingSession, setSharingSession] = useState<StudySession | null>(null);
 
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
-  const { playStream, openStudyMode } = useLivePlayer();
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -260,8 +258,55 @@ export default function SidebarFilter({
           </div>
         )}
 
+        {/* Banner Info Kajian Offline jika menggunakan data cache lokal */}
+        {(hasConnectionError || isOffline) && sessions.length > 0 && filters.time !== 'tersimpan' && (
+          <div className="mx-3.5 my-2.5 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="material-symbols-outlined text-[17px] shrink-0 text-amber-600">cloud_off</span>
+              <span className="text-[11px] leading-tight truncate">
+                Mode Offline: <strong>{sessions.length} kajian</strong> dari memori perangkat
+              </span>
+            </div>
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="shrink-0 text-[10px] font-bold px-2 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isRefreshing ? '...' : 'Coba Lagi'}
+              </button>
+            )}
+          </div>
+        )}
+
         {isLoading ? (
           Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)
+        ) : (hasConnectionError || isOffline) && sessions.length === 0 ? (
+          <div className="p-8 text-center flex flex-col items-center justify-center gap-3 my-auto">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs">
+              <span className="material-symbols-outlined text-[32px]">wifi_off</span>
+            </div>
+            <div>
+              <p className="font-bold text-sm text-on-surface">Tidak Ada Koneksi Internet</p>
+              <p className="text-xs text-on-surface-variant max-w-[260px] mt-1 leading-relaxed">
+                Gagal memuat jadwal kajian terbaru. Periksa koneksi internet Anda lalu coba lagi.
+              </p>
+            </div>
+            {onRefresh && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+              >
+                <span className={`material-symbols-outlined text-[16px] ${isRefreshing ? 'animate-spin' : ''}`}>
+                  refresh
+                </span>
+                <span>{isRefreshing ? 'Mencoba Terhubung...' : 'Coba Lagi'}</span>
+              </button>
+            )}
+          </div>
         ) : sessions.length === 0 ? (
           <div className="p-8 text-center text-outline text-sm flex flex-col items-center justify-center gap-2">
             {filters.time === 'tersimpan' ? (
@@ -310,23 +355,83 @@ export default function SidebarFilter({
                 data-id={session.id}
                 ref={isLast ? lastElementRef : null}
                 onClick={() => onSelectSession(session)}
-                className={`cursor-pointer p-4 transition-colors relative border-b border-surface-container-high/50 group
+                className={`cursor-pointer p-3.5 sm:p-4 transition-all relative border-b border-surface-container-high/50 group
                   ${isSelected ? 'bg-primary-container/10 shadow-[inset_3px_0_0_0_#15803d]' : isPast ? 'bg-surface-container-low/30 opacity-80 hover:opacity-100 hover:bg-surface-container-low' : 'hover:bg-surface-container-low'}
                 `}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[12px] font-bold ${isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
-                      {info.dateLabel}
+                {/* Baris 1: Tanggal & Bookmark Cepat (Ramping & Anti-Menumpuk) */}
+                <div className="flex items-center justify-between gap-2">
+                  <span className={`text-[12px] font-bold ${isLive ? 'text-red-600 dark:text-red-400' : isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
+                    {info.dateLabel}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const willBookmark = !isBookmarked(session.id);
+                      toggleBookmark(session.id, session);
+                      if (willBookmark && !currentUser) {
+                        triggerLoginNudge({ type: 'bookmark', title: session.title });
+                      }
+                    }}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                      isBookmarked(session.id)
+                        ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 shadow-2xs'
+                        : 'text-outline hover:text-on-surface hover:bg-surface-container-high'
+                    }`}
+                    title={isBookmarked(session.id) ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
+                  >
+                    <span
+                      className="material-symbols-outlined text-[15px]"
+                      style={{ fontVariationSettings: isBookmarked(session.id) ? "'FILL' 1" : "'FILL' 0" }}
+                    >
+                      bookmark
                     </span>
-                    
+                  </button>
+                </div>
+
+                {/* Baris 2: Judul Kajian & Nama Pemateri */}
+                <div className="mt-1">
+                  <h2 className="text-[13px] sm:text-sm font-semibold text-on-surface group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+                    {session.title}
+                  </h2>
+                  <p className="text-xs font-medium text-on-surface-variant mt-0.5 truncate">
+                    {session.speaker_name}
+                  </p>
+                </div>
+
+                {/* Baris 3: Judul Kitab (Jika Ada) */}
+                {session.book_title && session.book_title.trim() !== '' && session.book_title.toLowerCase() !== 'null' && (
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-outline font-medium truncate" title={`Kitab: ${session.book_title}`}>
+                    <span className="material-symbols-outlined text-[14px] shrink-0 text-outline">menu_book</span>
+                    <span className="truncate">{session.book_title}</span>
+                  </div>
+                )}
+
+                {/* Baris 4: Lokasi Masjid / Online */}
+                {session.venues ? (
+                  <div className="mt-1 flex items-center gap-1.5 text-outline text-xs">
+                    <span className="material-symbols-outlined text-[15px] shrink-0">location_on</span>
+                    <span className="truncate">{session.venues.name}</span>
+                  </div>
+                ) : (
+                  <div className="mt-1 flex items-center gap-1.5 text-outline text-xs">
+                    <span className="material-symbols-outlined text-[15px] text-[#dc2626] shrink-0">videocam</span>
+                    <span className="truncate">Kajian Online / Live Streaming</span>
+                  </div>
+                )}
+
+                {/* Baris 5 (Paling Bawah): Status Badges, Kategori Audiens & Jarak */}
+                <div className="mt-2.5 pt-1.5 border-t border-surface-container-high/40 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {isLive ? (
                       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white uppercase tracking-wide shadow-xs animate-pulse">
                         <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
-                        Sedang Berlangsung
+                        Live
                       </span>
                     ) : isRutin ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] uppercase tracking-wide border border-[#bae6fd]">
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] dark:bg-sky-950/50 dark:text-sky-300 uppercase tracking-wide border border-[#bae6fd] dark:border-sky-800">
                         <span className="material-symbols-outlined text-[12px]">event_repeat</span>
                         Rutin
                       </span>
@@ -336,160 +441,19 @@ export default function SidebarFilter({
                         Selesai
                       </span>
                     ) : (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#dcfce7] text-[#166534] uppercase tracking-wide border border-[#bbf7d0]">Akan Datang</span>
-                    )}
-
-                    <span className="text-[11px] text-on-surface-variant capitalize px-1 bg-surface-container-low rounded">{session.audience_type}</span>
-
-                    {session.is_online && (
-                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide border ${
-                        isPast
-                          ? 'bg-surface-container text-on-surface-variant border-surface-container-high'
-                          : 'bg-[#fee2e2] text-[#b91c1c] border-[#fecaca]'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${isPast ? 'bg-outline' : 'bg-[#dc2626]'}`}></span>
-                        {isPast ? 'Siaran Selesai' : (session.venues ? 'Hybrid' : 'Online')}
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#dcfce7] text-[#166534] dark:bg-emerald-950/50 dark:text-emerald-300 uppercase tracking-wide border border-[#bbf7d0] dark:border-emerald-800">
+                        Akan Datang
                       </span>
                     )}
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                    {distanceLabel && (
-                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">{distanceLabel}</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const willBookmark = !isBookmarked(session.id);
-                        toggleBookmark(session.id, session);
-                        if (willBookmark && !currentUser) {
-                          triggerLoginNudge({ type: 'bookmark', title: session.title });
-                        }
-                      }}
-                      className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                        isBookmarked(session.id)
-                          ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 shadow-2xs'
-                          : 'text-outline hover:text-on-surface hover:bg-surface-container-high'
-                      }`}
-                      title={isBookmarked(session.id) ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
-                    >
-                      <span
-                        className="material-symbols-outlined text-[15px]"
-                        style={{ fontVariationSettings: isBookmarked(session.id) ? "'FILL' 1" : "'FILL' 0" }}
-                      >
-                        bookmark
-                      </span>
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-1">
-                  <h2 className="text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">{session.title}</h2>
-                  <p className="text-[13px] text-on-surface-variant mt-0.5">{session.speaker_name}</p>
-                </div>
-                {session.venues ? (
-                  <div className="mt-1 flex items-center gap-1 text-outline text-[13px]">
-                    <span className="material-symbols-outlined text-[15px]">location_on</span>
-                    <span className="truncate">{session.venues.name}</span>
-                  </div>
-                ) : (
-                  <div className="mt-1 flex items-center gap-1 text-outline text-[13px]">
-                    <span className="material-symbols-outlined text-[15px] text-[#dc2626]">videocam</span>
-                    <span className="truncate">Kajian Online / Live Streaming</span>
-                  </div>
-                )}
-                <div className="mt-2 pt-1.5 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {hasPhysicalLocation(session) && (
-                      <a
-                        href={`https://maps.google.com/?q=${session.venues?.lat},${session.venues?.lng}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        className={`inline-flex items-center gap-1 text-[11px] font-medium transition-colors ${
-                          isPast
-                            ? 'text-primary font-semibold hover:underline bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20'
-                            : 'text-on-surface-variant hover:text-primary'
-                        }`}
-                      >
-                        <span>Rute Maps</span>
-                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                      </a>
-                    )}
-                    {session.stream_url && !isPast && (() => {
-                      const ytId = extractYouTubeVideoId(session.stream_url);
-                      if (ytId) {
-                        return (
-                          <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                openStudyMode({
-                                  videoId: ytId,
-                                  title: session.title,
-                                  speakerName: session.speaker_name,
-                                  channelName: session.venues?.name || session.speaker_name,
-                                  sessionId: session.id,
-                                });
-                              }}
-                              className={`${
-                                FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'inline-flex' : 'hidden md:inline-flex'
-                              } items-center gap-1 text-[11px] font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer`}
-                              title="Buka Mode Belajar & Catat Faidah"
-                            >
-                              <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>
-                              <span>Belajar</span>
-                            </button>
 
-                            <button
-                              type="button"
-                              onClick={() => {
-                                playStream({
-                                  videoId: ytId,
-                                  title: session.title,
-                                  speakerName: session.speaker_name,
-                                  channelName: session.venues?.name || session.speaker_name,
-                                });
-                              }}
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95 cursor-pointer"
-                              title="Tonton Live di Pemutar Mengambang"
-                            >
-                              <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
-                              <span>Live</span>
-                            </button>
-                          </div>
-                        );
-                      }
-                      return (
-                        <a 
-                          href={session.stream_url} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          onClick={e => e.stopPropagation()} 
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition-all shadow-2xs hover:scale-105 active:scale-95"
-                          title="Buka Link Live Streaming di Tab Baru"
-                        >
-                          <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
-                          <span>Tonton Live</span>
-                          <span className="material-symbols-outlined text-[12px] opacity-60">open_in_new</span>
-                        </a>
-                      );
-                    })()}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        shareSessionNative(session, () => setSharingSession(session));
-                      }}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-on-surface-variant hover:text-primary transition-colors cursor-pointer"
-                      title="Bagikan Info Kajian"
-                    >
-                      <span className="material-symbols-outlined text-[13px]">share</span>
-                      <span>Bagikan</span>
-                    </button>
+                    <span className="text-[10px] font-semibold text-on-surface-variant capitalize px-1.5 py-0.5 bg-surface-container-low rounded border border-surface-container-high/60">
+                      {session.audience_type}
+                    </span>
                   </div>
-                  {session.book_title && session.book_title !== 'null' && (
-                    <span className="text-[11px] text-outline truncate max-w-[120px]" title={session.book_title}>
-                      {session.book_title}
+
+                  {distanceLabel && (
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
+                      {distanceLabel}
                     </span>
                   )}
                 </div>
@@ -513,15 +477,6 @@ export default function SidebarFilter({
         onSelectRegion={(r) => setFilters((p) => ({ ...p, region: r }))}
         sessions={allSessions || sessions}
       />
-
-      {/* Modal Bagikan Kajian */}
-      {sharingSession && (
-        <ShareModal
-          isOpen={!!sharingSession}
-          onClose={() => setSharingSession(null)}
-          session={sharingSession}
-        />
-      )}
     </div>
   );
 }

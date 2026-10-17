@@ -19,6 +19,7 @@ export default function LiveStreamingPage() {
   const { playStream, openStudyMode } = useLivePlayer();
   const [channels, setChannels] = useState<YoutubeChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [activeTab, setActiveTab] = useState<'live' | 'upcoming'>('live');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVideo, setSelectedVideo] = useState<{
@@ -60,18 +61,41 @@ export default function LiveStreamingPage() {
 
   async function loadData() {
     setLoading(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('youtube_channels')
-      .select('*')
-      .eq('is_active', true)
-      .order('is_currently_live', { ascending: false })
-      .order('channel_name', { ascending: true });
+    setHasError(false);
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        setHasError(true);
+        setLoading(false);
+        return;
+      }
 
-    if (!error && data) {
-      setChannels(data as YoutubeChannel[]);
+      let timeoutId: ReturnType<typeof setTimeout>;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error('Koneksi timeout')), 6000);
+      });
+
+      const supabase = createClient();
+      const queryPromise = supabase
+        .from('youtube_channels')
+        .select('*')
+        .eq('is_active', true)
+        .order('is_currently_live', { ascending: false })
+        .order('channel_name', { ascending: true });
+
+      const { data, error } = (await Promise.race([queryPromise, timeoutPromise]).finally(() => {
+        clearTimeout(timeoutId);
+      })) as any;
+
+      if (error) {
+        setHasError(true);
+      } else if (data) {
+        setChannels(data as YoutubeChannel[]);
+      }
+    } catch {
+      setHasError(true);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   // Daftar channel yang sedang live saat ini (didukung proteksi deduplikasi)
@@ -336,6 +360,26 @@ export default function LiveStreamingPage() {
                 <div className="w-1/2 h-3 rounded bg-surface-container" />
               </div>
             ))}
+          </div>
+        ) : hasError && channels.length === 0 ? (
+          <div className="text-center py-16 px-4 rounded-3xl bg-surface-container-lowest border border-surface-container-high/60 max-w-md mx-auto flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-2xs">
+              <span className="material-symbols-outlined text-[32px]">wifi_off</span>
+            </div>
+            <div>
+              <p className="font-bold text-base text-on-surface">Tidak Ada Koneksi Internet</p>
+              <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+                Gagal memuat siaran langsung. Periksa koneksi internet Anda lalu coba lagi.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={loadData}
+              className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 transition-all shadow-xs cursor-pointer active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[16px]">refresh</span>
+              <span>Coba Lagi</span>
+            </button>
           </div>
         ) : (
           <>

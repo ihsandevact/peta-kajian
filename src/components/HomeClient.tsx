@@ -68,6 +68,7 @@ export default function HomeClient() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [hasConnectionError, setHasConnectionError] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
@@ -179,6 +180,19 @@ export default function HomeClient() {
     }
   }, []);
 
+  // Helper untuk membatasi waktu tunggu request Supabase maksimal 6 detik
+  const fetchWithTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs = 6000): Promise<T> => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        reject(new Error('Koneksi timeout: Server tidak merespons dalam 6 detik.'));
+      }, timeoutMs);
+    });
+    return Promise.race([promise, timeoutPromise]).finally(() => {
+      clearTimeout(timeoutId);
+    });
+  }, []);
+
   const refetchData = useCallback(async (isSilent = false) => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -187,8 +201,11 @@ export default function HomeClient() {
       setIsRefreshing(true);
     }
 
+    const isDeviceOffline = isOffline || (typeof navigator !== 'undefined' && !navigator.onLine);
+
     try {
-      if (isOffline) {
+      if (isDeviceOffline) {
+        setHasConnectionError(true);
         const cached = getFeedSnapshot();
         const offlineBookmarked = getCachedOfflineSessions();
         const map = new Map<string, StudySession>();
@@ -203,7 +220,9 @@ export default function HomeClient() {
       }
 
       const startTime = Date.now();
-      const data = await fetchActiveSessions();
+      const data = await fetchWithTimeout(fetchActiveSessions(), 6000);
+      
+      setHasConnectionError(false);
       if (data && data.length > 0) {
         setSessions(data);
         cacheFeedSnapshot(data);
@@ -235,6 +254,7 @@ export default function HomeClient() {
       }
     } catch (e) {
       console.warn('Gagal memuat kajian terbaru, beralih ke offline cache:', e);
+      setHasConnectionError(true);
       const cached = getFeedSnapshot();
       const offlineBookmarked = getCachedOfflineSessions();
       const map = new Map<string, StudySession>();
@@ -246,11 +266,20 @@ export default function HomeClient() {
       setIsRefreshing(false);
       isFetchingRef.current = false;
     }
-  }, [isOffline]);
+  }, [isOffline, fetchWithTimeout]);
 
   // Initial load
   useEffect(() => {
     refetchData(true);
+  }, [refetchData]);
+
+  // Auto-refetch saat perangkat kembali online
+  useEffect(() => {
+    const handleOnline = () => {
+      refetchData(false);
+    };
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, [refetchData]);
 
   // 1. Auto-refresh saat kembali ke tab/layar (Window Focus & Visibility Change)
@@ -684,12 +713,26 @@ export default function HomeClient() {
       <div className="flex-1 flex flex-col min-w-0">
         
         {/* Banner Peringatan Mode Offline */}
-        {isOffline && (
-          <div className="bg-amber-600 dark:bg-amber-700 text-white text-xs font-medium px-4 py-2 flex items-center justify-center gap-2 shadow-sm z-30 shrink-0">
-            <span className="material-symbols-outlined text-[18px]">wifi_off</span>
-            <span>
-              <strong>Mode Offline</strong> — Perangkat tidak terhubung ke internet. Menampilkan kajian tersimpan di memori perangkat Anda.
-            </span>
+        {(isOffline || hasConnectionError) && (
+          <div className="bg-amber-600 dark:bg-amber-700 text-white text-xs font-medium px-4 py-2 flex items-center justify-between gap-2 shadow-sm z-30 shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="material-symbols-outlined text-[18px] shrink-0">wifi_off</span>
+              <span className="truncate">
+                <strong>Mode Offline</strong> — Perangkat tidak terhubung ke internet. Menampilkan kajian tersimpan di memori perangkat.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => refetchData(false)}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1 text-[11px] font-semibold bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+              title="Coba Hubungkan Ulang"
+            >
+              <span className={`material-symbols-outlined text-[14px] ${isRefreshing ? 'animate-spin' : ''}`}>
+                refresh
+              </span>
+              <span>{isRefreshing ? 'Memuat...' : 'Coba Lagi'}</span>
+            </button>
           </div>
         )}
 
@@ -744,6 +787,8 @@ export default function HomeClient() {
                 isRefreshing={isRefreshing}
                 onRefresh={() => refetchData(false)}
                 currentUser={currentUser}
+                hasConnectionError={hasConnectionError}
+                isOffline={isOffline}
               />
             </div>
           </div>

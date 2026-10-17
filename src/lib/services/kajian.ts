@@ -71,7 +71,7 @@ export async function fetchActiveSessions(
 
   if (error) {
     console.error('Error fetching sessions:', error);
-    return [];
+    throw error;
   }
 
   const sessions = (data as StudySession[]) || [];
