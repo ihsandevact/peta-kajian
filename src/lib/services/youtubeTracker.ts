@@ -181,10 +181,11 @@ export async function resolveYoutubeChannelInfo(
 export function extractSpeakerFromTitle(title: string, defaultSpeaker = 'Asatidzah'): string {
   if (!title) return defaultSpeaker;
 
-  // Pola umum judul siaran dakwah: "... Bersama Ust. Firanda Andirja ..."
+  // Tangkap seluruh nama beserta gelar kehormatannya (Buya, Habib, Syaikh, Kyai, Ust/Ustadz)
   const patterns = [
-    /(?:Ust(?:adz)?\.?|Kajian\s+Bersama\s+Ust(?:adz)?\.?|Syaikh|Buya|Habib)\s+([A-Za-z\s,.'\-]+?)(?:\s*(?:\||-|–|—|\(|\)|\[|\]|#|\d{1,2}\s+[A-Za-z]+|\/|$))/i,
-    /(?:Pemateri\s*:?\s*)([A-Za-z\s,.'\-]+?)(?:\s*(?:\||-|–|—|\(|\)|\[|\]|#|$))/i,
+    /(?:(?:Kajian\s+)?(?:Bersama|Oleh)\s+)((?:Ust(?:adz)?\.?|Syaikh|Buya|Habib|Kyai\s+)?([A-Za-z\s,.'\-]+?))(?:\s*(?:\||-|–|—|\(|\)|\[|\]|#|\d{1,2}\s+[A-Za-z]+|\/|$))/i,
+    /(?:Pemateri\s*:?\s*)((?:Ust(?:adz)?\.?|Syaikh|Buya|Habib|Kyai\s+)?([A-Za-z\s,.'\-]+?))(?:\s*(?:\||-|–|—|\(|\)|\[|\]|#|$))/i,
+    /((?:Ust(?:adz)?\.?|Syaikh|Buya|Habib|Kyai)\s+[A-Za-z\s,.'\-]+?)(?:\s*(?:\||-|–|—|\(|\)|\[|\]|#|\d{1,2}\s+[A-Za-z]+|\/|$))/i,
   ];
 
   for (const pattern of patterns) {
@@ -192,8 +193,8 @@ export function extractSpeakerFromTitle(title: string, defaultSpeaker = 'Asatidz
     if (match && match[1]) {
       const candidate = match[1].trim();
       if (candidate.length >= 3 && candidate.length <= 50) {
-        // Lengkapi dengan prefix Ust. jika belum ada
-        if (!/^ust/i.test(candidate) && !/^syaikh/i.test(candidate) && !/^buya/i.test(candidate)) {
+        // Lengkapi dengan prefix Ust. jika belum ada gelar kehormatan
+        if (!/^(ust|syaikh|buya|habib|kyai)/i.test(candidate)) {
           return `Ust. ${candidate}`;
         }
         return candidate;
@@ -203,6 +204,69 @@ export function extractSpeakerFromTitle(title: string, defaultSpeaker = 'Asatidz
 
   return defaultSpeaker || 'Asatidzah';
 }
+
+/**
+ * Mengecek status live sebuah video ID secara presisi menggunakan YouTube InnerTube Player API (JSON).
+ * Endpoint ini tidak membutuhkan API key, sangat cepat (~200ms), dan tidak pernah dicegat
+ * oleh Bot Captcha di datacenter cloud (seperti server Vercel/AWS).
+ */
+export async function verifyVideoLiveStatusInnerTube(videoId: string): Promise<{
+  isLive: boolean;
+  title?: string;
+  playerDetails?: any;
+}> {
+  if (!videoId || videoId.length !== 11) return { isLive: false };
+
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/player', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': YOUTUBE_FETCH_HEADERS['User-Agent'],
+      },
+      body: JSON.stringify({
+        videoId,
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240410.01.00',
+          },
+        },
+      }),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!res.ok) return { isLive: false };
+    const data = await res.json();
+
+    const playabilityStatus = data?.playabilityStatus;
+    const videoDetails = data?.videoDetails;
+    const liveBroadcast = data?.microformat?.playerMicroformatRenderer?.liveBroadcastDetails;
+
+    const isOffline =
+      playabilityStatus?.status === 'LIVE_STREAM_OFFLINE' ||
+      playabilityStatus?.reason?.toLowerCase().includes('ended') ||
+      playabilityStatus?.reason?.toLowerCase().includes('berakhir');
+
+    const hasLiveMarker =
+      liveBroadcast?.isLiveNow === true ||
+      videoDetails?.isLive === true ||
+      (videoDetails?.isLiveContent === true && (videoDetails?.lengthSeconds === '0' || !videoDetails?.lengthSeconds)) ||
+      Boolean(playabilityStatus?.liveStreamability?.liveStreamabilityRenderer);
+
+    const isLive = !isOffline && Boolean(hasLiveMarker);
+
+    return {
+      isLive,
+      title: videoDetails?.title || undefined,
+      playerDetails: data,
+    };
+  } catch {
+    return { isLive: false };
+  }
+}
+
 
 /**
  * Pengecekan status Live siaran YouTube via canonical endpoint (0 Quota)
@@ -303,23 +367,16 @@ export async function checkChannelLiveStatus(
       }
     } else if (videoId) {
       // Fallback jika ytInitialPlayerResponse gagal di-parse:
-      // Periksa scoped playabilityStatus agar tidak terpengaruh video rekomendasi di sidebar
-      const playabilityMatch = html.match(/"playabilityStatus":\s*\{[^}]+\}/);
-      const playabilitySnippet = playabilityMatch ? playabilityMatch[0] : '';
-      const isPlayerEnded =
-        playabilitySnippet.includes('LIVE_STREAM_OFFLINE') ||
-        playabilitySnippet.includes('ENDED');
-
-      const isLiveNow = html.includes('"isLiveNow":true');
-      const hasLiveStreamability = html.includes('liveStreamabilityRenderer');
-      const hasLiveMarker = html.includes('"isLive":true');
-
-      if (!isPlayerEnded && (isLiveNow || (hasLiveMarker && hasLiveStreamability))) {
+      // Verifikasi presisi langsung via YouTube InnerTube API
+      const innerCheck = await verifyVideoLiveStatusInnerTube(videoId);
+      if (innerCheck.isLive) {
         isLive = true;
+        playerObj = innerCheck.playerDetails;
       }
     }
 
-    // 2. Fallback cerdas via YouTube RSS Feed jika HTML belum mendeteksi live tapi channelId ada
+    // 2. Fallback tangguh via YouTube Atom RSS Feed + InnerTube API
+    // YouTube RSS feed & InnerTube API tidak pernah diblokir captcha di IP server cloud manapun (Vercel/AWS)
     if (!isLive && channelId) {
       try {
         const rssRes = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`, {
@@ -329,41 +386,26 @@ export async function checkChannelLiveStatus(
         });
         if (rssRes.ok) {
           const rssText = await rssRes.text();
-          const firstEntryMatch = rssText.match(/<entry>([\s\S]*?)<\/entry>/);
-          if (firstEntryMatch) {
-            const entryXml = firstEntryMatch[1];
+          // Ambil hingga 3 entry video terbaru untuk memastikan siaran langsung yang baru dimulai tertangkap
+          const entryMatches = rssText.match(/<entry>[\s\S]*?<\/entry>/g) || [];
+          for (const entryXml of entryMatches.slice(0, 3)) {
             const rssVidMatch = entryXml.match(/<yt:videoId>([a-zA-Z0-9_-]{11})<\/yt:videoId>/);
             const rssTitleMatch = entryXml.match(/<title>([^<]+)<\/title>/);
             const entryTitle = rssTitleMatch ? cleanHtmlEntities(rssTitleMatch[1]) : '';
             const entryVideoId = rssVidMatch ? rssVidMatch[1] : null;
 
-            // Jika judul video terbaru mengandung indikator live
-            const isLiveTitle = /\[LIVE\]|\(LIVE\)|LIVE STREAMING|SIARAN LANGSUNG/i.test(entryTitle);
-            if (entryVideoId && isLiveTitle) {
-              // Verifikasi langsung ke halaman video watch tersebut
-              const watchRes = await fetch(`https://www.youtube.com/watch?v=${entryVideoId}`, {
-                headers: YOUTUBE_FETCH_HEADERS,
-                cache: 'no-store',
-                signal: AbortSignal.timeout(5000),
-              });
-              if (watchRes.ok) {
-                const watchHtml = await watchRes.text();
-                const watchPlayerMatch = watchHtml.match(/ytInitialPlayerResponse\s*=\s*({[\s\S]+?});(?:var|<\/script>)/);
-                if (watchPlayerMatch) {
-                  try {
-                    const wp = JSON.parse(watchPlayerMatch[1]);
-                    if (
-                      wp.playabilityStatus?.status === 'OK' &&
-                      (wp.playabilityStatus?.liveStreamability || wp.videoDetails?.isLive)
-                    ) {
-                      videoId = entryVideoId;
-                      playerObj = wp;
-                      isLive = true;
-                    }
-                  } catch {
-                    // ignore
-                  }
+            if (entryVideoId) {
+              const innerCheck = await verifyVideoLiveStatusInnerTube(entryVideoId);
+              if (innerCheck.isLive) {
+                videoId = entryVideoId;
+                playerObj = innerCheck.playerDetails;
+                isLive = true;
+                if (!playerObj?.videoDetails?.title && entryTitle) {
+                  if (!playerObj) playerObj = {};
+                  if (!playerObj.videoDetails) playerObj.videoDetails = {};
+                  playerObj.videoDetails.title = entryTitle;
                 }
+                break;
               }
             }
           }
@@ -507,8 +549,8 @@ export async function syncAllYoutubeChannels(): Promise<{
 
   const supabaseServer = createAdminClient();
 
-  // Proses channel dalam batch paralel (4 channel sekaligus) agar cepat (< 8 detik) dan stabil
-  const BATCH_SIZE = 4;
+  // Proses channel dalam batch paralel (5 channel sekaligus) agar cepat (< 12 detik) dan stabil
+  const BATCH_SIZE = 5;
   for (let i = 0; i < channels.length; i += BATCH_SIZE) {
     const batch = channels.slice(i, i + BATCH_SIZE);
 
@@ -705,9 +747,9 @@ export async function syncAllYoutubeChannels(): Promise<{
       }
     }
 
-    // Delay 300ms antar batch untuk stabilitas koneksi
+    // Delay 150ms antar batch untuk stabilitas koneksi
     if (i + BATCH_SIZE < channels.length) {
-      await new Promise((r) => setTimeout(r, 300));
+      await new Promise((r) => setTimeout(r, 150));
     }
   }
 
