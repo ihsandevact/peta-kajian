@@ -312,7 +312,7 @@ export default function SidebarFilter({
                 Jadwal Tersimpan di Memori Perangkat
               </p>
               <p className="text-[11px] text-on-surface-variant leading-relaxed mt-0.5">
-                Masuk akun Google (1-Klik) agar kajian tersimpan otomatis dicadangkan ke cloud & tidak hilang saat ganti HP.
+                Masuk akun Google agar kajian tersimpan otomatis dicadangkan ke cloud & tidak hilang saat ganti HP.
               </p>
               <div className="mt-2">
                 <Link

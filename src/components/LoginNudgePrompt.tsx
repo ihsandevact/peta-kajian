@@ -118,7 +118,7 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
   // Jangan render apa-apa jika sudah login, di halaman auth, atau di dalam jendela PiP OS
   if (currentUser || isAuthPage || isPipRoute) return null;
 
-  // Handler Login 1-Klik Google langsung dari modal/toast
+  // Handler Login Google langsung dari modal/toast
   const handleGoogleLogin = async () => {
     try {
       setIsLoggingIn(true);
@@ -193,7 +193,7 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
                   ) : (
                     <>
                       <span className="material-symbols-outlined text-[14px]">login</span>
-                      <span>Masuk 1-Klik Google</span>
+                      <span>Masuk dengan Google</span>
                     </>
                   )}
                 </button>
@@ -266,7 +266,7 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
                     alt="Google"
                   />
                 )}
-                <span>{isLoggingIn ? 'Menghubungkan...' : 'Lanjutkan dengan Google (1-Klik)'}</span>
+                <span>{isLoggingIn ? 'Menghubungkan...' : 'Lanjutkan dengan Google'}</span>
               </button>
 
               <button

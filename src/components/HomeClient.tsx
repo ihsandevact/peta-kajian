@@ -807,7 +807,7 @@ export default function HomeClient() {
                   </div>
 
                   <p className="text-[11px] text-on-surface-variant mb-3 leading-relaxed">
-                    Masuk dengan Google (1-Klik) untuk membuka fitur agenda & catatan majelis Anda:
+                    Masuk dengan Google untuk membuka fitur agenda & catatan majelis Anda:
                   </p>
 
                   {/* List Benefit */}

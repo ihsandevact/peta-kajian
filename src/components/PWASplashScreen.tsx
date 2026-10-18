@@ -84,7 +84,7 @@ export default function PWASplashScreen() {
       {/* Footer Bawah: Tagline Wilayah */}
       <div className="text-center">
         <span className="text-[11px] font-semibold text-outline tracking-wider uppercase">
-          Kajian Sunnah Seluruh Indonesia
+          Kajian Islam Seluruh Indonesia
         </span>
       </div>
     </div>

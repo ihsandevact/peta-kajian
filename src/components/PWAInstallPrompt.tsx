@@ -113,11 +113,29 @@ export default function PWAInstallPrompt() {
   const [showBanner, setShowBanner] = useState(false);
   const { canInstall, isInstalled, isIos, showIosGuide, setShowIosGuide, promptInstall } = usePWAInstall();
 
-  // Register Service Worker safely
+  // Register Service Worker safely (Hanya di mode produksi)
   useEffect(() => {
     if (isPipRoute) return;
 
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      if (process.env.NODE_ENV !== 'production') {
+        // Di mode development, unregister service worker agar tidak mengganggu HMR dan Turbopack dev server
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const reg of registrations) {
+            reg.unregister();
+            console.log('Unregistered development Service Worker:', reg.scope);
+          }
+        });
+        if ('caches' in window) {
+          caches.keys().then((keys) => {
+            for (const key of keys) {
+              caches.delete(key);
+            }
+          });
+        }
+        return;
+      }
+
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {

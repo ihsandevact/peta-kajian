@@ -1,6 +1,5 @@
-const CACHE_NAME = 'peta-kajian-v1';
+const CACHE_NAME = 'peta-kajian-v2';
 const PRECACHE_ASSETS = [
-  '/',
   '/logo.png?v=3',
   '/favicon.ico?v=3',
   '/site.webmanifest',
@@ -42,11 +41,16 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Bypass non-HTTP(S) or dynamic API requests
+  // Bypass non-HTTP(S), API, dan request internal Next.js (RSC, static chunks, HMR, Turbopack)
   if (
     !url.protocol.startsWith('http') ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/auth') ||
+    url.pathname.startsWith('/_next') ||
+    url.searchParams.has('_rsc') ||
+    url.pathname.includes('turbopack') ||
+    url.pathname.includes('webpack') ||
+    url.pathname.includes('__nextjs') ||
     url.host.includes('supabase.co') ||
     url.host.includes('maptiler.com')
   ) {

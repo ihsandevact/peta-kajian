@@ -214,7 +214,7 @@ export default function MobileNavDrawer({
                 className="w-3.5 h-3.5 bg-white rounded-full p-0.5 shrink-0"
                 alt=""
               />
-              <span>Masuk dengan Google (1-Klik)</span>
+              <span>Masuk dengan Google</span>
             </Link>
           </div>
         )}
@@ -339,7 +339,7 @@ export default function MobileNavDrawer({
                 className="w-3.5 h-3.5 bg-white rounded-full p-0.5 shrink-0"
                 alt=""
               />
-              <span>Masuk dengan Google (1-Klik)</span>
+              <span>Masuk dengan Google</span>
             </Link>
           )}
         </div>

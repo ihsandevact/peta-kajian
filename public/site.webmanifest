@@ -1,7 +1,7 @@
 {
   "name": "Peta Kajian Indonesia",
   "short_name": "PetaKajian",
-  "description": "Temukan dan pantau jadwal kajian sunnah terdekat di seluruh wilayah Indonesia.",
+  "description": "Temukan dan pantau jadwal kajian Islam terdekat di seluruh wilayah Indonesia.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
