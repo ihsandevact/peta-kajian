@@ -35,6 +35,7 @@ export interface StudySession {
   created_by?: string | null;
   contributor_name?: string | null;
   attendees_count?: number;
+  is_test?: boolean;
   venues?: Venue | null; // Joined data (null untuk kajian online murni)
 }
 
@@ -45,32 +46,52 @@ export function hasPhysicalLocation(s: StudySession): boolean {
 
 export interface FetchSessionsOptions {
   requireLocation?: boolean; // Default true: hanya sesi dengan titik fisik di peta (offline / hybrid)
+  includeTestSessions?: boolean; // Default false: jika true, sertakan kajian bertanda is_test = true (khusus admin)
 }
 
 // Untuk sementara kita menggunakan query biasa
 // Nanti bisa diganti dengan rpc calls untuk query ST_DWithin (radius)
 export async function fetchActiveSessions(
-  options: FetchSessionsOptions = { requireLocation: true }
+  options: FetchSessionsOptions = { requireLocation: true, includeTestSessions: false }
 ): Promise<StudySession[]> {
   const requireLocation = options.requireLocation ?? true;
+  const includeTestSessions = options.includeTestSessions ?? false;
 
-  let query = supabase
-    .from('study_sessions')
-    .select(`
-      *,
-      venues${requireLocation ? '!inner' : ''} (*)
-    `)
-    .eq('status', 'confirmed')
-    .order('start_datetime', { ascending: true });
+  const buildQuery = (withTestFilter: boolean) => {
+    let q = supabase
+      .from('study_sessions')
+      .select(`
+        *,
+        venues${requireLocation ? '!inner' : ''} (*)
+      `)
+      .eq('status', 'confirmed')
+      .order('start_datetime', { ascending: true });
 
-  if (requireLocation) {
-    query = query.not('venue_id', 'is', null);
+    if (withTestFilter) {
+      // Pengguna umum hanya melihat kajian non-test (is_test is null atau is_test = false)
+      q = q.or('is_test.is.null,is_test.eq.false');
+    }
+
+    if (requireLocation) {
+      q = q.not('venue_id', 'is', null);
+    }
+
+    return q;
+  };
+
+  let { data, error } = await buildQuery(!includeTestSessions);
+
+  // Fallback: Jika kolom is_test belum dibuat di database Supabase (Postgres error 42703 / column does not exist),
+  // jalankan ulang query tanpa filter is_test agar aplikasi tetap berfungsi normal.
+  if (error && !includeTestSessions && (error.code === '42703' || error.message?.includes('is_test'))) {
+    console.warn('[fetchActiveSessions] Kolom is_test belum tersedia di Supabase, fallback query tanpa filter is_test:', error.message);
+    const fallbackRes = await buildQuery(false);
+    data = fallbackRes.data;
+    error = fallbackRes.error;
   }
 
-  const { data, error } = await query;
-
   if (error) {
-    console.error('Error fetching sessions:', error);
+    console.error('Error fetching sessions:', error.message || error.details || error);
     throw error;
   }
 

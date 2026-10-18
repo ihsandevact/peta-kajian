@@ -95,6 +95,36 @@ export async function togglePublishSession(sessionId: string, publish: boolean) 
 }
 
 /**
+ * Toggle status testing kajian:
+ * - isTest: true  -> data pengujian khusus admin (tidak tampil di publik)
+ * - isTest: false -> data publik normal
+ */
+export async function toggleTestSession(sessionId: string, isTest: boolean) {
+  try {
+    const { supabase } = await verifyAdminAuth();
+
+    const { error } = await supabase
+      .from('study_sessions')
+      .update({
+        is_test: isTest,
+      })
+      .eq('id', sessionId);
+
+    if (error) {
+      console.error('Toggle test session failed:', error);
+      return { success: false, error: `Gagal mengubah status testing: ${error.message}` };
+    }
+
+    revalidatePath('/');
+    revalidatePath('/admin');
+    revalidatePath('/kontributor/profile');
+    return { success: true, isTest };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Terjadi kesalahan sistem.' };
+  }
+}
+
+/**
  * Menolak kajian (Status -> rejected) dengan alasan yang jelas
  */
 export async function rejectSession(sessionId: string, reason: string) {

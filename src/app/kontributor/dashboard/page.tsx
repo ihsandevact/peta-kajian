@@ -6,13 +6,8 @@ import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { submitKajian } from '@/app/actions/kajian'
 import { extractKajianFromPoster } from '@/app/actions/ai-poster'
-import Map, { Marker, NavigationControl } from 'react-map-gl/maplibre'
-import { setWorkerUrl } from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
-
-setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs')
-
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL'
+import VenueLocationPicker from '@/components/VenueLocationPicker'
+import { searchPlaces } from '@/lib/services/geocoding'
 
 import RecurringRuleSelector from '@/components/RecurringRuleSelector'
 import { RecurringRule } from '@/utils/recurring'
@@ -59,6 +54,11 @@ export default function DashboardPage() {
   const needsStream = mode !== 'offline'
 
   // AI Scanner States
+  interface QuotaExhaustedInfo {
+    resetAt?: string;
+    retryDelayText?: string;
+  }
+  const [quotaExhaustedInfo, setQuotaExhaustedInfo] = useState<QuotaExhaustedInfo | null>(null)
   const [posterFile, setPosterFile] = useState<File | null>(null)
   const [posterPreview, setPosterPreview] = useState<string | null>(null)
   const [isScanningAi, setIsScanningAi] = useState(false)
@@ -66,62 +66,48 @@ export default function DashboardPage() {
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Cek cache status kuota AI dari sessionStorage
+  useEffect(() => {
+    try {
+      const cached = sessionStorage.getItem('ai_quota_exhausted')
+      if (cached) {
+        const parsed: QuotaExhaustedInfo = JSON.parse(cached)
+        if (parsed.resetAt) {
+          const resetTime = new Date(parsed.resetAt).getTime()
+          if (Date.now() < resetTime) {
+            setQuotaExhaustedInfo(parsed)
+            return
+          } else {
+            sessionStorage.removeItem('ai_quota_exhausted')
+          }
+        } else {
+          setQuotaExhaustedInfo(parsed)
+        }
+      }
+    } catch {}
+  }, [])
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [submittedData, setSubmittedData] = useState<{
+    sessionId?: string;
+    title: string;
+    speakerName: string;
+    venueName?: string;
+    isPending: boolean;
+  } | null>(null)
   const formRef = useRef<HTMLFormElement>(null)
 
-  // Map States
-  const [viewState, setViewState] = useState({
-    longitude: 106.816666,
-    latitude: -6.200000,
-    zoom: 11,
-  })
+  // Map / Location State
   const [markerPos, setMarkerPos] = useState({ lat: -6.200000, lng: 106.816666 })
-  const [venueQuery, setVenueQuery] = useState('')
-  const [isSearchingLocation, setIsSearchingLocation] = useState(false)
-  const [searchResults, setSearchResults] = useState<any[]>([])
-
-  const handleSearchLocation = async () => {
-    if (!venueQuery) return
-    setIsSearchingLocation(true)
-    setSearchResults([])
-    try {
-      const res = await fetch(
-        `https://api.maptiler.com/geocoding/${encodeURIComponent(venueQuery)}.json?key=${MAPTILER_KEY}&bbox=95.0,-11.0,141.0,6.0&limit=5`
-      )
-      const data = await res.json()
-      if (data.features && data.features.length > 0) {
-        setSearchResults(data.features)
-        if (data.features.length === 1) {
-          selectLocation(data.features[0])
-        }
-      } else {
-        alert('Area tidak ditemukan. Coba ketik nama kota atau kecamatan yang lebih umum.')
-      }
-    } catch (e) {
-      console.error(e)
-      alert('Gagal mencari lokasi.')
-    }
-    setIsSearchingLocation(false)
-  }
-
-  const selectLocation = (feature: any) => {
-    const [lng, lat] = feature.center
-    setViewState({ longitude: lng, latitude: lat, zoom: 15 })
-    setMarkerPos({ lat, lng })
-    setSearchResults([])
-  }
 
   // Geocoding helper for AI extraction
   const geocodeAddress = async (query: string) => {
     if (!query) return
     try {
-      const res = await fetch(
-        `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${MAPTILER_KEY}&bbox=95.0,-11.0,141.0,6.0&limit=1`
-      )
-      const data = await res.json()
-      if (data.features && data.features.length > 0) {
-        selectLocation(data.features[0])
+      const places = await searchPlaces(query)
+      if (places.length > 0) {
+        setMarkerPos({ lat: places[0].lat, lng: places[0].lng })
       }
     } catch (e) {
       console.error('AI auto geocoding error:', e)
@@ -130,6 +116,14 @@ export default function DashboardPage() {
 
   // Scan Poster Handler
   const handleScanPoster = async (fileToScan: File) => {
+    if (quotaExhaustedInfo) {
+      setMessage({
+        type: 'error',
+        text: 'Fitur AI sedang dinonaktifkan sementara karena kuota harian telah habis. Silakan isi form kajian secara manual.',
+      })
+      return
+    }
+
     setIsScanningAi(true)
     setAiScanSuccess(null)
     setMessage(null)
@@ -164,14 +158,12 @@ export default function DashboardPage() {
 
         if (d.venue_name) {
           setVenueName(d.venue_name)
-          setVenueQuery(d.venue_name)
         }
 
         // Auto move pin if geocoded location exists
         if (d.geocodedLocation) {
           const { lat, lng } = d.geocodedLocation
           setMarkerPos({ lat, lng })
-          setViewState({ longitude: lng, latitude: lat, zoom: 15 })
         } else if (d.venue_name && d.mode !== 'online') {
           geocodeAddress(d.venue_name)
         }
@@ -180,15 +172,47 @@ export default function DashboardPage() {
           'Alhamdulillah! Data kajian berhasil diekstrak otomatis dari poster. Silakan periksa kolom-kolom di bawah dan sesuaikan pin lokasi jika perlu.'
         )
       } else {
-        setMessage({
-          type: 'error',
-          text: res.error || 'Gagal mengekstrak data dari poster kajian.',
-        })
+        if (res.isQuotaExhausted) {
+          const qInfo: QuotaExhaustedInfo = {
+            resetAt: res.resetAt,
+            retryDelayText: res.retryDelayText,
+          }
+          setQuotaExhaustedInfo(qInfo)
+          try {
+            sessionStorage.setItem('ai_quota_exhausted', JSON.stringify(qInfo))
+          } catch {}
+
+          setMessage({
+            type: 'error',
+            text: res.error || 'Kuota harian pemindaian AI saat ini telah habis. Silakan lengkapi formulir di bawah secara manual.',
+          })
+        } else {
+          let errText = res.error || 'Gagal mengekstrak data dari poster kajian.'
+          if (typeof errText === 'string' && errText.trim().startsWith('{')) {
+            errText = 'Gagal memindai poster secara otomatis. Silakan lengkapi formulir kajian secara manual.'
+          }
+          setMessage({
+            type: 'error',
+            text: errText,
+          })
+        }
       }
     } catch (err: any) {
+      let errMsg = err?.message || 'Terjadi kesalahan sistem saat memproses poster.'
+      if (
+        typeof errMsg === 'string' &&
+        (errMsg.trim().startsWith('{') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('429'))
+      ) {
+        errMsg = 'Layanan pemindaian AI saat ini sedang mencapai batas kuota. Silakan isi rincian kajian secara manual.'
+        const qInfo: QuotaExhaustedInfo = { retryDelayText: 'beberapa waktu ke depan' }
+        setQuotaExhaustedInfo(qInfo)
+        try {
+          sessionStorage.setItem('ai_quota_exhausted', JSON.stringify(qInfo))
+        } catch {}
+      }
       setMessage({
         type: 'error',
-        text: err.message || 'Terjadi kesalahan sistem saat memproses poster.',
+        text: errMsg,
       })
     } finally {
       setIsScanningAi(false)
@@ -201,7 +225,14 @@ export default function DashboardPage() {
       setPosterFile(file)
       const preview = URL.createObjectURL(file)
       setPosterPreview(preview)
-      handleScanPoster(file)
+      if (quotaExhaustedInfo) {
+        setMessage({
+          type: 'error',
+          text: 'Berkas poster berhasil disimpan. Karena kuota AI sedang habis, silakan isi formulir kajian di bawah secara manual.',
+        })
+      } else {
+        handleScanPoster(file)
+      }
     }
   }
 
@@ -213,7 +244,14 @@ export default function DashboardPage() {
       setPosterFile(file)
       const preview = URL.createObjectURL(file)
       setPosterPreview(preview)
-      handleScanPoster(file)
+      if (quotaExhaustedInfo) {
+        setMessage({
+          type: 'error',
+          text: 'Berkas poster berhasil disimpan. Karena kuota AI sedang habis, silakan isi formulir kajian di bawah secara manual.',
+        })
+      } else {
+        handleScanPoster(file)
+      }
     }
   }
 
@@ -285,42 +323,67 @@ export default function DashboardPage() {
   }, [router])
 
   async function onSubmit(formData: FormData) {
+    if (isSubmitting) return
     setIsSubmitting(true)
     setMessage(null)
-    const res = await submitKajian(formData)
-    setIsSubmitting(false)
 
-    if (res.success) {
-      if (res.isPending) {
-        setMessage({
-          type: 'success',
-          text: 'Alhamdulillah, kajian berhasil dikirim dan saat ini masuk antrean kurasi Admin sebelum tayang di peta publik.',
+    const submittedTitle = title.trim()
+    const submittedSpeaker = speakerName.trim()
+    const submittedVenue = venueName.trim()
+
+    try {
+      const res = await submitKajian(formData)
+      setIsSubmitting(false)
+
+      if (res.success) {
+        setSubmittedData({
+          sessionId: res.sessionId,
+          title: submittedTitle,
+          speakerName: submittedSpeaker,
+          venueName: submittedVenue,
+          isPending: !!res.isPending,
         })
+
+        if (res.isPending) {
+          setMessage({
+            type: 'success',
+            text: 'Alhamdulillah, kajian berhasil dikirim dan saat ini masuk antrean kurasi Admin sebelum tayang di peta publik.',
+          })
+        } else {
+          setMessage({
+            type: 'success',
+            text: 'Alhamdulillah, kajian berhasil dipublikasikan dan langsung tayang di Peta!',
+          })
+        }
+
+        // Reset states
+        setTitle('')
+        setSpeakerName('')
+        setBookTitle('')
+        setStartDatetime('')
+        setVenueName('')
+        setMarkerPos({ lat: -6.200000, lng: 106.816666 })
+        setStreamUrl('')
+        setPosterUrl('')
+        setAudience('umum')
+        setMode('offline')
+        setIsRecurring(false)
+        handleClearPoster()
+        formRef.current?.reset()
+
+        setTimeout(() => setMessage(null), 10000)
       } else {
-        setMessage({
-          type: 'success',
-          text: 'Alhamdulillah, kajian berhasil dipublikasikan dan langsung tayang di Peta!',
-        })
+        setMessage({ type: 'error', text: res.error || 'Terjadi kesalahan saat memublikasikan.' })
+        window.scrollTo({ top: 300, behavior: 'smooth' })
       }
-
-      // Reset states
-      setTitle('')
-      setSpeakerName('')
-      setBookTitle('')
-      setStartDatetime('')
-      setVenueName('')
-      setVenueQuery('')
-      setStreamUrl('')
-      setPosterUrl('')
-      setAudience('umum')
-      setMode('offline')
-      setIsRecurring(false)
-      handleClearPoster()
-      formRef.current?.reset()
-
-      setTimeout(() => setMessage(null), 7000)
-    } else {
-      setMessage({ type: 'error', text: res.error || 'Terjadi kesalahan saat memublikasikan.' })
+    } catch (err: any) {
+      setIsSubmitting(false)
+      let errText = err?.message || 'Terjadi kesalahan sistem saat memproses kajian.'
+      if (typeof errText === 'string' && errText.trim().startsWith('{')) {
+        errText = 'Terjadi kesalahan sistem saat memproses kajian. Silakan coba beberapa saat lagi.'
+      }
+      setMessage({ type: 'error', text: errText })
+      window.scrollTo({ top: 300, behavior: 'smooth' })
     }
   }
 
@@ -517,18 +580,28 @@ export default function DashboardPage() {
         <div className="bg-gradient-to-br from-emerald-500/10 via-surface-container-lowest to-surface-container-low border border-emerald-500/25 rounded-2xl p-4 sm:p-6 shadow-sm relative overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-sm shrink-0">
-                <span className="material-symbols-outlined text-[22px]">auto_awesome</span>
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0 ${
+                quotaExhaustedInfo
+                  ? 'bg-gradient-to-tr from-amber-600 to-amber-500 text-white'
+                  : 'bg-gradient-to-tr from-emerald-600 to-teal-500 text-white'
+              }`}>
+                <span className="material-symbols-outlined text-[22px]">
+                  {quotaExhaustedInfo ? 'hourglass_empty' : 'auto_awesome'}
+                </span>
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-base sm:text-lg font-bold text-on-surface">Pindai Poster dengan AI</h2>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-600 text-white tracking-wider uppercase">
-                    Otomatis
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold text-white tracking-wider uppercase ${
+                    quotaExhaustedInfo ? 'bg-amber-600' : 'bg-emerald-600'
+                  }`}>
+                    {quotaExhaustedInfo ? 'Kuota Habis' : 'Otomatis'}
                   </span>
                 </div>
                 <p className="text-xs text-on-surface-variant">
-                  Cukup unggah gambar/flyer kajian, AI akan mengekstrak data dan mengisi form di bawah secara otomatis!
+                  {quotaExhaustedInfo
+                    ? 'Layanan pemindaian otomatis sedang istirahat. Anda tetap bisa melampirkan berkas poster & mengisi formulir di bawah secara manual.'
+                    : 'Cukup unggah gambar/flyer kajian, AI akan mengekstrak data dan mengisi form di bawah secara otomatis!'}
                 </p>
               </div>
             </div>
@@ -544,6 +617,29 @@ export default function DashboardPage() {
               </button>
             )}
           </div>
+
+          {/* Banner Notifikasi Kuota Habis & Panduan Manual */}
+          {quotaExhaustedInfo && (
+            <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-950 dark:text-amber-200 text-xs flex items-start gap-3">
+              <span className="material-symbols-outlined text-[20px] text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                lock_clock
+              </span>
+              <div className="flex-1">
+                <span className="font-bold block text-sm text-amber-900 dark:text-amber-300">
+                  Batas Kuota Pemindaian AI Harian Tercapai
+                </span>
+                <p className="mt-1 leading-relaxed text-on-surface-variant text-[11px] sm:text-xs">
+                  Batas kuota harian layanan pemindaian Gemini AI untuk publik telah tercapai.
+                  {quotaExhaustedInfo.retryDelayText && (
+                    <span className="font-semibold block my-1 text-amber-800 dark:text-amber-400">
+                      Estimasi reset kuota: {quotaExhaustedInfo.retryDelayText}
+                    </span>
+                  )}
+                  Poster Anda tetap tersimpan dan tidak hilang. Silakan lanjutkan pengisian formulir kajian di bawah secara manual.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Hidden File Input */}
           <input
@@ -581,7 +677,9 @@ export default function DashboardPage() {
                   Format gambar JPG, PNG, atau WEBP (Maksimal 6 MB)
                 </p>
               </div>
-              <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-xs font-semibold shadow-xs transition-colors mt-1">
+              <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-xs transition-colors mt-1 text-white ${
+                quotaExhaustedInfo ? 'bg-amber-600 hover:bg-amber-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}>
                 <span className="material-symbols-outlined text-[16px]">upload</span>
                 <span>Pilih Gambar Poster</span>
               </span>
@@ -627,6 +725,11 @@ export default function DashboardPage() {
                       </span>
                       <span>{aiScanSuccess}</span>
                     </div>
+                  ) : quotaExhaustedInfo ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-300 font-medium mt-1.5 flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px]">info</span>
+                      <span>Poster tersimpan. Silakan lengkapi formulir kajian di bawah secara manual.</span>
+                    </p>
                   ) : (
                     <p className="text-xs text-on-surface-variant mt-1.5">
                       Poster siap dipindai ulang jika hasil sebelumnya ingin diperbarui.
@@ -638,13 +741,24 @@ export default function DashboardPage() {
                   <button
                     type="button"
                     onClick={() => posterFile && handleScanPoster(posterFile)}
-                    disabled={isScanningAi}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition-colors"
+                    disabled={isScanningAi || !!quotaExhaustedInfo}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      quotaExhaustedInfo
+                        ? 'bg-surface-container-high text-on-surface-variant/70 cursor-not-allowed border border-surface-container-highest'
+                        : 'bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white'
+                    }`}
+                    title={quotaExhaustedInfo ? 'Pemindaian AI dinonaktifkan sementara karena kuota habis' : undefined}
                   >
                     <span className="material-symbols-outlined text-[16px]">
-                      {isScanningAi ? 'progress_activity' : 'refresh'}
+                      {isScanningAi ? 'progress_activity' : quotaExhaustedInfo ? 'lock' : 'refresh'}
                     </span>
-                    <span>{isScanningAi ? 'Sedang Memindai...' : 'Pindai Ulang dengan AI'}</span>
+                    <span>
+                      {isScanningAi
+                        ? 'Sedang Memindai...'
+                        : quotaExhaustedInfo
+                        ? 'Kuota AI Habis (Isi Manual)'
+                        : 'Pindai Ulang dengan AI'}
+                    </span>
                   </button>
 
                   <button
@@ -686,7 +800,11 @@ export default function DashboardPage() {
               <span className="material-symbols-outlined text-[20px] shrink-0">
                 {message.type === 'success' ? 'check_circle' : 'error'}
               </span>
-              <span>{message.text}</span>
+              <span>
+                {message.text?.trim().startsWith('{')
+                  ? 'Layanan AI sedang mencapai batas kuota harian. Silakan lengkapi formulir kajian secara manual.'
+                  : message.text}
+              </span>
             </div>
           )}
 
@@ -818,108 +936,14 @@ export default function DashboardPage() {
             )}
 
             {needsVenue && (
-              <div className="flex flex-col gap-4 border border-surface-container-high rounded-xl p-4 bg-surface-container-lowest animate-in fade-in slide-in-from-top-2 duration-300">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs sm:text-sm font-semibold text-on-surface">
-                    Nama Masjid / Lokasi <span className="text-error">*</span>
-                  </span>
-                  <input
-                    type="text"
-                    name="venue_name"
-                    value={venueName}
-                    onChange={(e) => setVenueName(e.target.value)}
-                    className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-xs sm:text-sm focus:outline-none focus:border-primary"
-                    placeholder="Contoh: Masjid Nurul Iman Blok M, Kebayoran Baru"
-                    required
-                  />
-                </label>
-
-                <div className="border-t border-surface-container-high pt-3">
-                  <label className="flex flex-col gap-1.5 relative">
-                    <span className="text-xs sm:text-sm font-semibold text-on-surface">
-                      Tandai Titik Peta (Wajib) <span className="text-error">*</span>
-                    </span>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={venueQuery}
-                        onChange={(e) => setVenueQuery(e.target.value)}
-                        className="w-full bg-surface-container-low border border-surface-container-high rounded-lg px-3 py-2 text-xs sm:text-sm focus:outline-none focus:border-primary"
-                        placeholder="Cari nama masjid, kecamatan, atau kota..."
-                      />
-                      <button
-                        type="button"
-                        onClick={handleSearchLocation}
-                        disabled={isSearchingLocation}
-                        className="px-3.5 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex items-center justify-center min-w-[70px]"
-                      >
-                        {isSearchingLocation ? (
-                          <span className="material-symbols-outlined animate-spin text-[18px]">
-                            progress_activity
-                          </span>
-                        ) : (
-                          'Cari'
-                        )}
-                      </button>
-                    </div>
-
-                    {searchResults.length > 1 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-surface-container-high rounded-lg shadow-lg z-50 overflow-hidden">
-                        <ul className="max-h-48 overflow-y-auto">
-                          {searchResults.map((feat) => (
-                            <li
-                              key={feat.id}
-                              onClick={() => selectLocation(feat)}
-                              className="px-3 py-2 text-xs sm:text-sm hover:bg-surface-container-low cursor-pointer border-b border-surface-container-high last:border-b-0"
-                            >
-                              <span className="font-semibold text-on-surface block">{feat.text}</span>
-                              <span className="text-[11px] text-on-surface-variant line-clamp-1">
-                                {feat.place_name}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    <span className="text-[11px] text-outline mt-1 leading-tight">
-                      Geser peta di bawah dan tempatkan <b>Pin Merah</b> persis di atas bangunan masjid.
-                    </span>
-                  </label>
-                </div>
-
-                {/* Peta Mini */}
-                <div className="w-full h-[240px] sm:h-[280px] rounded-lg overflow-hidden border border-outline-variant relative">
-                  <div className="absolute top-2 left-2 z-10 bg-surface/90 backdrop-blur text-[11px] px-2.5 py-1 rounded shadow-sm text-on-surface font-medium border border-surface-container-high pointer-events-none">
-                    Geser pin merah ke lokasi persis masjid
-                  </div>
-                  <Map
-                    {...viewState}
-                    onMove={(evt) => setViewState(evt.viewState)}
-                    mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`}
-                    attributionControl={false}
-                  >
-                    <NavigationControl position="bottom-right" />
-                    <Marker
-                      longitude={markerPos.lng}
-                      latitude={markerPos.lat}
-                      draggable
-                      onDragEnd={(e) => setMarkerPos({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
-                    >
-                      <div className="text-error cursor-grab active:cursor-grabbing transform -translate-y-1/2">
-                        <span
-                          className="material-symbols-outlined text-[36px]"
-                          style={{ fontVariationSettings: "'FILL' 1" }}
-                        >
-                          location_on
-                        </span>
-                      </div>
-                    </Marker>
-                  </Map>
-                </div>
-
-                {/* Hidden Inputs for coordinates */}
-                <input type="hidden" name="lat" value={markerPos.lat} />
-                <input type="hidden" name="lng" value={markerPos.lng} />
+              <div className="border border-surface-container-high rounded-xl p-4 bg-surface-container-lowest animate-in fade-in slide-in-from-top-2 duration-300">
+                <VenueLocationPicker
+                  venueName={venueName}
+                  onVenueNameChange={setVenueName}
+                  markerPos={markerPos}
+                  onMarkerPosChange={setMarkerPos}
+                  required
+                />
               </div>
             )}
 
@@ -993,6 +1017,113 @@ export default function DashboardPage() {
           </form>
         </div>
       </main>
+
+      {/* Blocking Full-Screen Loading Overlay saat Menerbitkan Kajian */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-surface border border-surface-container-high rounded-3xl p-6 sm:p-8 max-w-sm w-full text-center shadow-2xl flex flex-col items-center gap-4 animate-in zoom-in-95 duration-200">
+            <div className="w-16 h-16 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center relative">
+              <span className="material-symbols-outlined text-[36px] animate-spin">
+                progress_activity
+              </span>
+              <div className="absolute inset-0 rounded-full border-2 border-emerald-500/30 animate-ping pointer-events-none"></div>
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-bold text-on-surface">
+                Sedang Menerbitkan Kajian...
+              </h3>
+              <p className="text-xs text-on-surface-variant mt-1.5 leading-relaxed">
+                Mohon tunggu sebentar, data kajian sedang divalidasi dan disinkronkan ke server.
+              </p>
+            </div>
+            <div className="w-full bg-surface-container-low rounded-full h-1.5 overflow-hidden">
+              <div className="bg-emerald-600 h-full w-2/3 animate-[pulse_1.5s_infinite]"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Sukses Submit Kajian */}
+      {submittedData && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-surface border border-surface-container-high rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl flex flex-col items-center text-center animate-in zoom-in-95 duration-200 relative overflow-hidden">
+            {/* Dekorasi Cahaya Sukses */}
+            <div className="absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 bg-emerald-500/15 rounded-full blur-2xl pointer-events-none"></div>
+
+            {/* Ikon Sukses */}
+            <div className="w-20 h-20 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 shadow-inner ring-8 ring-emerald-500/10">
+              <span className="material-symbols-outlined text-[48px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                check_circle
+              </span>
+            </div>
+
+            {/* Judul & Penjelasan Status */}
+            <h3 className="text-lg sm:text-xl font-bold text-on-surface tracking-tight">
+              {submittedData.isPending
+                ? 'Alhamdulillah, Kajian Berhasil Dikirim!'
+                : 'Alhamdulillah, Kajian Berhasil Diterbitkan!'}
+            </h3>
+            <p className="text-xs sm:text-sm text-on-surface-variant mt-2 leading-relaxed max-w-sm">
+              {submittedData.isPending ? (
+                <span>
+                  Jadwal kajian telah masuk ke <strong>antrean kurasi Admin</strong> untuk verifikasi singkat sebelum tayang di peta publik.
+                </span>
+              ) : (
+                <span>
+                  Jadwal kajian kini <strong>langsung aktif</strong> dan dapat ditemukan oleh jamaah di Peta Kajian.
+                </span>
+              )}
+            </p>
+
+            {/* Kotak Ringkasan Data Kajian yang Baru Disubmit */}
+            <div className="w-full bg-surface-container-lowest border border-surface-container-high rounded-2xl p-4 my-5 text-left text-xs space-y-2">
+              <div className="flex items-start gap-2">
+                <span className="material-symbols-outlined text-[16px] text-primary shrink-0 mt-0.5">menu_book</span>
+                <span className="font-semibold text-on-surface line-clamp-1">{submittedData.title || 'Kajian Rutin'}</span>
+              </div>
+              {submittedData.speakerName && (
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[16px] text-outline shrink-0">record_voice_over</span>
+                  <span className="truncate">{submittedData.speakerName}</span>
+                </div>
+              )}
+              {submittedData.venueName && (
+                <div className="flex items-center gap-2 text-on-surface-variant">
+                  <span className="material-symbols-outlined text-[16px] text-outline shrink-0">location_on</span>
+                  <span className="truncate">{submittedData.venueName}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Tombol Aksi */}
+            <div className="w-full flex flex-col gap-2.5">
+              <Link
+                href={submittedData.sessionId ? `/?session=${submittedData.sessionId}` : '/'}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 shadow-xs"
+              >
+                <span className="material-symbols-outlined text-[18px]">map</span>
+                <span>Lihat di Peta Kajian</span>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() => setSubmittedData(null)}
+                className="w-full py-2.5 bg-surface-container-high hover:bg-surface-container-highest active:bg-surface-container text-on-surface font-semibold rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">add_circle</span>
+                <span>Tambah Kajian Lain</span>
+              </button>
+
+              <Link
+                href="/kontributor/profile"
+                className="text-[11px] text-outline hover:text-primary font-medium py-1 transition-colors"
+              >
+                Buka Riwayat Kontribusi Saya
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

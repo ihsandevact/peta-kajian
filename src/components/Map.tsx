@@ -274,21 +274,27 @@ export default function AppMap({
             >
               {isSelected ? (
                 <div className="relative cursor-pointer group">
-                  <div className="absolute -inset-2 rounded-full bg-primary-container/30 animate-ping"></div>
-                  <div className="relative flex items-center gap-1 bg-primary-container text-on-primary px-2.5 py-1 rounded-full shadow-md transition-transform group-hover:scale-105">
-                    <span className="material-symbols-outlined text-[14px]">mosque</span>
-                    <span className="text-[13px] font-semibold tracking-tight">{sessionTime}</span>
+                  <div className={`absolute -inset-2 rounded-full animate-ping ${session.is_test ? 'bg-amber-500/30' : 'bg-primary-container/30'}`}></div>
+                  <div className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full shadow-md transition-transform group-hover:scale-105 ${
+                    session.is_test
+                      ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+                      : 'bg-primary-container text-on-primary'
+                  }`}>
+                    <span className="material-symbols-outlined text-[14px]">{session.is_test ? 'science' : 'mosque'}</span>
+                    <span className="text-[13px] font-semibold tracking-tight">{session.is_test ? 'TEST' : sessionTime}</span>
                   </div>
                 </div>
               ) : (
                 <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow transition-all group-hover:scale-105 cursor-pointer
-                  ${isAkhwat 
-                    ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary' 
-                    : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
+                  ${session.is_test
+                    ? 'bg-amber-500 text-white ring-1 ring-amber-300'
+                    : isAkhwat 
+                      ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary' 
+                      : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
                   }
                 `}>
-                  <span className="material-symbols-outlined text-[12px]">{isAkhwat ? 'female' : 'schedule'}</span>
-                  <span className="text-[11px] font-medium">{sessionTime}</span>
+                  <span className="material-symbols-outlined text-[12px]">{session.is_test ? 'science' : isAkhwat ? 'female' : 'schedule'}</span>
+                  <span className="text-[11px] font-medium">{session.is_test ? 'TEST' : sessionTime}</span>
                 </div>
               )}
             </Marker>

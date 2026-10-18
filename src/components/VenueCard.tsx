@@ -200,6 +200,17 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
           </div>
         )}
 
+        {/* Banner Mode Pengujian Khusus Admin */}
+        {session.is_test && (
+          <div className="px-3 py-1.5 bg-amber-500/15 border-b border-amber-500/30 flex items-center justify-between text-amber-800 dark:text-amber-300 text-[11px] font-bold shrink-0">
+            <span className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[15px] text-amber-600">science</span>
+              <span>MODE PENGUJIAN (KHUSUS ADMIN)</span>
+            </span>
+            <span className="text-[10px] font-medium opacity-80 hidden xs:inline">Hanya Anda yg melihat</span>
+          </div>
+        )}
+
         <div className="p-2.5 sm:p-3">
           {/* Header Badges & Action Buttons */}
           <div className="flex items-center justify-between pb-1.5 border-b border-surface-container-high/60 mb-1.5">

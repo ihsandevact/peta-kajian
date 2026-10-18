@@ -247,6 +247,13 @@ export default function KajianPreviewModal({
                       <span>{isPast ? 'Siaran Selesai' : 'Live Streaming'}</span>
                     </span>
                   )}
+
+                  {session.is_test && (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                      <span className="material-symbols-outlined text-[14px] text-amber-600">science</span>
+                      <span>TEST ADMIN</span>
+                    </span>
+                  )}
                 </div>
 
                 <button
@@ -258,6 +265,19 @@ export default function KajianPreviewModal({
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
               </div>
+
+              {/* Banner Penanda Kajian Testing Khusus Admin */}
+              {session.is_test && (
+                <div className="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-300">
+                  <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0 mt-0.5">science</span>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-amber-900 dark:text-amber-200">Mode Pengujian Internal (Khusus Admin)</span>
+                    <span className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-0.5">
+                      Kajian ini dibuat untuk keperluan pengujian fitur peta, rute jalan, dan navigasi. Hanya akun Administrator yang dapat melihat kajian ini.
+                    </span>
+                  </div>
+                </div>
+              )}
 
               {/* Banner Penanda Arsip Kajian */}
               {isPast && (

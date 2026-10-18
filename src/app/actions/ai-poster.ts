@@ -2,6 +2,8 @@
 
 import { createClient } from '@/utils/supabase/server';
 import { GoogleGenAI } from '@google/genai';
+import { searchPlaces } from '@/lib/services/geocoding';
+import { getUserRoleAndStatus, ADMIN_EMAILS } from '@/lib/services/admin';
 
 export interface ExtractedKajianData {
   title: string;
@@ -83,18 +85,117 @@ const responseSchema = {
   required: ['title', 'speaker_name', 'mode', 'audience', 'is_recurring'],
 };
 
-export async function extractKajianFromPoster(
-  formData: FormData
-): Promise<{ success: boolean; data?: ExtractedKajianData; error?: string }> {
-  // 1. Verifikasi User Login & Hak Akses Kontributor/Admin
+interface SanitizeResult {
+  error: string;
+  isQuotaExhausted: boolean;
+  retryDelayText?: string;
+  resetAt?: string;
+}
+
+function sanitizeAiError(error: any): SanitizeResult {
+  const rawMsg = String(error?.message || error || '');
+  let is429 = false;
+  let retrySeconds: number | null = null;
+  let retryText = '';
+
+  // Coba parse jika rawMsg mengandung string JSON
+  if (rawMsg.includes('{') && rawMsg.includes('}')) {
+    try {
+      const match = rawMsg.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        const errObj = parsed.error || parsed;
+        if (
+          errObj.code === 429 ||
+          errObj.status === 'RESOURCE_EXHAUSTED' ||
+          String(errObj.message || '').toLowerCase().includes('quota')
+        ) {
+          is429 = true;
+        }
+
+        if (Array.isArray(errObj.details)) {
+          for (const d of errObj.details) {
+            if (d.retryDelay) {
+              const sec = parseInt(d.retryDelay);
+              if (!isNaN(sec)) retrySeconds = sec;
+            }
+          }
+        }
+
+        const retryMatch = String(errObj.message || '').match(/retry in\s+([0-9a-zA-Z\.\s]+)/i);
+        if (retryMatch) {
+          retryText = retryMatch[1].trim();
+        }
+      }
+    } catch {
+      // Abaikan jika bukan format JSON
+    }
+  }
+
+  if (
+    is429 ||
+    error?.status === 429 ||
+    rawMsg.includes('429') ||
+    rawMsg.includes('RESOURCE_EXHAUSTED') ||
+    rawMsg.toLowerCase().includes('quota')
+  ) {
+    let delayDescription = '';
+    if (retrySeconds) {
+      const hours = Math.floor(retrySeconds / 3600);
+      const minutes = Math.floor((retrySeconds % 3600) / 60);
+      delayDescription = hours > 0 ? `~${hours} jam ${minutes > 0 ? `${minutes} menit` : ''}` : `~${minutes} menit`;
+    } else if (retryText) {
+      const cleanH = retryText.match(/(\d+)h/i);
+      const cleanM = retryText.match(/(\d+)m/i);
+      if (cleanH || cleanM) {
+        delayDescription = `~${cleanH ? `${cleanH[1]} jam ` : ''}${cleanM ? `${cleanM[1]} menit` : ''}`.trim();
+      } else {
+        delayDescription = retryText;
+      }
+    }
+
+    const resetDate = retrySeconds ? new Date(Date.now() + retrySeconds * 1000).toISOString() : undefined;
+
+    return {
+      isQuotaExhausted: true,
+      retryDelayText: delayDescription || '~12 jam',
+      resetAt: resetDate,
+      error: `Batas kuota harian pemindaian AI dari Google telah tercapai${
+        delayDescription ? ` (aktif kembali dalam: ${delayDescription})` : ''
+      }. Jangan khawatir, gambar poster Anda tetap tersimpan. Silakan lengkapi formulir kajian di bawah secara manual.`,
+    };
+  }
+
+  if (error?.status === 503 || rawMsg.includes('503') || rawMsg.includes('UNAVAILABLE')) {
+    return {
+      isQuotaExhausted: false,
+      error: 'Server AI Google saat ini sedang sibuk memproses antrean. Silakan coba kembali beberapa saat lagi atau isi formulir secara manual.',
+    };
+  }
+
+  return {
+    isQuotaExhausted: false,
+    error: 'Gagal mengekstrak data dari poster secara otomatis. Silakan lengkapi data jadwal kajian melalui formulir di bawah.',
+  };
+}
+
+export async function extractKajianFromPoster(formData: FormData): Promise<{
+  success: boolean;
+  data?: ExtractedKajianData;
+  error?: string;
+  isQuotaExhausted?: boolean;
+  retryDelayText?: string;
+  resetAt?: string;
+}> {
+  // 1. Verifikasi Autentikasi Pengguna
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
+
   if (!user) {
-    return { success: false, error: 'Silakan login terlebih dahulu untuk menggunakan fitur AI.' };
+    return { success: false, error: 'Anda harus login untuk menggunakan fitur pemindaian poster.' };
   }
 
   // Verifikasi role kontributor atau admin
-  const { ADMIN_EMAILS } = await import('@/lib/services/admin');
   const isAdminByEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim());
   let isAuthorized = !!isAdminByEmail;
 
@@ -102,14 +203,20 @@ export async function extractKajianFromPoster(
     try {
       const { data: roleData } = await supabase
         .from('user_roles')
-        .select('role')
+        .select('role, is_trusted')
         .eq('user_id', user.id)
         .maybeSingle();
 
-      if (roleData && (roleData.role === 'kontributor' || roleData.role === 'admin' || roleData.role === 'superadmin')) {
+      if (
+        roleData &&
+        (roleData.role === 'kontributor' ||
+          roleData.role === 'admin' ||
+          roleData.role === 'superadmin' ||
+          roleData.is_trusted)
+      ) {
         isAuthorized = true;
       } else {
-        // Cek legacy contributor (pernah membuat session)
+        // Cek riwayat session jika user kontributor lama
         const { count } = await supabase
           .from('study_sessions')
           .select('id', { count: 'exact', head: true })
@@ -130,8 +237,12 @@ export async function extractKajianFromPoster(
     };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
+  const rawApiKeys = (process.env.GEMINI_API_KEY || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+
+  if (rawApiKeys.length === 0) {
     return {
       success: false,
       error: 'Konfigurasi GEMINI_API_KEY belum tersedia di server. Hubungi administrator.',
@@ -184,52 +295,63 @@ Aturan Penting:
 10. stream_url: Isi hanya jika link URL live streaming (YouTube, Zoom) tertulis jelas. Jangan mengarang URL. Jika tidak ada, isi null.
 `;
 
-    const ai = new GoogleGenAI({ apiKey });
+    // Model multimodal aktif berkuota stabil
+    const modelsToTry = [
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.8-flash',
+      'gemini-flash-latest',
+    ];
 
-    // Model multimodal aktif
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
     let lastError: any = null;
     let extractedJsonText: string | null = null;
 
-    for (const modelName of modelsToTry) {
-      try {
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: [
-            {
-              role: 'user',
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: posterFile.type,
-                    data: base64Data,
-                  },
-                },
-                {
-                  text: promptText,
-                },
-              ],
-            },
-          ],
-          config: {
-            responseMimeType: 'application/json',
-            responseSchema: responseSchema,
-            temperature: 0.1,
-          },
-        });
+    // Multi-key failover pool
+    for (const key of rawApiKeys) {
+      const ai = new GoogleGenAI({ apiKey: key });
 
-        if (response && response.text) {
-          extractedJsonText = response.text;
-          break;
-        }
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`Model ${modelName} gagal atau sedang sibuk:`, err?.status || err?.message || err);
-        // Jika 503 (server sibuk), beri jeda singkat sebelum mencoba model berikutnya
-        if (err?.status === 503) {
-          await new Promise((r) => setTimeout(r, 800));
+      for (const modelName of modelsToTry) {
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents: [
+              {
+                role: 'user',
+                parts: [
+                  {
+                    inlineData: {
+                      mimeType: posterFile.type,
+                      data: base64Data,
+                    },
+                  },
+                  {
+                    text: promptText,
+                  },
+                ],
+              },
+            ],
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: responseSchema,
+              temperature: 0.1,
+            },
+          });
+
+          if (response && response.text) {
+            extractedJsonText = response.text;
+            break;
+          }
+        } catch (err: any) {
+          lastError = err;
+          console.warn(`Model ${modelName} gagal:`, err?.status || err?.message || err);
+          if (err?.status === 503) {
+            await new Promise((r) => setTimeout(r, 600));
+          }
         }
       }
+
+      if (extractedJsonText) break;
     }
 
     if (!extractedJsonText) {
@@ -239,19 +361,14 @@ Aturan Penting:
     const parsedData: ExtractedKajianData = JSON.parse(extractedJsonText);
 
     // 4. Geocoding otomatis jika ada venue_name fisik
-    const maptilerKey = process.env.NEXT_PUBLIC_MAPTILER_KEY;
-    if (parsedData.venue_name && maptilerKey && parsedData.mode !== 'online') {
+    if (parsedData.venue_name && parsedData.mode !== 'online') {
       try {
-        const geoUrl = `https://api.maptiler.com/geocoding/${encodeURIComponent(parsedData.venue_name)}.json?key=${maptilerKey}&bbox=95.0,-11.0,141.0,6.0&limit=1`;
-        const geoRes = await fetch(geoUrl);
-        const geoData = await geoRes.json();
-
-        if (geoData.features && geoData.features.length > 0) {
-          const [lng, lat] = geoData.features[0].center;
+        const places = await searchPlaces(parsedData.venue_name);
+        if (places.length > 0) {
           parsedData.geocodedLocation = {
-            lat,
-            lng,
-            place_name: geoData.features[0].place_name,
+            lat: places[0].lat,
+            lng: places[0].lng,
+            place_name: places[0].placeName,
           };
         }
       } catch (geoErr) {
@@ -265,9 +382,13 @@ Aturan Penting:
     };
   } catch (error: any) {
     console.error('Error in extractKajianFromPoster:', error);
+    const sanitized = sanitizeAiError(error);
     return {
       success: false,
-      error: error.message || 'Terjadi kesalahan saat memproses gambar poster kajian.',
+      error: sanitized.error,
+      isQuotaExhausted: sanitized.isQuotaExhausted,
+      retryDelayText: sanitized.retryDelayText,
+      resetAt: sanitized.resetAt,
     };
   }
 }

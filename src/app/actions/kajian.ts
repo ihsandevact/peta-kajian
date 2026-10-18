@@ -178,11 +178,14 @@ export async function submitKajian(formData: FormData) {
     const isAutoPublish = isUserTrusted || userRole === 'admin';
     const initialStatus = isAutoPublish ? 'confirmed' : 'pending';
     const contributorName = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split('@')[0] || 'Relawan Dakwah'
+    const is_test = userRole === 'admin' && (formData.get('is_test') === 'true' || formData.get('is_test') === 'on')
+
+    const newSessionId = crypto.randomUUID()
 
     const { error: sessionError } = await supabase
       .from('study_sessions')
       .insert({
-        id: crypto.randomUUID(),
+        id: newSessionId,
         venue_id: venueId,
         title,
         speaker_name,
@@ -197,7 +200,8 @@ export async function submitKajian(formData: FormData) {
         stream_url,
         status: initialStatus,
         created_by: user.id,
-        contributor_name: contributorName
+        contributor_name: contributorName,
+        is_test: is_test || false,
       })
 
     if (sessionError) {
@@ -210,7 +214,7 @@ export async function submitKajian(formData: FormData) {
     revalidatePath('/admin')
     revalidatePath('/kontributor/profile')
 
-    return { success: true, isPending: !isAutoPublish }
+    return { success: true, isPending: !isAutoPublish, sessionId: newSessionId }
   } catch (err: any) {
     console.error('Submit Kajian Error:', err)
     return { success: false, error: 'Terjadi kesalahan sistem internal.' }
@@ -243,7 +247,20 @@ export async function updateKajian(formData: FormData) {
       return { success: false, error: 'Data kajian tidak ditemukan.' }
     }
 
-    if (existingSession.created_by && existingSession.created_by !== user.id) {
+    const isAdminByEmail = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())
+    let isAdmin = !!isAdminByEmail
+    if (!isAdmin) {
+      try {
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        if (roleData?.role === 'admin') isAdmin = true
+      } catch {}
+    }
+
+    if (existingSession.created_by && existingSession.created_by !== user.id && !isAdmin) {
       return { success: false, error: 'Anda tidak memiliki izin untuk mengedit kajian ini.' }
     }
 
@@ -345,23 +362,29 @@ export async function updateKajian(formData: FormData) {
     }
 
     // 5. Update study session record
+    const updatePayload: Record<string, any> = {
+      venue_id: venueId,
+      title,
+      speaker_name,
+      book_title,
+      audience_type,
+      start_datetime,
+      is_recurring,
+      recurring_pattern,
+      recurring_rule,
+      poster_url,
+      is_online,
+      stream_url,
+      status,
+    }
+
+    if (isAdmin && formData.has('is_test')) {
+      updatePayload.is_test = formData.get('is_test') === 'true' || formData.get('is_test') === 'on'
+    }
+
     const { error: updateError } = await supabase
       .from('study_sessions')
-      .update({
-        venue_id: venueId,
-        title,
-        speaker_name,
-        book_title,
-        audience_type,
-        start_datetime,
-        is_recurring,
-        recurring_pattern,
-        recurring_rule,
-        poster_url,
-        is_online,
-        stream_url,
-        status,
-      })
+      .update(updatePayload)
       .eq('id', sessionId)
 
     if (updateError) {
@@ -370,6 +393,7 @@ export async function updateKajian(formData: FormData) {
     }
 
     revalidatePath('/')
+    revalidatePath('/admin')
     revalidatePath('/kontributor/profile')
     return { success: true }
   } catch (err: any) {

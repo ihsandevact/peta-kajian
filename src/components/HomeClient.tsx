@@ -454,7 +454,11 @@ export default function HomeClient() {
       }
 
       const startTime = Date.now();
-      const data = await fetchWithTimeout(fetchActiveSessions(), 6000);
+      const isAdmin = currentUserRole === 'admin';
+      const data = await fetchWithTimeout(
+        fetchActiveSessions({ requireLocation: true, includeTestSessions: isAdmin }),
+        6000
+      );
       
       setHasConnectionError(false);
       if (data && data.length > 0) {
@@ -500,7 +504,7 @@ export default function HomeClient() {
       setIsRefreshing(false);
       isFetchingRef.current = false;
     }
-  }, [isOffline, fetchWithTimeout]);
+  }, [currentUserRole, isOffline, fetchWithTimeout]);
 
   // Initial load
   useEffect(() => {

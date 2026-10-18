@@ -360,9 +360,17 @@ export default function SidebarFilter({
               >
                 {/* Baris 1: Tanggal & Bookmark Cepat (Ramping & Anti-Menumpuk) */}
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-[12px] font-bold ${isLive ? 'text-red-600 dark:text-red-400' : isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
-                    {info.dateLabel}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span className={`text-[12px] font-bold truncate ${isLive ? 'text-red-600 dark:text-red-400' : isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
+                      {info.dateLabel}
+                    </span>
+                    {session.is_test && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                        <span className="material-symbols-outlined text-[12px]">science</span>
+                        <span>TEST ADMIN</span>
+                      </span>
+                    )}
+                  </div>
 
                   <button
                     type="button"

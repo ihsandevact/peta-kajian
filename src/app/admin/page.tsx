@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { fetchSessionsByStatus, fetchAdminStats } from '@/lib/services/admin';
-import { approveSession, rejectSession, togglePublishSession } from '@/app/actions/admin';
+import { approveSession, rejectSession, togglePublishSession, toggleTestSession } from '@/app/actions/admin';
 import type { StudySession } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useAttendance } from '@/utils/attendance';
@@ -108,6 +108,29 @@ export default function AdminModerationPage() {
   };
 
   const handleApprove = (id: string, title: string) => handleTogglePublish(id, title, true);
+
+  const handleToggleTest = async (sessionId: string, title: string, currentTest: boolean) => {
+    setProcessingId(sessionId);
+    try {
+      const res = await toggleTestSession(sessionId, !currentTest);
+      if (res.success) {
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionId ? { ...s, is_test: !currentTest } : s))
+        );
+        setToastMessage(
+          !currentTest
+            ? `Kajian "${title}" sekarang ditandai sebagai DATA TEST (hanya terlihat oleh akun Admin).`
+            : `Kajian "${title}" sekarang berstatus PUBLIK biasa.`
+        );
+      } else {
+        alert(res.error || 'Gagal mengubah status testing.');
+      }
+    } catch {
+      alert('Terjadi kesalahan sistem.');
+    } finally {
+      setProcessingId(null);
+    }
+  };
 
   // Handle Reject Submit
   const handleRejectSubmit = async (e: React.FormEvent) => {
@@ -422,6 +445,13 @@ export default function AdminModerationPage() {
                             <span className="material-symbols-outlined text-[12px] text-teal-600">groups</span>
                             <span>{Math.max(0, (session.attendees_count || 0) + getExtraCount(session.id))} Hadir</span>
                           </span>
+
+                          {session.is_test && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700 px-2 py-0.5 rounded-md">
+                              <span className="material-symbols-outlined text-[12px] text-amber-600">science</span>
+                              <span>TEST ADMIN</span>
+                            </span>
+                          )}
                         </div>
 
                         {/* Title & Info */}
@@ -545,6 +575,22 @@ export default function AdminModerationPage() {
                           >
                             <span className="material-symbols-outlined text-[16px]">edit</span>
                             <span>Edit</span>
+                          </button>
+
+                          {/* Toggle Data Testing Khusus Admin */}
+                          <button
+                            type="button"
+                            disabled={processingId === session.id}
+                            onClick={() => handleToggleTest(session.id, session.title, !!session.is_test)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-all shadow-2xs cursor-pointer ${
+                              session.is_test
+                                ? 'bg-amber-500/20 border-amber-500/50 text-amber-800 dark:text-amber-200 hover:bg-amber-500/30'
+                                : 'bg-surface-container-low border-surface-container-high text-on-surface-variant hover:bg-surface-container'
+                            } ${processingId === session.id ? 'opacity-50 cursor-wait' : ''}`}
+                            title={session.is_test ? 'Kajian ini data test khusus admin. Klik untuk jadikan data publik biasa.' : 'Jadikan kajian ini sebagai data test (hanya tampil untuk admin).'}
+                          >
+                            <span className="material-symbols-outlined text-[15px] text-amber-600">science</span>
+                            <span>{session.is_test ? 'Data Test' : 'Set Test'}</span>
                           </button>
 
                           {!isRejected && (

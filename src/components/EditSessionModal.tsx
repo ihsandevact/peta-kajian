@@ -5,13 +5,7 @@ import type { StudySession } from '@/lib/services/kajian';
 import { updateKajian } from '@/app/actions/kajian';
 import RecurringRuleSelector from './RecurringRuleSelector';
 import { RecurringRule, parseRecurringPattern } from '@/utils/recurring';
-import Map, { Marker, NavigationControl } from 'react-map-gl/maplibre';
-import { setWorkerUrl } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-
-setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
-
-const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL';
+import VenueLocationPicker from './VenueLocationPicker';
 
 interface EditSessionModalProps {
   session: StudySession | null;
@@ -40,6 +34,7 @@ export default function EditSessionModal({
   const [streamUrl, setStreamUrl] = useState('');
   const [mode, setMode] = useState<'offline' | 'online' | 'hybrid'>('offline');
   const [venueName, setVenueName] = useState('');
+  const [isTest, setIsTest] = useState(false);
 
   // Recurring state
   const [isRecurring, setIsRecurring] = useState(false);
@@ -50,16 +45,8 @@ export default function EditSessionModal({
     weeks: [1, 2, 3, 4, 5],
   });
 
-  // Map state
+  // Map / Location state
   const [markerPos, setMarkerPos] = useState({ lat: -6.200000, lng: 106.816666 });
-  const [viewState, setViewState] = useState({
-    longitude: 106.816666,
-    latitude: -6.200000,
-    zoom: 12,
-  });
-  const [venueQuery, setVenueQuery] = useState('');
-  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
-  const [searchResults, setSearchResults] = useState<any[]>([]);
 
   // Synchronize when session prop changes
   useEffect(() => {
@@ -88,7 +75,6 @@ export default function EditSessionModal({
       const lat = session.venues.lat || -6.200000;
       const lng = session.venues.lng || 106.816666;
       setMarkerPos({ lat, lng });
-      setViewState({ longitude: lng, latitude: lat, zoom: 13 });
     } else {
       setVenueName('');
     }
@@ -112,33 +98,10 @@ export default function EditSessionModal({
       const parsed = parseRecurringPattern(session.recurring_pattern);
       if (parsed) setRecurringRule(parsed);
     }
+
+    // Flag Data Testing Admin
+    setIsTest(!!session.is_test);
   }, [session, isOpen]);
-
-  const handleSearchLocation = async () => {
-    if (!venueQuery) return;
-    setIsSearchingLocation(true);
-    setSearchResults([]);
-    try {
-      const res = await fetch(
-        `https://api.maptiler.com/geocoding/${encodeURIComponent(venueQuery)}.json?key=${MAPTILER_KEY}&bbox=95.0,-11.0,141.0,6.0&limit=5`
-      );
-      const data = await res.json();
-      if (data.features && data.features.length > 0) {
-        setSearchResults(data.features);
-      }
-    } catch (err) {
-      console.error('Search Location Error:', err);
-    } finally {
-      setIsSearchingLocation(false);
-    }
-  };
-
-  const selectLocation = (feature: any) => {
-    const [lng, lat] = feature.center;
-    setMarkerPos({ lat, lng });
-    setViewState((prev) => ({ ...prev, longitude: lng, latitude: lat, zoom: 14 }));
-    setSearchResults([]);
-  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -151,6 +114,7 @@ export default function EditSessionModal({
     formData.append('mode', mode);
     formData.append('audience', audience);
     formData.append('status', status);
+    formData.append('is_test', String(isTest));
     formData.append('lat', String(markerPos.lat));
     formData.append('lng', String(markerPos.lng));
 
@@ -333,84 +297,13 @@ export default function EditSessionModal({
             {/* Venue & Map Pin */}
             {needsVenue && (
               <div className="flex flex-col gap-3 p-4 border border-surface-container-high rounded-2xl bg-surface-container-low/40">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-semibold text-on-surface">
-                    Nama Masjid / Lokasi <span className="text-error">*</span>
-                  </span>
-                  <input
-                    type="text"
-                    name="venue_name"
-                    value={venueName}
-                    onChange={(e) => setVenueName(e.target.value)}
-                    required
-                    className="w-full bg-surface-container-lowest border border-surface-container-high rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                  />
-                </label>
-
-                {/* Cari Lokasi di Peta */}
-                <div className="flex flex-col gap-1.5 relative">
-                  <span className="text-xs font-semibold text-on-surface">Tandai Lokasi Presisi di Peta</span>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={venueQuery}
-                      onChange={(e) => setVenueQuery(e.target.value)}
-                      placeholder="Cari kecamatan / kelurahan / masjid..."
-                      className="w-full bg-surface-container-lowest border border-surface-container-high rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-primary"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleSearchLocation}
-                      disabled={isSearchingLocation}
-                      className="px-3 bg-surface-container-high hover:bg-surface-container-highest text-on-surface rounded-lg text-xs font-semibold transition-colors shrink-0"
-                    >
-                      {isSearchingLocation ? 'Mencari...' : 'Cari'}
-                    </button>
-                  </div>
-
-                  {searchResults.length > 0 && (
-                    <div className="absolute top-full left-0 right-0 mt-1 bg-surface-container-lowest border border-surface-container-high rounded-lg shadow-xl z-50 overflow-hidden">
-                      <ul className="max-h-36 overflow-y-auto">
-                        {searchResults.map((feat) => (
-                          <li
-                            key={feat.id}
-                            onClick={() => selectLocation(feat)}
-                            className="px-3 py-2 text-xs hover:bg-surface-container-low cursor-pointer border-b border-surface-container-high last:border-b-0"
-                          >
-                            <span className="font-semibold text-on-surface block">{feat.text}</span>
-                            <span className="text-[10px] text-on-surface-variant truncate block">
-                              {feat.place_name}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-
-                {/* Mini Map */}
-                <div className="w-full h-[180px] rounded-xl overflow-hidden border border-surface-container-high relative">
-                  <Map
-                    {...viewState}
-                    onMove={(evt) => setViewState(evt.viewState)}
-                    mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`}
-                    attributionControl={false}
-                  >
-                    <NavigationControl position="bottom-right" />
-                    <Marker
-                      longitude={markerPos.lng}
-                      latitude={markerPos.lat}
-                      draggable
-                      onDragEnd={(e) => setMarkerPos({ lng: e.lngLat.lng, lat: e.lngLat.lat })}
-                    >
-                      <div className="text-error cursor-grab active:cursor-grabbing transform -translate-y-1/2">
-                        <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                          location_on
-                        </span>
-                      </div>
-                    </Marker>
-                  </Map>
-                </div>
+                <VenueLocationPicker
+                  venueName={venueName}
+                  onVenueNameChange={setVenueName}
+                  markerPos={markerPos}
+                  onMarkerPosChange={setMarkerPos}
+                  required
+                />
               </div>
             )}
 
@@ -441,6 +334,29 @@ export default function EditSessionModal({
                   <span className="capitalize text-on-surface">{aud}</span>
                 </label>
               ))}
+            </div>
+
+            {/* Toggle Data Testing Khusus Admin */}
+            <div className="p-3.5 rounded-xl bg-amber-500/10 dark:bg-amber-950/30 border border-amber-500/30 flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                  <span className="material-symbols-outlined text-[16px]">science</span>
+                  <span>Data Kajian Pengujian (Khusus Admin)</span>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-0.5 leading-relaxed">
+                  Jika diaktifkan, kajian ini <strong>HANYA akan terlihat oleh akun Administrator</strong> di peta dan daftar kajian untuk keperluan pengujian. Jamaah umum tidak akan melihatnya.
+                </p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-0.5">
+                <input
+                  type="checkbox"
+                  name="is_test_toggle"
+                  checked={isTest}
+                  onChange={(e) => setIsTest(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-600"></div>
+              </label>
             </div>
 
             {/* Recurring Rule Selector */}

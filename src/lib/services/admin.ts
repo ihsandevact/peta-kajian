@@ -67,15 +67,44 @@ export async function getUserRoleAndStatus(user: { id: string; email?: string } 
       .maybeSingle();
 
     if (data) {
+      let role = isAdminByEmail ? 'admin' : (data.role as AppUserRole) || 'user';
+      let isTrusted = isAdminByEmail ? true : !!data.is_trusted;
+      let requestStatus = (data.request_status as ContributorRequestStatus) || 'none';
+
+      // Fallback jika di user_roles masih 'user' tapi pernah buat session (legacy contributor)
+      if (role === 'user' && !isAdminByEmail) {
+        const { count } = await supabase
+          .from('study_sessions')
+          .select('id', { count: 'exact', head: true })
+          .eq('created_by', userId);
+        if (count && count > 0) {
+          role = 'kontributor';
+          requestStatus = 'approved';
+        }
+      }
+
       return {
-        role: isAdminByEmail ? 'admin' : (data.role as AppUserRole) || 'user',
-        isTrusted: isAdminByEmail ? true : !!data.is_trusted,
-        requestStatus: (data.request_status as ContributorRequestStatus) || 'none',
+        role,
+        isTrusted,
+        requestStatus,
         communityName: data.community_name || null,
         whatsappNumber: data.whatsapp_number || null,
         requestNote: data.request_note || null,
         requestedAt: data.requested_at || null,
       };
+    } else if (userId && !isAdminByEmail) {
+      // Baris user_roles belum ada, periksa legacy session
+      const { count } = await supabase
+        .from('study_sessions')
+        .select('id', { count: 'exact', head: true })
+        .eq('created_by', userId);
+      if (count && count > 0) {
+        return {
+          role: 'kontributor',
+          isTrusted: false,
+          requestStatus: 'approved',
+        };
+      }
     }
   } catch {
     // Fallback jika belum termigrasi
