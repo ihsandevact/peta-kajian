@@ -47,6 +47,7 @@ export async function syncYoutubeLiveAction(): Promise<{
   totalChannels: number;
   liveCount: number;
   upcomingCount?: number;
+  endedCount?: number;
   reports: ChannelSyncReport[];
   error?: string;
 }> {
@@ -64,6 +65,7 @@ export async function syncYoutubeLiveAction(): Promise<{
       totalChannels: result.totalChannels,
       liveCount: result.liveCount,
       upcomingCount: result.upcomingCount,
+      endedCount: result.endedCount,
       reports: result.reports,
     };
   } catch (err: any) {

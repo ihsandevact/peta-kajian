@@ -12,6 +12,17 @@ export interface UpcomingStreamItem {
   channelName?: string;
 }
 
+export interface EndedStreamItem {
+  videoId: string;
+  title: string;
+  endedAt?: string; // Format ISO 8601
+  startedAt?: string; // Format ISO 8601
+  posterUrl: string;
+  streamUrl: string;
+  speakerName: string;
+  channelName?: string;
+}
+
 export interface YoutubeChannel {
   id: string;
   channel_name: string;
@@ -26,6 +37,7 @@ export interface YoutubeChannel {
   current_video_title?: string | null;
   current_session_id?: string | null;
   upcoming_streams?: UpcomingStreamItem[] | null;
+  ended_streams?: EndedStreamItem[] | null;
   last_checked_at?: string | null;
   last_live_at?: string | null;
   created_at: string;
@@ -42,6 +54,7 @@ export interface LiveDetectionResult {
   streamUrl: string | null;
   speakerName: string;
   upcomingStreams?: UpcomingStreamItem[];
+  endedStreams?: EndedStreamItem[];
   error?: string | null;
 }
 
@@ -54,6 +67,7 @@ export interface ChannelSyncReport {
   title?: string | null;
   sessionId?: string | null;
   upcomingCount?: number;
+  endedCount?: number;
   message?: string;
 }
 
@@ -258,6 +272,45 @@ export function formatUpcomingTime(isoDate: string): string {
 }
 
 /**
+ * Format string tanggal waktu ISO ke teks ramah bahasa Indonesia untuk rekaman siaran yang telah berakhir
+ * Contoh: "Hari ini, 11:30 WIB", "Kemarin, 20:00 WIB", atau "Ahad, 19 Okt • 09:00 WIB"
+ */
+export function formatEndedTime(isoDate: string): string {
+  try {
+    const d = new Date(isoDate);
+    const now = new Date();
+
+    const isToday =
+      d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday =
+      d.getDate() === yesterday.getDate() &&
+      d.getMonth() === yesterday.getMonth() &&
+      d.getFullYear() === yesterday.getFullYear();
+
+    const timeStr = d.toLocaleTimeString('id-ID', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Jakarta',
+    });
+
+    if (isToday) return `Hari ini, ${timeStr} WIB`;
+    if (isYesterday) return `Kemarin, ${timeStr} WIB`;
+
+    const dayName = d.toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' });
+    const dateStr = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'Asia/Jakarta' });
+    return `${dayName}, ${dateStr} • ${timeStr} WIB`;
+  } catch {
+    return 'Selesai Tayang';
+  }
+}
+
+/**
  * Mengecek status live sebuah video ID secara presisi menggunakan YouTube InnerTube Player API (JSON).
  * Endpoint ini tidak membutuhkan API key, sangat cepat (~200ms), dan tidak pernah dicegat
  * oleh Bot Captcha di datacenter cloud (seperti server Vercel/AWS).
@@ -381,9 +434,9 @@ export async function checkChannelLiveViaApi(
 
     if (!uploadsPlaylistId) return null;
 
-    // 1. Ambil hingga 6 video terbaru dari playlist Uploads channel (1 kuota)
+    // 1. Ambil hingga 8 video terbaru dari playlist Uploads channel (1 kuota)
     const playlistRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=6&key=${apiKey}`,
+      `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=8&key=${apiKey}`,
       { cache: 'no-store', signal: AbortSignal.timeout(6000) }
     );
 
@@ -404,6 +457,7 @@ export async function checkChannelLiveViaApi(
         streamUrl: null,
         speakerName: defaultSpeaker || 'Asatidzah',
         upcomingStreams: [],
+        endedStreams: [],
       };
     }
 
@@ -422,10 +476,11 @@ export async function checkChannelLiveViaApi(
         streamUrl: null,
         speakerName: defaultSpeaker || 'Asatidzah',
         upcomingStreams: [],
+        endedStreams: [],
       };
     }
 
-    // 2. Periksa status live & upcoming siaran pada video terbaru (1 kuota untuk multiple ID)
+    // 2. Periksa status live, upcoming, dan rekaman siaran berakhir pada video terbaru
     const videosRes = await fetch(
       `https://www.googleapis.com/youtube/v3/videos?part=snippet,liveStreamingDetails&id=${videoIds.join(',')}&key=${apiKey}`,
       { cache: 'no-store', signal: AbortSignal.timeout(6000) }
@@ -445,6 +500,7 @@ export async function checkChannelLiveViaApi(
     } | null = null;
 
     const upcomingStreams: UpcomingStreamItem[] = [];
+    const endedStreams: EndedStreamItem[] = [];
     const nowMs = Date.now();
     const maxFutureMs = nowMs + 48 * 60 * 60 * 1000; // Siaran 48 jam ke depan
 
@@ -458,6 +514,10 @@ export async function checkChannelLiveViaApi(
       const isCurrentlyLive =
         liveBroadcastContent === 'live' ||
         (Boolean(liveDetails?.actualStartTime) && !liveDetails?.actualEndTime);
+
+      const isEndedLive =
+        Boolean(liveDetails?.actualEndTime) ||
+        (Boolean(liveDetails?.actualStartTime) && liveBroadcastContent === 'none');
 
       if (isCurrentlyLive && !activeLiveStream) {
         const videoId = vid.id;
@@ -500,8 +560,29 @@ export async function checkChannelLiveViaApi(
             posterUrl,
             streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
             speakerName,
+            channelName: snippet?.channelTitle,
           });
         }
+      } else if (isEndedLive) {
+        const videoId = vid.id;
+        const title = cleanHtmlEntities(snippet?.title || '');
+        const speakerName = extractSpeakerFromTitle(title, defaultSpeaker || 'Asatidzah');
+        const posterUrl =
+          snippet?.thumbnails?.maxres?.url ||
+          snippet?.thumbnails?.high?.url ||
+          snippet?.thumbnails?.default?.url ||
+          `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+        endedStreams.push({
+          videoId,
+          title,
+          endedAt: liveDetails?.actualEndTime || liveDetails?.actualStartTime || snippet?.publishedAt,
+          startedAt: liveDetails?.actualStartTime,
+          posterUrl,
+          streamUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          speakerName,
+          channelName: snippet?.channelTitle,
+        });
       }
     }
 
@@ -509,6 +590,12 @@ export async function checkChannelLiveViaApi(
     upcomingStreams.sort(
       (a, b) => new Date(a.scheduledStartTime).getTime() - new Date(b.scheduledStartTime).getTime()
     );
+
+    // Urutkan rekaman siaran berakhir dari yang paling baru selesai (descending)
+    endedStreams.sort(
+      (a, b) => new Date(b.endedAt || 0).getTime() - new Date(a.endedAt || 0).getTime()
+    );
+    const limitedEndedStreams = endedStreams.slice(0, 6);
 
     if (activeLiveStream) {
       return {
@@ -521,6 +608,7 @@ export async function checkChannelLiveViaApi(
         streamUrl: activeLiveStream.streamUrl,
         speakerName: activeLiveStream.speakerName,
         upcomingStreams,
+        endedStreams: limitedEndedStreams,
       };
     }
 
@@ -534,6 +622,7 @@ export async function checkChannelLiveViaApi(
       streamUrl: null,
       speakerName: defaultSpeaker || 'Asatidzah',
       upcomingStreams,
+      endedStreams: limitedEndedStreams,
     };
   } catch (err) {
     console.warn(`[checkChannelLiveViaApi] Error for ${channelIdOrHandle}:`, err);
@@ -757,6 +846,7 @@ export async function checkChannelLiveStatus(
         streamUrl: null,
         speakerName: defaultSpeaker || 'Asatidzah',
         upcomingStreams,
+        endedStreams: [],
       };
     }
 
@@ -793,6 +883,7 @@ export async function checkChannelLiveStatus(
       streamUrl,
       speakerName,
       upcomingStreams: upcomingStreams.filter((u) => u.videoId !== videoId),
+      endedStreams: [],
     };
   } catch (err: any) {
     console.error(`Error checking YouTube Live for ${handle}:`, err);
@@ -806,6 +897,7 @@ export async function checkChannelLiveStatus(
       streamUrl: null,
       speakerName: defaultSpeaker || 'Asatidzah',
       upcomingStreams: [],
+      endedStreams: [],
       error: err.message,
     };
   }
@@ -876,12 +968,14 @@ export async function syncAllYoutubeChannels(): Promise<{
   totalChannels: number;
   liveCount: number;
   upcomingCount: number;
+  endedCount: number;
   reports: ChannelSyncReport[];
 }> {
   const channels = await fetchActiveYoutubeChannels();
   const reports: ChannelSyncReport[] = [];
   let liveCount = 0;
   let upcomingCount = 0;
+  let endedCount = 0;
 
   const supabaseServer = createAdminClient();
 
@@ -977,6 +1071,8 @@ export async function syncAllYoutubeChannels(): Promise<{
             }
 
             const upcomingClean = (check.upcomingStreams || []).filter((u) => u.videoId !== check.videoId);
+            const endedClean = (check.endedStreams || []).filter((e) => e.videoId !== check.videoId);
+            const mergedEnded = endedClean.length > 0 ? endedClean : (channel.ended_streams || []);
 
             // Perbarui metadata tabel youtube_channels
             await supabaseServer
@@ -987,6 +1083,7 @@ export async function syncAllYoutubeChannels(): Promise<{
                 current_video_title: check.title,
                 current_session_id: sessionId,
                 upcoming_streams: upcomingClean,
+                ended_streams: mergedEnded,
                 last_live_at: nowIso,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
@@ -1003,12 +1100,16 @@ export async function syncAllYoutubeChannels(): Promise<{
                 title: check.title,
                 sessionId,
                 upcomingCount: upcomingClean.length,
+                endedCount: mergedEnded.length,
               },
               isLive: true,
               upcomingCount: upcomingClean.length,
+              endedCount: mergedEnded.length,
             };
           } else {
             const upcomingClean = (check.upcomingStreams || []).filter((u) => u.videoId !== check.videoId);
+            const endedClean = (check.endedStreams || []).filter((e) => e.videoId !== check.videoId);
+            const mergedEnded = endedClean.length > 0 ? endedClean : (channel.ended_streams || []);
 
             // Sesi sudah ada sebelumnya di database
             await supabaseServer
@@ -1019,6 +1120,7 @@ export async function syncAllYoutubeChannels(): Promise<{
                 current_video_title: check.title,
                 current_session_id: sessionId,
                 upcoming_streams: upcomingClean,
+                ended_streams: mergedEnded,
                 last_live_at: nowIso,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
@@ -1035,14 +1137,17 @@ export async function syncAllYoutubeChannels(): Promise<{
                 title: check.title,
                 sessionId,
                 upcomingCount: upcomingClean.length,
+                endedCount: mergedEnded.length,
               },
               isLive: true,
               upcomingCount: upcomingClean.length,
+              endedCount: mergedEnded.length,
             };
           }
         } else {
           // Channel sedang OFFLINE
           const upcomings = check.upcomingStreams || [];
+          const apiEnded = check.endedStreams || [];
 
           if (channel.is_currently_live) {
             // Bersihkan row study_sessions buatan bot jika ada agar tidak meninggalkan data menggantung
@@ -1057,6 +1162,30 @@ export async function syncAllYoutubeChannels(): Promise<{
               }
             }
 
+            // Arsipkan siaran yang baru saja berakhir ke ended_streams
+            const mergedEndedMap = new Map<string, EndedStreamItem>();
+            if (channel.current_video_id) {
+              mergedEndedMap.set(channel.current_video_id, {
+                videoId: channel.current_video_id,
+                title: channel.current_video_title || `Live Rekaman ${channel.channel_name}`,
+                endedAt: nowIso,
+                startedAt: channel.last_live_at || undefined,
+                posterUrl: `https://i.ytimg.com/vi/${channel.current_video_id}/hqdefault.jpg`,
+                streamUrl: `https://www.youtube.com/watch?v=${channel.current_video_id}`,
+                speakerName: channel.default_speaker_name || 'Asatidzah',
+                channelName: channel.channel_name,
+              });
+            }
+            apiEnded.forEach((e) => {
+              if (!mergedEndedMap.has(e.videoId)) mergedEndedMap.set(e.videoId, e);
+            });
+            if (Array.isArray(channel.ended_streams)) {
+              channel.ended_streams.forEach((e) => {
+                if (e?.videoId && !mergedEndedMap.has(e.videoId)) mergedEndedMap.set(e.videoId, e);
+              });
+            }
+            const finalEndedStreams = Array.from(mergedEndedMap.values()).slice(0, 8);
+
             await supabaseServer
               .from('youtube_channels')
               .update({
@@ -1065,6 +1194,7 @@ export async function syncAllYoutubeChannels(): Promise<{
                 current_video_title: null,
                 current_session_id: null,
                 upcoming_streams: upcomings,
+                ended_streams: finalEndedStreams,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
               })
@@ -1077,17 +1207,29 @@ export async function syncAllYoutubeChannels(): Promise<{
                 handle: channel.channel_handle,
                 status: 'offline' as const,
                 upcomingCount: upcomings.length,
+                endedCount: finalEndedStreams.length,
                 message: 'Siaran langsung baru saja berakhir.',
               },
               isLive: false,
               upcomingCount: upcomings.length,
+              endedCount: finalEndedStreams.length,
             };
           } else {
-            // Update waktu pengecekan dan upcoming streams
+            // Channel sedang offline dan sebelumnya juga offline
+            const mergedEndedMap = new Map<string, EndedStreamItem>();
+            apiEnded.forEach((e) => mergedEndedMap.set(e.videoId, e));
+            if (Array.isArray(channel.ended_streams)) {
+              channel.ended_streams.forEach((e) => {
+                if (e?.videoId && !mergedEndedMap.has(e.videoId)) mergedEndedMap.set(e.videoId, e);
+              });
+            }
+            const finalEndedStreams = Array.from(mergedEndedMap.values()).slice(0, 8);
+
             await supabaseServer
               .from('youtube_channels')
               .update({
                 upcoming_streams: upcomings,
+                ended_streams: finalEndedStreams.length > 0 ? finalEndedStreams : (channel.ended_streams || []),
                 last_checked_at: nowIso,
                 updated_at: nowIso,
               })
@@ -1100,10 +1242,12 @@ export async function syncAllYoutubeChannels(): Promise<{
                 handle: channel.channel_handle,
                 status: 'offline' as const,
                 upcomingCount: upcomings.length,
+                endedCount: finalEndedStreams.length,
                 message: 'Offline (tidak sedang live)',
               },
               isLive: false,
               upcomingCount: upcomings.length,
+              endedCount: finalEndedStreams.length,
             };
           }
         }
@@ -1115,6 +1259,7 @@ export async function syncAllYoutubeChannels(): Promise<{
         reports.push(res.value.report);
         if (res.value.isLive) liveCount++;
         upcomingCount += res.value.upcomingCount || 0;
+        endedCount += res.value.endedCount || 0;
       }
     }
 
@@ -1128,6 +1273,7 @@ export async function syncAllYoutubeChannels(): Promise<{
     totalChannels: channels.length,
     liveCount,
     upcomingCount,
+    endedCount,
     reports,
   };
 }

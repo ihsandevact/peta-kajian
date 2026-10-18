@@ -97,7 +97,7 @@ export default function AdminYoutubeChannelsPage() {
           reports: res.reports,
         });
         showToast(
-          `Sinkronisasi selesai! Ditemukan ${res.liveCount} LIVE & ${res.upcomingCount || 0} Terjadwal.`
+          `Sinkronisasi selesai! Ditemukan ${res.liveCount} LIVE, ${res.upcomingCount || 0} Terjadwal & ${res.endedCount || 0} Rekaman.`
         );
         await loadChannels();
       } else {
