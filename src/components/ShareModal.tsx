@@ -63,36 +63,10 @@ export async function shareSessionNative(
 
   if (typeof navigator !== 'undefined' && navigator.share) {
     try {
-      // Coba lampirkan file poster jika ada dan browser mendukung
-      let filesToShare: File[] | undefined;
-      const hasPoster = Boolean(
-        session.poster_url &&
-        session.poster_url.trim() !== '' &&
-        session.poster_url.toLowerCase() !== 'null'
-      );
-
-      if (hasPoster && typeof navigator.canShare === 'function') {
-        try {
-          const res = await fetch(session.poster_url!, { mode: 'cors' });
-          if (res.ok) {
-            const blob = await res.blob();
-            const file = new File([blob], 'poster-kajian.jpg', {
-              type: blob.type || 'image/jpeg',
-            });
-            if (navigator.canShare({ files: [file] })) {
-              filesToShare = [file];
-            }
-          }
-        } catch {
-          // Abaikan error CORS/fetch, fallback ke share teks dan tautan biasa
-        }
-      }
-
       await navigator.share({
         title: session.title,
         text: shareText,
         url: shareUrl,
-        ...(filesToShare ? { files: filesToShare } : {}),
       });
       return;
     } catch (err: any) {
