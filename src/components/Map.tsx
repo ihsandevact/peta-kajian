@@ -38,12 +38,42 @@ export default function AppMap({
 }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
   const { resolvedTheme } = useTheme();
+  const [isMapLoaded, setIsMapLoaded] = React.useState(false);
+  const [isFollowingUser, setIsFollowingUser] = React.useState(true);
+  const prevRegionRef = React.useRef<SelectedRegion | null | undefined>(undefined);
   
   const [viewState, setViewState] = React.useState({
     longitude: 118.0, // Titik Tengah Indonesia
     latitude: -2.0,
     zoom: 4.5
   });
+
+  const handleMapLoad = React.useCallback(() => {
+    setIsMapLoaded(true);
+    mapRef.current?.resize();
+  }, []);
+
+  // Reset mode mengikuti pengguna saat navigasi dimulai
+  React.useEffect(() => {
+    if (isNavigating) {
+      setIsFollowingUser(true);
+    }
+  }, [isNavigating]);
+
+  // Fungsi untuk memusatkan kamera kembali ke posisi GPS dan arah kemudi
+  const handleRecenter = React.useCallback(() => {
+    if (!userLocation || !mapRef.current) return;
+    setIsFollowingUser(true);
+    const heading = typeof userHeading === 'number' && !isNaN(userHeading) ? userHeading : 0;
+    mapRef.current.easeTo({
+      center: [userLocation.lng, userLocation.lat],
+      zoom: 17.5,
+      pitch: 50,
+      bearing: heading,
+      duration: 800,
+      essential: true,
+    });
+  }, [userLocation, userHeading]);
 
   const getLat = (s: StudySession) => s.venues?.lat || 0;
   const getLng = (s: StudySession) => s.venues?.lng || 0;
@@ -80,32 +110,36 @@ export default function AppMap({
 
   // Reset sudut kamera 3D kembali ke 2D rata saat navigasi langsung selesai (hanya jika tidak sedang fokus terbang ke kajian)
   React.useEffect(() => {
-    if (!isNavigating && !selectedSession && mapRef.current) {
+    if (isMapLoaded && !isNavigating && !selectedSession && mapRef.current) {
       mapRef.current.easeTo({
         pitch: 0,
         bearing: 0,
         duration: 800,
       });
     }
-  }, [isNavigating, selectedSession]);
+  }, [isMapLoaded, isNavigating, selectedSession]);
 
-  // Terbang ke kajian terpilih saat diklik
+  // Terbang ke kajian terpilih saat diklik atau saat peta pertama kali selesai dimuat
   React.useEffect(() => {
-    if (selectedSession && hasPhysicalLocation(selectedSession)) {
+    if (isMapLoaded && selectedSession && hasPhysicalLocation(selectedSession)) {
       flyToSession(selectedSession);
     }
-  }, [selectedSession, flyToSession]);
+  }, [isMapLoaded, selectedSession, flyToSession]);
 
   // Terbang ke wilayah/kota yang dipilih dari filter
   React.useEffect(() => {
-    if (flyToRegion && mapRef.current) {
+    if (!isMapLoaded || !mapRef.current) return;
+
+    if (flyToRegion) {
       mapRef.current.flyTo({
         center: [flyToRegion.center[0], flyToRegion.center[1]],
         zoom: flyToRegion.zoom,
         duration: 1600,
         essential: true
       });
-    } else if (flyToRegion === null && mapRef.current) {
+    } else if (prevRegionRef.current && flyToRegion === null && !selectedSession) {
+      // Hanya reset ke Indonesia jika sebelumnya ada wilayah yang dipilih lalu dihapus,
+      // dan saat ini tidak sedang membuka kartu kajian aktif
       mapRef.current.flyTo({
         center: [118.0, -2.0],
         zoom: 4.5,
@@ -113,11 +147,13 @@ export default function AppMap({
         essential: true
       });
     }
-  }, [flyToRegion]);
+
+    prevRegionRef.current = flyToRegion;
+  }, [isMapLoaded, flyToRegion, selectedSession]);
 
   // Auto fitBounds saat rute in-app aktif (hanya saat tidak dalam mode navigasi 3D)
   React.useEffect(() => {
-    if (activeRoute && !isNavigating && mapRef.current) {
+    if (isMapLoaded && activeRoute && !isNavigating && mapRef.current) {
       const coords = activeRoute.geometry.coordinates;
       if (coords.length > 0) {
         let minLng = coords[0][0];
@@ -148,11 +184,11 @@ export default function AppMap({
         );
       }
     }
-  }, [activeRoute, isNavigating]);
+  }, [isMapLoaded, activeRoute, isNavigating]);
 
-  // Kamera Mengemudi 3D saat Live Navigasi Aktif
+  // Kamera Mengemudi 3D saat Live Navigasi Aktif (hanya saat mode mengikuti pengguna aktif)
   React.useEffect(() => {
-    if (isNavigating && userLocation && mapRef.current) {
+    if (isMapLoaded && isNavigating && isFollowingUser && userLocation && mapRef.current) {
       const heading = typeof userHeading === 'number' && !isNaN(userHeading) ? userHeading : 0;
       mapRef.current.easeTo({
         center: [userLocation.lng, userLocation.lat],
@@ -163,7 +199,7 @@ export default function AppMap({
         essential: true,
       });
     }
-  }, [isNavigating, userLocation, userHeading]);
+  }, [isMapLoaded, isNavigating, isFollowingUser, userLocation, userHeading]);
 
   const routeGeoJson = React.useMemo(() => {
     if (!activeRoute) return null;
@@ -179,6 +215,17 @@ export default function AppMap({
       <Map
         ref={mapRef}
         {...viewState}
+        onLoad={handleMapLoad}
+        onDragStart={() => {
+          if (isNavigating) {
+            setIsFollowingUser(false);
+          }
+        }}
+        onMoveStart={(evt) => {
+          if (isNavigating && evt.originalEvent) {
+            setIsFollowingUser(false);
+          }
+        }}
         onMove={evt => setViewState(evt.viewState)}
         mapStyle={
           resolvedTheme === 'dark'
@@ -329,6 +376,29 @@ export default function AppMap({
           session={selectedSession}
           onClose={() => onSelectSession(null)}
         />
+      )}
+
+      {/* Floating Tombol Pusatkan saat Navigasi Langsung Sedang Tidak Mengikuti Pengguna */}
+      {isNavigating && !isFollowingUser && userLocation && (
+        <div className="fixed md:absolute bottom-[calc(155px+env(safe-area-inset-bottom,0px))] md:bottom-24 right-4 md:right-6 z-40 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          <button
+            type="button"
+            onClick={handleRecenter}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-full bg-surface-container-lowest/95 backdrop-blur-md hover:bg-surface-container text-primary font-bold text-xs shadow-xl border border-surface-container-high/90 transition-all active:scale-95 cursor-pointer"
+            title="Pusatkan kembali ke posisi saya"
+          >
+            <span
+              className="material-symbols-outlined text-[18px] text-primary"
+              style={{
+                transform: `rotate(${userHeading || 0}deg)`,
+                transition: 'transform 0.3s ease',
+              }}
+            >
+              navigation
+            </span>
+            <span>Pusatkan</span>
+          </button>
+        </div>
       )}
     </div>
   );

@@ -4,13 +4,14 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import SidebarFilter from '@/components/SidebarFilter';
-import { fetchActiveSessions, hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
+import { hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
 import { calculateDistance } from '@/utils/distance';
 import { createClient } from '@/utils/supabase/client';
 import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
-import { useOnlineStatus, cacheFeedSnapshot, getFeedSnapshot, getCachedOfflineSessions } from '@/utils/offlineCache';
+import { useOnlineStatus } from '@/utils/offlineCache';
+import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import RequestContributorModal from '@/components/RequestContributorModal';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
@@ -65,13 +66,9 @@ export default function HomeClient() {
     region: null,
   });
 
-  const [sessions, setSessions] = useState<StudySession[]>([]);
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
   const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [hasConnectionError, setHasConnectionError] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [activeRouteSession, setActiveRouteSession] = useState<StudySession | null>(null);
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
@@ -85,6 +82,27 @@ export default function HomeClient() {
   const wakeLockRef = useRef<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
+
+  // TanStack Query untuk data fetching kajian
+  const {
+    sessions,
+    isLoading,
+    isRefreshing,
+    hasConnectionError,
+    refetch: handleManualRefresh,
+  } = useActiveSessionsQuery({
+    currentUserRole,
+    isOffline,
+  });
+
+  // Pertahankan selectedSession agar data terbarunya tersinkron saat refresh
+  useEffect(() => {
+    if (selectedSession && sessions.length > 0) {
+      const updated = sessions.find((s) => s.id === selectedSession.id);
+      if (updated) setSelectedSession(updated);
+    }
+  }, [sessions]);
+
   const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
   const [showLoginBenefits, setShowLoginBenefits] = useState<boolean>(false);
   const loginBenefitsRef = useRef<HTMLDivElement>(null);
@@ -104,8 +122,6 @@ export default function HomeClient() {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showLoginBenefits]);
-  const lastFetchTimeRef = useRef<number>(Date.now());
-  const isFetchingRef = useRef<boolean>(false);
 
   // Periksa status login dan role pengguna
   useEffect(() => {
@@ -213,21 +229,26 @@ export default function HomeClient() {
     } catch {}
   }, []);
 
-  // Minta lokasi pengguna saat aplikasi dimuat
-  useEffect(() => {
-    if ('geolocation' in navigator) {
+  // Fungsi untuk meminta lokasi pengguna
+  const requestUserLocation = useCallback(() => {
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
         },
         (error) => {
-          console.error('Error getting location', error);
+          console.warn('Gagal mendapatkan lokasi GPS pengguna:', error);
           // Silent fail agar tidak mengganggu pengguna yang menolak akses GPS
         },
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
   }, []);
+
+  // Minta lokasi pengguna saat aplikasi dimuat
+  useEffect(() => {
+    requestUserLocation();
+  }, [requestUserLocation]);
 
   // Handler untuk memulai navigasi rute jalan in-app
   const handleStartRoute = useCallback(async (session: StudySession) => {
@@ -414,144 +435,6 @@ export default function HomeClient() {
     };
   }, []);
 
-  // Helper untuk membatasi waktu tunggu request Supabase maksimal 6 detik
-  const fetchWithTimeout = useCallback(async <T,>(promise: Promise<T>, timeoutMs = 6000): Promise<T> => {
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error('Koneksi timeout: Server tidak merespons dalam 6 detik.'));
-      }, timeoutMs);
-    });
-    return Promise.race([promise, timeoutPromise]).finally(() => {
-      clearTimeout(timeoutId);
-    });
-  }, []);
-
-  const refetchData = useCallback(async (isSilent = false) => {
-    if (isFetchingRef.current) return;
-    isFetchingRef.current = true;
-
-    if (!isSilent) {
-      setIsRefreshing(true);
-    }
-
-    const isDeviceOffline = isOffline || (typeof navigator !== 'undefined' && !navigator.onLine);
-
-    try {
-      if (isDeviceOffline) {
-        setHasConnectionError(true);
-        const cached = getFeedSnapshot();
-        const offlineBookmarked = getCachedOfflineSessions();
-        const map = new Map<string, StudySession>();
-        [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
-        const merged = Array.from(map.values());
-        setSessions(merged);
-        setSelectedSession((prev) => {
-          if (!prev) return null;
-          return merged.find((s) => s.id === prev.id) || prev;
-        });
-        return;
-      }
-
-      const startTime = Date.now();
-      const isAdmin = currentUserRole === 'admin';
-      const data = await fetchWithTimeout(
-        fetchActiveSessions({ requireLocation: true, includeTestSessions: isAdmin }),
-        6000
-      );
-      
-      setHasConnectionError(false);
-      if (data && data.length > 0) {
-        setSessions(data);
-        cacheFeedSnapshot(data);
-        // Pertahankan selectedSession agar tidak tertutup saat background refresh
-        setSelectedSession((prev) => {
-          if (!prev) return null;
-          return data.find((s) => s.id === prev.id) || prev;
-        });
-      } else {
-        const cached = getFeedSnapshot();
-        const offlineBookmarked = getCachedOfflineSessions();
-        const map = new Map<string, StudySession>();
-        [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
-        const merged = Array.from(map.values());
-        setSessions(merged);
-        setSelectedSession((prev) => {
-          if (!prev) return null;
-          return merged.find((s) => s.id === prev.id) || prev;
-        });
-      }
-      lastFetchTimeRef.current = Date.now();
-
-      // Jika manual refresh, pastikan animasi spin berputar setidaknya 400ms agar user merasakan responnya
-      if (!isSilent) {
-        const elapsed = Date.now() - startTime;
-        if (elapsed < 400) {
-          await new Promise((res) => setTimeout(res, 400 - elapsed));
-        }
-      }
-    } catch (e) {
-      console.warn('Gagal memuat kajian terbaru, beralih ke offline cache:', e);
-      setHasConnectionError(true);
-      const cached = getFeedSnapshot();
-      const offlineBookmarked = getCachedOfflineSessions();
-      const map = new Map<string, StudySession>();
-      [...cached, ...offlineBookmarked].forEach((s) => map.set(s.id, s));
-      const merged = Array.from(map.values());
-      setSessions(merged);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-      isFetchingRef.current = false;
-    }
-  }, [currentUserRole, isOffline, fetchWithTimeout]);
-
-  // Initial load
-  useEffect(() => {
-    refetchData(true);
-  }, [refetchData]);
-
-  // Auto-refetch saat perangkat kembali online
-  useEffect(() => {
-    const handleOnline = () => {
-      refetchData(false);
-    };
-    window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
-  }, [refetchData]);
-
-  // 1. Auto-refresh saat kembali ke tab/layar (Window Focus & Visibility Change)
-  // Dilengkapi throttle 30 detik agar tidak spam jika berpindah cepat
-  useEffect(() => {
-    const handleReentry = () => {
-      if (document.visibilityState === 'visible') {
-        const now = Date.now();
-        if (now - lastFetchTimeRef.current > 30000) {
-          refetchData(true);
-        }
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleReentry);
-    window.addEventListener('focus', handleReentry);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleReentry);
-      window.removeEventListener('focus', handleReentry);
-    };
-  }, [refetchData]);
-
-  // 2. Periodic background polling setiap 3 menit (hanya ketika tab sedang aktif dilihat)
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refetchData(true);
-      }
-    }, 180000); // 3 menit (180.000 ms)
-
-    return () => clearInterval(interval);
-  }, [refetchData]);
-
   const filteredSessions = useMemo(() => {
     return sessions.filter(s => {
       // Hanya tampilkan kajian yang memiliki lokasi fisik di peta (offline atau hybrid)
@@ -601,6 +484,7 @@ export default function HomeClient() {
       if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
       if (filters.time === 'rutin' && !isRutin) return false;
       if (filters.time === 'online' && !s.is_online && !s.stream_url) return false;
+      if (filters.time === 'akhwat' && s.audience_type !== 'akhwat') return false;
       
       return true;
     });
@@ -673,22 +557,47 @@ export default function HomeClient() {
     }
   }, [sessions]);
 
+  const prevFiltersRef = useRef<FilterState>(filters);
+  const prevUserLocationRef = useRef<{lat: number, lng: number} | null>(userLocation);
+
   // OBSERVER: Auto-Focus dinamis setiap kali daftar filter/sorting berubah
   useEffect(() => {
     // Jika rute sedang aktif atau dalam proses navigasi, jangan ubah selectedSession secara otomatis
     if (activeRouteSession) return;
 
-    if (sortedSessions.length > 0) {
-      setSelectedSession(prev => {
-        if (prev && sortedSessions.some(s => s.id === prev.id)) {
-          return prev;
-        }
-        return sortedSessions[0];
-      });
+    const filtersChanged =
+      prevFiltersRef.current.time !== filters.time ||
+      prevFiltersRef.current.searchQuery !== filters.searchQuery ||
+      prevFiltersRef.current.region !== filters.region ||
+      JSON.stringify(prevFiltersRef.current.audience) !== JSON.stringify(filters.audience) ||
+      JSON.stringify(prevFiltersRef.current.facilities) !== JSON.stringify(filters.facilities);
+
+    const locationJustArrived = !prevUserLocationRef.current && !!userLocation && filters.time === 'terdekat';
+    prevUserLocationRef.current = userLocation;
+
+    if (filtersChanged || locationJustArrived) {
+      prevFiltersRef.current = filters;
+      if (sortedSessions.length > 0) {
+        // Setiap kali berpindah filter: SELALU trigger aktif kajian paling atas (urutan pertama)
+        setSelectedSession({ ...sortedSessions[0] });
+      } else {
+        setSelectedSession(null);
+      }
     } else {
-      setSelectedSession(null);
+      // Jika filter TIDAK berubah (misal pembaruan background data dari query),
+      // pertahankan sesi yang sedang dilihat jika masih ada dalam daftar
+      if (sortedSessions.length > 0) {
+        setSelectedSession(prev => {
+          if (prev && sortedSessions.some(s => s.id === prev.id)) {
+            return prev;
+          }
+          return sortedSessions[0];
+        });
+      } else {
+        setSelectedSession(null);
+      }
     }
-  }, [sortedSessions, activeRouteSession]);
+  }, [filters, sortedSessions, activeRouteSession, userLocation]);
 
   return (
     <div className="w-full h-screen bg-surface font-geist text-on-surface flex overflow-hidden">
@@ -964,7 +873,7 @@ export default function HomeClient() {
             </div>
             <button
               type="button"
-              onClick={() => refetchData(false)}
+              onClick={handleManualRefresh}
               disabled={isRefreshing}
               className="inline-flex items-center gap-1 text-[11px] font-semibold bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg transition-colors cursor-pointer shrink-0 disabled:opacity-50"
               title="Coba Hubungkan Ulang"
@@ -1057,8 +966,9 @@ export default function HomeClient() {
                 onSelectSession={handleSelectSession}
                 isLoading={isLoading}
                 userLocation={userLocation}
+                onRequestLocation={requestUserLocation}
                 isRefreshing={isRefreshing}
-                onRefresh={() => refetchData(false)}
+                onRefresh={handleManualRefresh}
                 currentUser={currentUser}
                 hasConnectionError={hasConnectionError}
                 isOffline={isOffline}

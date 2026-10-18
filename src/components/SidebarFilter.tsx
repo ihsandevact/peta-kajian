@@ -20,6 +20,7 @@ interface SidebarFilterProps {
   onSelectSession: (s: StudySession | null) => void;
   isLoading?: boolean;
   userLocation?: {lat: number, lng: number} | null;
+  onRequestLocation?: () => void;
   isRefreshing?: boolean;
   onRefresh?: () => void;
   currentUser?: any;
@@ -36,6 +37,7 @@ export default function SidebarFilter({
   onSelectSession,
   isLoading = false,
   userLocation = null,
+  onRequestLocation,
   isRefreshing = false,
   onRefresh,
   currentUser,
@@ -46,8 +48,25 @@ export default function SidebarFilter({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const [visibleCount, setVisibleCount] = useState(10);
   const [isRegionModalOpen, setIsRegionModalOpen] = useState(false);
+  const [searchInputValue, setSearchInputValue] = useState(filters.searchQuery);
 
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
+
+  // Sinkronkan state lokal jika filters.searchQuery berubah dari luar
+  useEffect(() => {
+    setSearchInputValue(filters.searchQuery);
+  }, [filters.searchQuery]);
+
+  // Debounce 280ms sebelum memperbarui filters.searchQuery ke state global
+  useEffect(() => {
+    if (searchInputValue === filters.searchQuery) return;
+
+    const timer = setTimeout(() => {
+      setFilters(p => ({ ...p, searchQuery: searchInputValue }));
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [searchInputValue, filters.searchQuery, setFilters]);
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -146,10 +165,23 @@ export default function SidebarFilter({
           <input 
             type="text" 
             placeholder="Cari ustadz, kitab, atau masjid..." 
-            value={filters.searchQuery}
-            onChange={e => setFilters(p => ({ ...p, searchQuery: e.target.value }))}
-            className="w-full bg-surface-container-low text-on-surface placeholder:text-outline text-sm rounded-lg pl-9 pr-3 py-2 focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary-container transition-all"
+            value={searchInputValue}
+            onChange={e => setSearchInputValue(e.target.value)}
+            className="w-full bg-surface-container-low text-on-surface placeholder:text-outline text-sm rounded-lg pl-9 pr-8 py-2 focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary-container transition-all"
           />
+          {searchInputValue && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearchInputValue('');
+                setFilters(p => ({ ...p, searchQuery: '' }));
+              }}
+              className="absolute right-2.5 top-2.5 w-4 h-4 rounded-full bg-outline/20 hover:bg-outline/30 flex items-center justify-center text-outline hover:text-on-surface transition-colors cursor-pointer"
+              title="Hapus pencarian"
+            >
+              <span className="material-symbols-outlined text-[13px]">close</span>
+            </button>
+          )}
         </div>
 
         {/* Region Selector Bar */}
@@ -193,25 +225,63 @@ export default function SidebarFilter({
 
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
-          <Pill active={filters.time === 'semua'} label="Mendatang" onClick={() => setFilters(p => ({ ...p, time: 'semua' }))} />
+          <Pill
+            active={filters.time === 'semua'}
+            label="Mendatang"
+            onClick={() => setFilters(p => ({ ...p, time: 'semua', audience: ['umum', 'ikhwan', 'akhwat'] }))}
+          />
           <Pill
             active={filters.time === 'tersimpan'}
             label={bookmarks.length > 0 ? `📌 Tersimpan (${bookmarks.length})` : '📌 Tersimpan'}
-            onClick={() => setFilters(p => ({ ...p, time: 'tersimpan' }))}
+            onClick={() => setFilters(p => ({ ...p, time: p.time === 'tersimpan' ? 'semua' : 'tersimpan', audience: ['umum', 'ikhwan', 'akhwat'] }))}
           />
-          <Pill active={filters.time === 'berlangsung'} label="🔴 Berlangsung" onClick={() => setFilters(p => ({ ...p, time: 'berlangsung' }))} />
-          <Pill active={filters.time === 'terdekat'} label="Terdekat" onClick={() => setFilters(p => ({ ...p, time: 'terdekat' }))} />
-          <Pill active={filters.time === 'rutin'} label="Rutin" onClick={() => setFilters(p => ({ ...p, time: 'rutin' }))} />
-          <Pill active={filters.time === 'online'} label="Online (Hybrid)" onClick={() => setFilters(p => ({ ...p, time: 'online' }))} />
-          <Pill active={!filters.audience.includes('ikhwan')} label="Khusus Akhwat" onClick={() => setFilters(p => ({ ...p, audience: p.audience.includes('ikhwan') ? ['akhwat'] : ['umum', 'ikhwan', 'akhwat'] }))} />
-          <Pill active={filters.time === 'selesai'} label="Arsip Selesai" onClick={() => setFilters(p => ({ ...p, time: 'selesai' }))} />
+          <Pill
+            active={filters.time === 'berlangsung'}
+            label="🔴 Berlangsung"
+            onClick={() => setFilters(p => ({ ...p, time: p.time === 'berlangsung' ? 'semua' : 'berlangsung', audience: ['umum', 'ikhwan', 'akhwat'] }))}
+          />
+          <Pill
+            active={filters.time === 'terdekat'}
+            label="Terdekat"
+            onClick={() => {
+              if (!userLocation && onRequestLocation) onRequestLocation();
+              setFilters(p => ({ ...p, time: p.time === 'terdekat' ? 'semua' : 'terdekat', audience: ['umum', 'ikhwan', 'akhwat'] }));
+            }}
+          />
+          <Pill
+            active={filters.time === 'rutin'}
+            label="Rutin"
+            onClick={() => setFilters(p => ({ ...p, time: p.time === 'rutin' ? 'semua' : 'rutin', audience: ['umum', 'ikhwan', 'akhwat'] }))}
+          />
+          <Pill
+            active={filters.time === 'online'}
+            label="Online (Hybrid)"
+            onClick={() => setFilters(p => ({ ...p, time: p.time === 'online' ? 'semua' : 'online', audience: ['umum', 'ikhwan', 'akhwat'] }))}
+          />
+          <Pill
+            active={filters.time === 'akhwat' || (!filters.audience.includes('ikhwan') && filters.audience.includes('akhwat'))}
+            label="Khusus Akhwat"
+            onClick={() => {
+              const isCurrentlyAkhwat = filters.time === 'akhwat' || (!filters.audience.includes('ikhwan') && filters.audience.includes('akhwat'));
+              setFilters(p => ({
+                ...p,
+                time: isCurrentlyAkhwat ? 'semua' : 'akhwat',
+                audience: isCurrentlyAkhwat ? ['umum', 'ikhwan', 'akhwat'] : ['akhwat'],
+              }));
+            }}
+          />
+          <Pill
+            active={filters.time === 'selesai'}
+            label="Arsip Selesai"
+            onClick={() => setFilters(p => ({ ...p, time: p.time === 'selesai' ? 'semua' : 'selesai', audience: ['umum', 'ikhwan', 'akhwat'] }))}
+          />
         </div>
       </div>
 
       {/* 2. Result Count Subtext Bar */}
       <div className="flex px-4 py-1.5 bg-surface-container-low/70 items-center justify-between text-outline text-[11px] font-medium shrink-0">
-        <span className="truncate pr-2">
-          Menampilkan {sessions.length} kajian{filters.time === 'selesai' ? ' (Arsip Selesai)' : ''}{filters.region ? ` di ${filters.region.name}` : ''}
+        <span className="truncate pr-2" suppressHydrationWarning>
+          Menampilkan {sessions.length} kajian{filters.time === 'selesai' ? ' (Arsip Selesai)' : filters.time === 'akhwat' ? ' (Khusus Akhwat)' : ''}{filters.region ? ` di ${filters.region.name}` : ''}
         </span>
         {onRefresh && (
           <button
@@ -322,6 +392,14 @@ export default function SidebarFilter({
                 <p className="font-semibold text-on-surface">Tidak Ada Arsip Kajian Selesai</p>
                 <p className="text-xs text-on-surface-variant max-w-[240px]">
                   Belum ada riwayat kajian masa lalu yang sesuai dengan filter pencarian ini.
+                </p>
+              </>
+            ) : filters.time === 'akhwat' ? (
+              <>
+                <span className="material-symbols-outlined text-[36px] text-outline/60">female</span>
+                <p className="font-semibold text-on-surface">Tidak Ada Kajian Khusus Akhwat</p>
+                <p className="text-xs text-on-surface-variant max-w-[240px]">
+                  Belum ada jadwal kajian khusus akhwat yang sesuai dengan filter pencarian ini.
                 </p>
               </>
             ) : (

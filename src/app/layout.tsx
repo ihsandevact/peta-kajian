@@ -7,6 +7,7 @@ import { LivePlayerProvider } from "@/context/LivePlayerContext";
 import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePlayer";
 import FloatingStudyNotes from "@/components/FloatingStudyNotes";
 import LoginNudgePrompt from "@/components/LoginNudgePrompt";
+import QueryProvider from "@/components/providers/QueryProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -71,15 +72,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="font-geist antialiased bg-surface text-on-surface h-full flex flex-col"
         suppressHydrationWarning
       >
-        <ThemeProvider>
-          <LivePlayerProvider>
-            {children}
-            <PersistentFloatingLivePlayer />
-            <FloatingStudyNotes />
-            <LoginNudgePrompt />
-            <PWAInstallPrompt />
-          </LivePlayerProvider>
-        </ThemeProvider>
+        <QueryProvider>
+          <ThemeProvider>
+            <LivePlayerProvider>
+              {children}
+              <PersistentFloatingLivePlayer />
+              <FloatingStudyNotes />
+              <LoginNudgePrompt />
+              <PWAInstallPrompt />
+            </LivePlayerProvider>
+          </ThemeProvider>
+        </QueryProvider>
       </body>
     </html>
   );

@@ -213,19 +213,19 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
 
         <div className="p-2.5 sm:p-3">
           {/* Header Badges & Action Buttons */}
-          <div className="flex items-center justify-between pb-1.5 border-b border-surface-container-high/60 mb-1.5">
+          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-surface-container-high/60 mb-1.5">
             {isPast ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full border border-surface-container-highest">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full border border-surface-container-highest whitespace-nowrap shrink-0">
                 <span className="material-symbols-outlined text-[13px] text-outline">history</span>
-                Kajian Telah Selesai
+                Kajian Selesai
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800 whitespace-nowrap shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
                 Kajian Aktif
               </span>
             )}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 shrink-0">
               {/* Badge Kategori */}
               <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider bg-surface-container px-2 py-0.5 rounded-full border border-surface-container-high">
                 {session.audience_type}
