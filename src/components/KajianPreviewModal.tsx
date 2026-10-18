@@ -20,12 +20,14 @@ interface KajianPreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
   session: StudySession | null;
+  onStartRoute?: (session: StudySession) => void;
 }
 
 export default function KajianPreviewModal({
   isOpen,
   onClose,
   session,
+  onStartRoute,
 }: KajianPreviewModalProps) {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [imgError, setImgError] = useState(false);
@@ -465,28 +467,56 @@ export default function KajianPreviewModal({
               {isPast ? (
                 /* Khusus Kajian Selesai/Arsip: Hanya Petunjuk Rute Maps yang diaktifkan */
                 hasRoute && (
-                  <a
-                    href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">directions_car</span>
-                    <span>Petunjuk Rute ke Lokasi Masjid</span>
-                  </a>
-                )
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {hasRoute && (
+                  onStartRoute ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onStartRoute(session);
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                      <span>Petunjuk Rute ke Lokasi Masjid</span>
+                    </button>
+                  ) : (
                     <a
                       href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
                     >
-                      <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
-                      <span>Petunjuk Rute</span>
+                      <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                      <span>Petunjuk Rute ke Lokasi Masjid</span>
                     </a>
+                  )
+                )
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {hasRoute && (
+                    onStartRoute ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onStartRoute(session);
+                        }}
+                        className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
+                        <span>Petunjuk Rute</span>
+                      </button>
+                    ) : (
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                      >
+                        <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
+                        <span>Petunjuk Rute</span>
+                      </a>
+                    )
                   )}
 
                   {hasDate && (

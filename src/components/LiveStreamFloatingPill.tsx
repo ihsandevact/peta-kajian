@@ -7,10 +7,12 @@ import { useLivePlayer } from '@/context/LivePlayerContext';
 
 interface LiveStreamFloatingPillProps {
   hasSelectedSession?: boolean;
+  isNavigating?: boolean;
 }
 
 export default function LiveStreamFloatingPill({
   hasSelectedSession = false,
+  isNavigating = false,
 }: LiveStreamFloatingPillProps) {
   const { playStream, isOpen } = useLivePlayer();
   const [liveCount, setLiveCount] = useState<number>(0);
@@ -84,13 +86,13 @@ export default function LiveStreamFloatingPill({
     };
   }, []);
 
-  if (liveCount <= 0 || dismissed || isOpen) {
+  if (liveCount <= 0 || dismissed || isOpen || isNavigating) {
     return null;
   }
 
   return (
     <div
-      className={`absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 z-30 transition-all duration-300 w-max max-w-[calc(100vw-24px)] ${
+      className={`absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 md:left-auto md:right-6 md:translate-x-0 z-30 transition-all duration-300 w-max max-w-[calc(100vw-24px)] ${
         hasSelectedSession ? 'hidden md:block' : 'block'
       }`}
     >

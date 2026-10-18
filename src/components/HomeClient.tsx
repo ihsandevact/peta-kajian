@@ -14,6 +14,9 @@ import { useOnlineStatus, cacheFeedSnapshot, getFeedSnapshot, getCachedOfflineSe
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import RequestContributorModal from '@/components/RequestContributorModal';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
+import InAppRoutePanel from '@/components/InAppRoutePanel';
+import LiveNavigationHUD from '@/components/LiveNavigationHUD';
+import { fetchRoute, type RouteResult } from '@/lib/services/routing';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -70,6 +73,16 @@ export default function HomeClient() {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [hasConnectionError, setHasConnectionError] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [activeRouteSession, setActiveRouteSession] = useState<StudySession | null>(null);
+  const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
+  const [routeMode, setRouteMode] = useState<'driving' | 'walking'>('driving');
+  const [isRouteLoading, setIsRouteLoading] = useState<boolean>(false);
+  const [routeError, setRouteError] = useState<string | null>(null);
+  const [isNavigating, setIsNavigating] = useState<boolean>(false);
+  const [userHeading, setUserHeading] = useState<number | null>(null);
+  const [isNavMuted, setIsNavMuted] = useState<boolean>(false);
+  const watchIdRef = useRef<number | null>(null);
+  const wakeLockRef = useRef<any>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'kontributor' | 'user' | null>(null);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState<boolean>(false);
@@ -214,6 +227,191 @@ export default function HomeClient() {
         { enableHighAccuracy: true, timeout: 10000 }
       );
     }
+  }, []);
+
+  // Handler untuk memulai navigasi rute jalan in-app
+  const handleStartRoute = useCallback(async (session: StudySession) => {
+    if (!session.venues || typeof session.venues.lat !== 'number' || typeof session.venues.lng !== 'number') {
+      alert('Lokasi kajian tidak memiliki koordinat GPS yang valid.');
+      return;
+    }
+
+    setActiveRouteSession(session);
+    setIsRouteLoading(true);
+    setRouteError(null);
+    setSelectedSession(null); // Tutup popup info agar tampilan peta bersih untuk rute
+    setIsSheetExpanded(false); // Ciutkan bottom sheet di tampilan mobile
+
+    let origin = userLocation;
+    if (!origin) {
+      if ('geolocation' in navigator) {
+        try {
+          const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 10000,
+            });
+          });
+          origin = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserLocation(origin);
+        } catch (err) {
+          console.warn('Geolocation permission denied or timed out:', err);
+          setIsRouteLoading(false);
+          setRouteError('Mohon izinkan akses lokasi (GPS) pada perangkat Anda untuk menghitung rute ke masjid.');
+          return;
+        }
+      } else {
+        setIsRouteLoading(false);
+        setRouteError('Browser/perangkat Anda tidak mendukung fitur lokasi GPS.');
+        return;
+      }
+    }
+
+    try {
+      const result = await fetchRoute(
+        [origin.lng, origin.lat],
+        [session.venues.lng, session.venues.lat],
+        routeMode
+      );
+      if (result) {
+        setActiveRoute(result);
+      } else {
+        setRouteError('Tidak dapat menemukan rute jalan ke lokasi kajian ini.');
+      }
+    } catch (err) {
+      console.error('Failed to fetch route:', err);
+      setRouteError('Gagal memuat rute jalan. Silakan coba kembali atau buka via Google Maps.');
+    } finally {
+      setIsRouteLoading(false);
+    }
+  }, [routeMode, userLocation]);
+
+  // Ganti moda transportasi (berkendara vs jalan kaki)
+  const handleModeChange = useCallback(async (newMode: 'driving' | 'walking') => {
+    setRouteMode(newMode);
+    if (activeRouteSession && userLocation && activeRouteSession.venues) {
+      setIsRouteLoading(true);
+      setRouteError(null);
+      try {
+        const result = await fetchRoute(
+          [userLocation.lng, userLocation.lat],
+          [activeRouteSession.venues.lng, activeRouteSession.venues.lat],
+          newMode
+        );
+        if (result) {
+          setActiveRoute(result);
+        } else {
+          setRouteError('Tidak dapat menemukan rute jalan untuk moda transportasi ini.');
+        }
+      } catch {
+        setRouteError('Gagal memperbarui rute moda transportasi.');
+      } finally {
+        setIsRouteLoading(false);
+      }
+    }
+  }, [activeRouteSession, userLocation]);
+
+  // Mulai navigasi langsung (HUD mode, 3D camera, Screen Wake Lock, continuous GPS tracking)
+  const handleStartLiveNav = useCallback(() => {
+    setIsNavigating(true);
+
+    // 1. Minta Screen Wake Lock agar layar HP tidak mati otomatis
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+      try {
+        (navigator as any).wakeLock.request('screen').then((lock: any) => {
+          wakeLockRef.current = lock;
+        }).catch((err: any) => {
+          console.warn('Wake Lock request error:', err);
+        });
+      } catch (e) {
+        console.warn('Wake Lock not supported:', e);
+      }
+    }
+
+    // 2. Mulai continuous GPS tracking dengan watchPosition
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      try {
+        const watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading)) {
+              setUserHeading(pos.coords.heading);
+            }
+          },
+          (err) => {
+            console.warn('Geolocation watchPosition error:', err);
+          },
+          { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+        );
+        watchIdRef.current = watchId;
+      } catch (err) {
+        console.warn('watchPosition failure:', err);
+      }
+    }
+  }, []);
+
+  // Hentikan mode navigasi langsung
+  const handleExitLiveNav = useCallback(() => {
+    setIsNavigating(false);
+
+    // Hentikan GPS watch
+    if (watchIdRef.current !== null && typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+
+    // Lepaskan Screen Wake Lock
+    if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+
+    // Hentikan suara jika sedang berbicara
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  }, []);
+
+  // Handler pemilihan kajian terpusat: otomatis membersihkan rute/navigasi jika memilih kajian lain
+  const handleSelectSession = useCallback((session: StudySession | null) => {
+    if (activeRouteSession && (!session || session.id !== activeRouteSession.id)) {
+      handleExitLiveNav();
+      setActiveRouteSession(null);
+      setActiveRoute(null);
+      setRouteError(null);
+    }
+    setSelectedSession(session);
+    if (session) {
+      setIsSheetExpanded(false);
+    }
+  }, [activeRouteSession, handleExitLiveNav]);
+
+  // Tutup panel dan bersihkan garis rute di peta, serta pulihkan state floating card kajian awal
+  const handleCloseRoute = useCallback(() => {
+    const prevSession = activeRouteSession;
+    handleExitLiveNav();
+    setActiveRouteSession(null);
+    setActiveRoute(null);
+    setRouteError(null);
+    if (prevSession) {
+      // Kloning objek agar referensi state baru dan memicu flyToSession di Map.tsx
+      setSelectedSession({ ...prevSession });
+    }
+  }, [activeRouteSession, handleExitLiveNav]);
+
+  // Bersihkan GPS watch dan Wake Lock saat komponen unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null && typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
   }, []);
 
   // Helper untuk membatasi waktu tunggu request Supabase maksimal 6 detik
@@ -473,6 +671,9 @@ export default function HomeClient() {
 
   // OBSERVER: Auto-Focus dinamis setiap kali daftar filter/sorting berubah
   useEffect(() => {
+    // Jika rute sedang aktif atau dalam proses navigasi, jangan ubah selectedSession secara otomatis
+    if (activeRouteSession) return;
+
     if (sortedSessions.length > 0) {
       setSelectedSession(prev => {
         if (prev && sortedSessions.some(s => s.id === prev.id)) {
@@ -483,7 +684,7 @@ export default function HomeClient() {
     } else {
       setSelectedSession(null);
     }
-  }, [sortedSessions]);
+  }, [sortedSessions, activeRouteSession]);
 
   return (
     <div className="w-full h-screen bg-surface font-geist text-on-surface flex overflow-hidden">
@@ -773,31 +974,66 @@ export default function HomeClient() {
         )}
 
         {/* MAIN CONTENT SPLIT */}
-        <main className="flex-1 flex w-full h-full relative overflow-hidden bg-surface md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */">
+        <main className={`flex-1 flex w-full h-full relative overflow-hidden bg-surface transition-all duration-300 ${
+          activeRouteSession ? 'pb-0' : 'md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */'
+        }`}>
           
           {/* Kolom Kanan: Map */}
           <div className="absolute inset-0 w-full h-full md:relative md:flex-1 bg-[#f1f5f9] overflow-hidden z-10">
-            {/* Quick Access Floating Pill jika ada channel live */}
-            <LiveStreamFloatingPill hasSelectedSession={!!selectedSession} />
+            {/* Quick Access Floating Pill jika ada channel live (disembunyikan saat mode navigasi aktif) */}
+            {!isNavigating && (
+              <LiveStreamFloatingPill hasSelectedSession={!!selectedSession} isNavigating={isNavigating} />
+            )}
 
             <MapComponent 
               sessions={sortedSessions} 
               selectedSession={selectedSession}
-              onSelectSession={(session) => {
-                setSelectedSession(session);
-                if (session) setIsSheetExpanded(false);
-              }}
+              onSelectSession={handleSelectSession}
               flyToRegion={filters.region}
+              activeRoute={activeRoute}
+              userLocation={userLocation}
+              onStartRoute={handleStartRoute}
+              isNavigating={isNavigating}
+              userHeading={userHeading}
             />
+
+            {/* Panel Rute In-App Pratinjau (Tampil sebelum mulai navigasi langsung) */}
+            {activeRouteSession && !isNavigating && (
+              <InAppRoutePanel
+                session={activeRouteSession}
+                routeResult={activeRoute}
+                isLoading={isRouteLoading}
+                mode={routeMode}
+                onModeChange={handleModeChange}
+                onClose={handleCloseRoute}
+                userLocation={userLocation}
+                errorMessage={routeError}
+                onStartLiveNavigation={handleStartLiveNav}
+              />
+            )}
+
+            {/* Mode Navigasi Langsung In-App (Top HUD Banner & Bottom Control Bar) */}
+            {activeRouteSession && isNavigating && activeRoute && (
+              <LiveNavigationHUD
+                session={activeRouteSession}
+                routeResult={activeRoute}
+                userLocation={userLocation}
+                userHeading={userHeading}
+                onExit={handleExitLiveNav}
+                isMuted={isNavMuted}
+                onToggleMute={() => setIsNavMuted((prev) => !prev)}
+              />
+            )}
           </div>
           
-          {/* Kolom Kiri: Search & List (Menjadi Bottom Sheet di Mobile) */}
+          {/* Kolom Kiri: Search & List (Menjadi Bottom Sheet di Mobile, tersembunyi saat rute aktif untuk Fullscreen Mode) */}
           <div className={`
             absolute bottom-[64px] left-0 w-full z-20 rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]
             ${isSheetExpanded ? 'h-[65vh]' : 'h-[160px]'}
             md:relative md:w-[410px] lg:w-[430px] md:h-full md:rounded-none md:shadow-[1px_0_0_0_rgba(226,232,240,0.8)] md:bottom-auto
             shrink-0 flex flex-col bg-surface-container-lowest overflow-hidden transition-all duration-300 ease-in-out
             md:order-first
+            ${activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none md:translate-y-0 md:opacity-100 md:pointer-events-auto' : ''}
           `}>
             {/* Drag Handle Indicator (Hanya tampil di Mobile) */}
             <div 
@@ -814,10 +1050,7 @@ export default function HomeClient() {
                 sessions={sortedSessions} 
                 allSessions={sessions}
                 selectedSession={selectedSession}
-                onSelectSession={(session) => {
-                  setSelectedSession(session);
-                  if (session) setIsSheetExpanded(false); // Otomatis collapse saat kajian dipilih agar map terlihat
-                }}
+                onSelectSession={handleSelectSession}
                 isLoading={isLoading}
                 userLocation={userLocation}
                 isRefreshing={isRefreshing}
@@ -831,8 +1064,10 @@ export default function HomeClient() {
           
         </main>
 
-        {/* MOBILE BOTTOM NAVIGATION (Hanya di HP) */}
-        <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest shadow-[0_-2px_12px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom,0px)] border-t border-surface-container-high/50">
+        {/* MOBILE BOTTOM NAVIGATION (Hanya di HP, otomatis meluncur keluar saat rute aktif) */}
+        <nav className={`md:hidden fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest shadow-[0_-2px_12px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom,0px)] border-t border-surface-container-high/50 transition-transform duration-300 ${
+          activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none' : ''
+        }`}>
           <div className="flex items-center justify-around h-16 px-2">
             <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary font-bold">
               <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>map</span>

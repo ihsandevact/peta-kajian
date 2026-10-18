@@ -1,9 +1,10 @@
 import * as React from 'react';
-import Map, { NavigationControl, Marker, Popup, type MapRef } from 'react-map-gl/maplibre';
+import Map, { NavigationControl, Marker, Popup, Source, Layer, type MapRef } from 'react-map-gl/maplibre';
 import { setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import type { SelectedRegion } from '@/utils/regions';
+import type { RouteResult } from '@/lib/services/routing';
 import VenueCard from './VenueCard';
 import OnlineStreamingOverlay from './OnlineStreamingOverlay';
 import { useTheme } from '@/context/ThemeContext';
@@ -17,6 +18,11 @@ interface AppMapProps {
   selectedSession: StudySession | null;
   onSelectSession: (s: StudySession | null) => void;
   flyToRegion?: SelectedRegion | null;
+  activeRoute?: RouteResult | null;
+  userLocation?: { lat: number; lng: number } | null;
+  onStartRoute?: (session: StudySession) => void;
+  isNavigating?: boolean;
+  userHeading?: number | null;
 }
 
 export default function AppMap({
@@ -24,6 +30,11 @@ export default function AppMap({
   selectedSession,
   onSelectSession,
   flyToRegion,
+  activeRoute,
+  userLocation,
+  onStartRoute,
+  isNavigating = false,
+  userHeading = null,
 }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
   const { resolvedTheme } = useTheme();
@@ -60,10 +71,23 @@ export default function AppMap({
       center: [getLng(session), getLat(session)],
       offset: [0, offsetY],
       zoom: 14,
+      pitch: 0,
+      bearing: 0,
       duration: 1200,
       essential: true
     });
   }, []);
+
+  // Reset sudut kamera 3D kembali ke 2D rata saat navigasi langsung selesai (hanya jika tidak sedang fokus terbang ke kajian)
+  React.useEffect(() => {
+    if (!isNavigating && !selectedSession && mapRef.current) {
+      mapRef.current.easeTo({
+        pitch: 0,
+        bearing: 0,
+        duration: 800,
+      });
+    }
+  }, [isNavigating, selectedSession]);
 
   // Terbang ke kajian terpilih saat diklik
   React.useEffect(() => {
@@ -91,6 +115,65 @@ export default function AppMap({
     }
   }, [flyToRegion]);
 
+  // Auto fitBounds saat rute in-app aktif (hanya saat tidak dalam mode navigasi 3D)
+  React.useEffect(() => {
+    if (activeRoute && !isNavigating && mapRef.current) {
+      const coords = activeRoute.geometry.coordinates;
+      if (coords.length > 0) {
+        let minLng = coords[0][0];
+        let maxLng = coords[0][0];
+        let minLat = coords[0][1];
+        let maxLat = coords[0][1];
+
+        for (const [lng, lat] of coords) {
+          if (lng < minLng) minLng = lng;
+          if (lng > maxLng) maxLng = lng;
+          if (lat < minLat) minLat = lat;
+          if (lat > maxLat) maxLat = lat;
+        }
+
+        const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+        mapRef.current.fitBounds(
+          [
+            [minLng, minLat],
+            [maxLng, maxLat],
+          ],
+          {
+            padding: isDesktop
+              ? { top: 90, bottom: 90, left: 430, right: 90 }
+              : { top: 70, bottom: 250, left: 35, right: 35 },
+            duration: 1200,
+            essential: true,
+          }
+        );
+      }
+    }
+  }, [activeRoute, isNavigating]);
+
+  // Kamera Mengemudi 3D saat Live Navigasi Aktif
+  React.useEffect(() => {
+    if (isNavigating && userLocation && mapRef.current) {
+      const heading = typeof userHeading === 'number' && !isNaN(userHeading) ? userHeading : 0;
+      mapRef.current.easeTo({
+        center: [userLocation.lng, userLocation.lat],
+        zoom: 17.5,
+        pitch: 50,
+        bearing: heading,
+        duration: 800,
+        essential: true,
+      });
+    }
+  }, [isNavigating, userLocation, userHeading]);
+
+  const routeGeoJson = React.useMemo(() => {
+    if (!activeRoute) return null;
+    return {
+      type: 'Feature' as const,
+      properties: {},
+      geometry: activeRoute.geometry,
+    };
+  }, [activeRoute]);
+
   return (
     <div className="w-full h-full relative">
       <Map
@@ -104,6 +187,69 @@ export default function AppMap({
         }
       >
         <NavigationControl position="bottom-right" showCompass={false} />
+
+        {/* LAYER RUTE IN-APP (GEOJSON LINESTRING) */}
+        {routeGeoJson && (
+          <Source id="in-app-route-source" type="geojson" data={routeGeoJson}>
+            {/* Layer Casing / Outline Gelap Kontras */}
+            <Layer
+              id="route-casing"
+              type="line"
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+              paint={{
+                'line-color': resolvedTheme === 'dark' ? '#064e3b' : '#047857',
+                'line-width': 8,
+                'line-opacity': 0.85,
+              }}
+            />
+            {/* Layer Inti Rute Jalan Raya (Warna Emerald Cerah) */}
+            <Layer
+              id="route-line"
+              type="line"
+              layout={{
+                'line-cap': 'round',
+                'line-join': 'round',
+              }}
+              paint={{
+                'line-color': '#10b981',
+                'line-width': 5,
+                'line-opacity': 0.95,
+              }}
+            />
+          </Source>
+        )}
+
+        {/* MARKER LOKASI PENGGUNA (TITIK BIRU ATAU PANAH NAVIGASI) */}
+        {userLocation && (
+          <Marker
+            longitude={userLocation.lng}
+            latitude={userLocation.lat}
+            anchor="center"
+            style={{ zIndex: 45 }}
+          >
+            {isNavigating ? (
+              <div
+                className="relative flex items-center justify-center transition-transform duration-300"
+                style={{
+                  transform: typeof userHeading === 'number' && !isNaN(userHeading) ? `rotate(${userHeading}deg)` : undefined,
+                }}
+              >
+                <div className="absolute -inset-3 rounded-full bg-blue-500/25 animate-ping pointer-events-none" />
+                <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 shadow-xl flex items-center justify-center text-white">
+                  <span className="material-symbols-outlined text-[20px]">navigation</span>
+                </div>
+              </div>
+            ) : (
+              <div className="relative flex items-center justify-center">
+                <div className="absolute -inset-2.5 rounded-full bg-blue-500/30 animate-ping pointer-events-none" />
+                <div className="relative w-4 h-4 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 shadow-md" />
+              </div>
+            )}
+          </Marker>
+        )}
         
         {mappableSessions.map(session => {
           const isSelected = selectedSession?.id === session.id;
@@ -161,7 +307,12 @@ export default function AppMap({
             offset={12}
             maxWidth="none"
           >
-            <VenueCard key={selectedSession.id} session={selectedSession} onClose={() => onSelectSession(null)} />
+            <VenueCard
+              key={selectedSession.id}
+              session={selectedSession}
+              onClose={() => onSelectSession(null)}
+              onStartRoute={onStartRoute}
+            />
           </Popup>
         )}
       </Map>

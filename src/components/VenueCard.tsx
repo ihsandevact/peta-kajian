@@ -16,9 +16,10 @@ import { FEATURE_FLAGS } from '@/config/features';
 interface VenueCardProps {
   session: StudySession;
   onClose?: () => void;
+  onStartRoute?: (session: StudySession) => void;
 }
 
-export default function VenueCard({ session, onClose }: VenueCardProps) {
+export default function VenueCard({ session, onClose, onStartRoute }: VenueCardProps) {
   const { playStream, openStudyMode } = useLivePlayer();
   const [imgError, setImgError] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -377,15 +378,26 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           {isPast ? (
             <div className="flex flex-col gap-1.5 w-full">
               {hasRoute ? (
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
-                >
-                  <span className="material-symbols-outlined text-[16px]">directions_car</span>
-                  <span>Petunjuk Rute ke Lokasi</span>
-                </a>
+                onStartRoute ? (
+                  <button
+                    type="button"
+                    onClick={() => onStartRoute(session)}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                    <span>Petunjuk Rute ke Lokasi</span>
+                  </button>
+                ) : (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                    <span>Petunjuk Rute ke Lokasi</span>
+                  </a>
+                )
               ) : (
                 <div className="w-full py-1.5 px-3 text-center text-xs font-medium text-on-surface-variant bg-surface-container rounded-xl border border-surface-container-high">
                   Kajian Online Telah Selesai
@@ -396,15 +408,26 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             /* Skenario 1: Hybrid (Ada Rute Maps DAN Ada Tonton Live) */
             <>
               <div className="grid grid-cols-2 gap-1.5 w-full">
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
-                >
-                  <span className="material-symbols-outlined text-[15px]">directions_car</span>
-                  <span>Rute Maps</span>
-                </a>
+                {onStartRoute ? (
+                  <button
+                    type="button"
+                    onClick={() => onStartRoute(session)}
+                    className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span>Rute Maps</span>
+                  </button>
+                ) : (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span>Rute Maps</span>
+                  </a>
+                )}
 
                 <button
                   type="button"
@@ -454,15 +477,26 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
           ) : hasRoute && hasCalendar ? (
             /* Skenario 2: Offline di Masjid (Ada Rute + Kalender, Tanpa Stream) */
             <div className="grid grid-cols-2 gap-1.5 w-full">
-              <a
-                href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
-              >
-                <span className="material-symbols-outlined text-[15px]">directions_car</span>
-                <span>Rute Maps</span>
-              </a>
+              {onStartRoute ? (
+                <button
+                  type="button"
+                  onClick={() => onStartRoute(session)}
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                  <span>Rute Maps</span>
+                </button>
+              ) : (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                >
+                  <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                  <span>Rute Maps</span>
+                </a>
+              )}
 
               <a
                 href={gCalUrl.toString()}
@@ -525,15 +559,26 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
             /* Skenario 4: Sisa tombol tunggal jika yang lain tidak tersedia */
             <div className="flex flex-col gap-1.5 w-full">
               {hasRoute && (
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
-                >
-                  <span className="material-symbols-outlined text-[15px]">directions_car</span>
-                  <span>Petunjuk Rute Maps</span>
-                </a>
+                onStartRoute ? (
+                  <button
+                    type="button"
+                    onClick={() => onStartRoute(session)}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span>Petunjuk Rute Maps</span>
+                  </button>
+                ) : (
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span>Petunjuk Rute Maps</span>
+                  </a>
+                )
               )}
               {hasLive && (
                 <button
@@ -588,6 +633,7 @@ export default function VenueCard({ session, onClose }: VenueCardProps) {
         isOpen={isPreviewModalOpen}
         onClose={() => setIsPreviewModalOpen(false)}
         session={session}
+        onStartRoute={onStartRoute}
       />
     </div>
   );
