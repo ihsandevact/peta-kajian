@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 
@@ -34,6 +33,7 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
   const [attendanceSessionTitle, setAttendanceSessionTitle] = useState<string>('');
   const [isPipModalOpen, setIsPipModalOpen] = useState(false);
   const [pipSessionTitle, setPipSessionTitle] = useState<string>('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Pantau status login secara mandiri jika propUser tidak dioper (misal saat dipasang global di layout.tsx)
@@ -45,7 +45,17 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
 
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
-      setCurrentUser(data?.user || null);
+      if (data?.user) {
+        setCurrentUser(data.user);
+      } else {
+        supabase.auth.getSession().then(({ data: sess }) => {
+          if (sess?.session?.user) {
+            setCurrentUser(sess.session.user);
+          } else {
+            setCurrentUser(null);
+          }
+        });
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -70,7 +80,7 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
     const handleEvent = (e: CustomEvent<LoginNudgeEventDetail>) => {
       // Jika pengguna sudah login atau sedang di halaman auth, jangan tampilkan ajakan login
       if (currentUser) return;
-      if (pathname === '/login' || pathname === '/kontributor/login' || pathname?.startsWith('/auth')) return;
+      if (pathname === '/login' || pathname === '/kontributor/login' || pathname?.startsWith('/auth') || pathname === '/live/pip' || pathname?.startsWith('/live/pip')) return;
 
       const detail = e.detail;
       if (!detail) return;
@@ -103,25 +113,41 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
   }, [currentUser, pathname]);
 
   const isAuthPage = pathname === '/login' || pathname === '/kontributor/login' || pathname?.startsWith('/auth');
+  const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
 
-  // Jika sudah login atau sedang berada di halaman login/auth, tidak merender apa-apa
-  if (currentUser || isAuthPage) return null;
+  // Jangan render apa-apa jika sudah login, di halaman auth, atau di dalam jendela PiP OS
+  if (currentUser || isAuthPage || isPipRoute) return null;
 
-  const loginUrl = pathname && pathname !== '/' && !isAuthPage
-    ? `/login?next=${encodeURIComponent(pathname)}`
-    : '/login';
-
-  const closeAllPrompts = () => {
-    setIsPipModalOpen(false);
-    setIsAttendanceModalOpen(false);
-    setToastData(null);
-    if (pathname && pathname !== '/' && !isAuthPage) {
+  // Handler Login 1-Klik Google langsung dari modal/toast
+  const handleGoogleLogin = async () => {
+    try {
+      setIsLoggingIn(true);
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname + window.location.search : (pathname || '/');
       const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-      document.cookie = `peta_kajian_auth_next=${encodeURIComponent(pathname)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+      
+      document.cookie = `peta_kajian_auth_next=${encodeURIComponent(currentPath)}; path=/; max-age=600; SameSite=Lax${isHttps ? '; Secure' : ''}`;
       try {
-        sessionStorage.setItem('peta_kajian_auth_next', pathname);
+        sessionStorage.setItem('peta_kajian_auth_next', currentPath);
         sessionStorage.setItem('peta_kajian_auth_in_progress', 'true');
       } catch {}
+
+      const supabase = createClient();
+      const callbackUrl = new URL('/auth/callback', window.location.origin);
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: callbackUrl.toString(),
+        },
+      });
+
+      if (error) {
+        console.error('Login error from nudge prompt:', error.message);
+        setIsLoggingIn(false);
+      }
+    } catch (err) {
+      console.error('Unexpected login error:', err);
+      setIsLoggingIn(false);
     }
   };
 
@@ -153,14 +179,24 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
               </p>
 
               <div className="mt-2.5 flex items-center gap-2">
-                <Link
-                  href={loginUrl}
-                  onClick={closeAllPrompts}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-primary text-white text-[11px] font-semibold hover:bg-primary/90 transition-all shadow-2xs active:scale-95"
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isLoggingIn}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-primary text-white text-[11px] font-semibold hover:bg-primary/90 transition-all shadow-2xs active:scale-95 disabled:opacity-60 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[14px]">login</span>
-                  <span>Masuk 1-Klik Google</span>
-                </Link>
+                  {isLoggingIn ? (
+                    <>
+                      <span className="material-symbols-outlined text-[14px] animate-spin">progress_activity</span>
+                      <span>Menghubungkan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[14px]">login</span>
+                      <span>Masuk 1-Klik Google</span>
+                    </>
+                  )}
+                </button>
 
                 <button
                   type="button"
@@ -215,18 +251,23 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
             </div>
 
             <div className="flex flex-col gap-2 mt-4">
-              <Link
-                href={loginUrl}
-                onClick={closeAllPrompts}
-                className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
+                className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98 cursor-pointer disabled:opacity-60"
               >
-                <img
-                  src="https://www.svgrepo.com/show/475656/google-color.svg"
-                  className="w-4 h-4 bg-white rounded-full p-0.5"
-                  alt="Google"
-                />
-                <span>Lanjutkan dengan Google (1-Klik)</span>
-              </Link>
+                {isLoggingIn ? (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                ) : (
+                  <img
+                    src="https://www.svgrepo.com/show/475656/google-color.svg"
+                    className="w-4 h-4 bg-white rounded-full p-0.5"
+                    alt="Google"
+                  />
+                )}
+                <span>{isLoggingIn ? 'Menghubungkan...' : 'Lanjutkan dengan Google (1-Klik)'}</span>
+              </button>
 
               <button
                 type="button"
@@ -283,18 +324,23 @@ export default function LoginNudgePrompt({ currentUser: propUser }: LoginNudgePr
             </div>
 
             <div className="flex flex-col gap-2 mt-4">
-              <Link
-                href={loginUrl}
-                onClick={closeAllPrompts}
-                className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98"
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                disabled={isLoggingIn}
+                className="w-full py-2.5 px-4 rounded-xl bg-primary text-white text-xs font-semibold hover:bg-primary/90 flex items-center justify-center gap-2 transition-all shadow-xs active:scale-98 cursor-pointer disabled:opacity-60"
               >
-                <img
-                  src="https://www.svgrepo.com/show/475656/google-color.svg"
-                  className="w-4 h-4 bg-white rounded-full p-0.5"
-                  alt="Google"
-                />
-                <span>Masuk Sekarang untuk Mengaktifkan</span>
-              </Link>
+                {isLoggingIn ? (
+                  <span className="material-symbols-outlined text-[16px] animate-spin">progress_activity</span>
+                ) : (
+                  <img
+                    src="https://www.svgrepo.com/show/475656/google-color.svg"
+                    className="w-4 h-4 bg-white rounded-full p-0.5"
+                    alt="Google"
+                  />
+                )}
+                <span>{isLoggingIn ? 'Menghubungkan...' : 'Masuk Sekarang untuk Mengaktifkan'}</span>
+              </button>
 
               <button
                 type="button"

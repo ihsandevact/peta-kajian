@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 import { createClient } from '@/utils/supabase/client';
@@ -25,6 +26,9 @@ export default function PersistentFloatingLivePlayer() {
     isStudyNotesOpen,
     toggleMinimizeStudyNotes,
   } = useLivePlayer();
+
+  const pathname = usePathname();
+  const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
 
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -259,7 +263,17 @@ export default function PersistentFloatingLivePlayer() {
   useEffect(() => {
     const supabase = createClient();
     supabase.auth.getUser().then(({ data }) => {
-      setCurrentUser(data?.user || null);
+      if (data?.user) {
+        setCurrentUser(data.user);
+      } else {
+        supabase.auth.getSession().then(({ data: sess }) => {
+          if (sess?.session?.user) {
+            setCurrentUser(sess.session.user);
+          } else {
+            setCurrentUser(null);
+          }
+        });
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -295,7 +309,7 @@ export default function PersistentFloatingLivePlayer() {
 
   // Handshake berkala ke YouTube iframe agar secara kontinu mengirimkan telemetry infoDelivery (termasuk saat user seek)
   useEffect(() => {
-    if (!isOpen || isPipActive) return;
+    if (isPipRoute || !isOpen || isPipActive) return;
 
     const interval = setInterval(() => {
       try {
@@ -309,11 +323,12 @@ export default function PersistentFloatingLivePlayer() {
     }, 600);
 
     return () => clearInterval(interval);
-  }, [isOpen, isPipActive]);
+  }, [isPipRoute, isOpen, isPipActive]);
 
   // Helper penanganan ketika jendela PiP ditutup / dikembalikan ke tab web
   const handlePipClosedEvent = useCallback((time?: number) => {
     setIsPipActive(false);
+    maximizePlayer();
 
     let resolvedTime = time;
     if (typeof resolvedTime !== 'number' || resolvedTime <= 0) {
@@ -334,12 +349,31 @@ export default function PersistentFloatingLivePlayer() {
       playbackStartEpochRef.current = Date.now();
     }
 
+    try {
+      if (iframeRef.current?.contentWindow) {
+        if (typeof resolvedTime === 'number' && resolvedTime > 0) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'seekTo', args: [resolvedTime, true] }),
+            '*'
+          );
+        }
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+      }
+    } catch {}
+
     if (pipCheckIntervalRef.current) {
       clearInterval(pipCheckIntervalRef.current);
       pipCheckIntervalRef.current = null;
     }
     pipWindowRef.current = null;
-  }, [activeStream?.videoId, setIsPipActive]);
+  }, [activeStream?.videoId, setIsPipActive, maximizePlayer]);
 
   // Sinkronisasi status & timestamp PiP dengan jendela pop-out / Document PiP
   useEffect(() => {
@@ -470,6 +504,21 @@ export default function PersistentFloatingLivePlayer() {
     const height = Math.round(width * (9 / 16)) + 44;
     const url = `/live/pip?v=${activeStream.videoId}&t=${currentTimestamp}&title=${encodeURIComponent(activeStream.title)}&channel=${encodeURIComponent(activeStream.channelName)}&speaker=${encodeURIComponent(activeStream.speakerName || '')}`;
 
+    // Minimalkan player di jendela utama dan jeda audio di tab ini agar tidak bentrok suara ganda (double audio)
+    minimizePlayer();
+    try {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+          '*'
+        );
+      }
+    } catch {}
+
     // PRIORITAS 1: Modern Document Picture-in-Picture API (Standar Chrome 116+ / Edge 116+)
     // Memberikan perilaku OS Always-on-Top (Topmost) persis seperti TikTok & YouTube!
     if (typeof window !== 'undefined' && 'documentPictureInPicture' in window) {
@@ -587,7 +636,7 @@ export default function PersistentFloatingLivePlayer() {
         handlePipClosedEvent(lastTime);
       }
     }, 400);
-  }, [activeStream, currentUser, isPipActive, playerWidth, resumeTime, handlePipClosedEvent, handleRestoreFromPip]);
+  }, [activeStream, currentUser, isPipActive, playerWidth, resumeTime, handlePipClosedEvent, handleRestoreFromPip, minimizePlayer]);
 
   // Handler Tutup Pemutar & Tutup PiP jika terbuka
   const handleClosePlayer = useCallback(() => {
@@ -604,7 +653,7 @@ export default function PersistentFloatingLivePlayer() {
     closePlayer();
   }, [closePlayer]);
 
-  if (!isOpen || !activeStream) {
+  if (isPipRoute || !isOpen || !activeStream) {
     return null;
   }
 

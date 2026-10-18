@@ -138,28 +138,64 @@ export default function HomeClient() {
     if (typeof window === 'undefined') return;
 
     try {
-      const inProgress = sessionStorage.getItem('peta_kajian_auth_in_progress');
       const targetNext = sessionStorage.getItem('peta_kajian_auth_next');
+      const inProgress = sessionStorage.getItem('peta_kajian_auth_in_progress');
 
-      // Segera konsumsi (hapus) flag agar hanya berjalan satu kali dan tidak menghalangi tombol '<- Peta Kajian'
-      if (inProgress || targetNext) {
+      // Jika tidak ada targetNext atau tujuannya memang beranda '/', bersihkan flag
+      if (!targetNext || targetNext === '/' || !targetNext.startsWith('/') || targetNext.startsWith('//')) {
+        if (inProgress || targetNext) {
+          sessionStorage.removeItem('peta_kajian_auth_in_progress');
+          sessionStorage.removeItem('peta_kajian_auth_next');
+          const isHttps = window.location.protocol === 'https:';
+          document.cookie = `peta_kajian_auth_next=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT${isHttps ? '; Secure' : ''}`;
+        }
+        return;
+      }
+
+      // Jika ada targetNext selain beranda (misal '/live'):
+      const supabase = createClient();
+
+      const proceedRedirect = () => {
         sessionStorage.removeItem('peta_kajian_auth_in_progress');
         sessionStorage.removeItem('peta_kajian_auth_next');
         const isHttps = window.location.protocol === 'https:';
         document.cookie = `peta_kajian_auth_next=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT${isHttps ? '; Secure' : ''}`;
-      }
 
-      if (targetNext && targetNext !== '/' && targetNext.startsWith('/') && !targetNext.startsWith('//')) {
+        // Arahkan ke targetNext TANPA menyertakan ?code= karena sudah berhasil di-exchange menjadi session cookies
         const targetUrl = new URL(targetNext, window.location.origin);
-        // Teruskan query param code jika ada (PKCE flow) agar halaman tujuan dapat mendeteksi auth
-        if (window.location.search.includes('code=')) {
-          const currentParams = new URLSearchParams(window.location.search);
-          const code = currentParams.get('code');
-          if (code) {
-            targetUrl.searchParams.set('code', code);
-          }
-        }
         window.location.replace(targetUrl.pathname + targetUrl.search);
+      };
+
+      // Jika URL membawa ?code=, tunggu sampai proses exchange token PKCE selesai dan sesi tersimpan di cookie
+      if (window.location.search.includes('code=')) {
+        let resolved = false;
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            proceedRedirect();
+          }
+        }, 3500);
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+          if (session?.user && !resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            subscription.unsubscribe();
+            proceedRedirect();
+          }
+        });
+
+        supabase.auth.getSession().then(({ data: sess }) => {
+          if (sess?.session?.user && !resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            subscription.unsubscribe();
+            proceedRedirect();
+          }
+        });
+      } else {
+        // Jika tidak membawa ?code= (misal sudah di-exchange di server atau sudah tersimpan)
+        proceedRedirect();
       }
     } catch {}
   }, []);

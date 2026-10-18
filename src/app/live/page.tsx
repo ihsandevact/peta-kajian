@@ -44,20 +44,63 @@ export default function LiveStreamingPage() {
     } catch {}
 
     loadData();
-    initUser();
-  }, []);
 
-  async function initUser() {
+    // Inisialisasi & sinkronisasi realtime status autentikasi user
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setCurrentUser(user);
-      const admin = await checkIsAdmin(user);
-      setIsAdmin(admin);
-    } else {
-      setIsAdmin(false);
+
+    async function handleUserAuth(u: any) {
+      setCurrentUser(u);
+      if (u) {
+        try {
+          const admin = await checkIsAdmin(u);
+          setIsAdmin(admin);
+        } catch {
+          setIsAdmin(false);
+        }
+      } else {
+        setIsAdmin(false);
+      }
     }
-  }
+
+    // Fallback: Jika pengguna diarahkan langsung ke /live dengan membawa ?code=
+    if (typeof window !== 'undefined' && window.location.search.includes('code=')) {
+      const currentCode = new URLSearchParams(window.location.search).get('code');
+      if (currentCode) {
+        supabase.auth.exchangeCodeForSession(currentCode).then(({ data, error }) => {
+          if (!error && data?.user) {
+            handleUserAuth(data.user);
+          }
+          try {
+            const cleanUrl = new URL(window.location.href);
+            cleanUrl.searchParams.delete('code');
+            window.history.replaceState({}, '', cleanUrl.pathname + cleanUrl.search);
+          } catch {}
+        });
+      }
+    }
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        handleUserAuth(data.user);
+      } else {
+        supabase.auth.getSession().then(({ data: sess }) => {
+          if (sess?.session?.user) {
+            handleUserAuth(sess.session.user);
+          } else {
+            handleUserAuth(null);
+          }
+        });
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleUserAuth(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   async function loadData() {
     setLoading(true);
@@ -1100,7 +1143,16 @@ export default function LiveStreamingPage() {
       <MobileNavDrawer
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
-        currentUser={currentUser}
+        currentUser={
+          currentUser
+            ? {
+                name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || null,
+                email: currentUser.email || null,
+                avatarUrl: currentUser.user_metadata?.avatar_url || null,
+                role: isAdmin ? 'admin' : undefined,
+              }
+            : null
+        }
         isAdmin={isAdmin}
       />
     </div>

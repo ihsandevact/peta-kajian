@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 export async function GET(request: Request) {
@@ -16,39 +16,58 @@ export async function GET(request: Request) {
   const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/'
 
   if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      const forwardedHost = request.headers.get('x-forwarded-host')
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      
-      let redirectUrl = `${origin}${next}`
-      if (!isLocalEnv && forwardedHost) {
-        redirectUrl = `https://${forwardedHost}${next}`
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    const isLocalEnv = process.env.NODE_ENV === 'development'
+    
+    let redirectUrl = `${origin}${next}`
+    if (!isLocalEnv && forwardedHost) {
+      redirectUrl = `https://${forwardedHost}${next}`
+    }
+
+    const response = NextResponse.redirect(redirectUrl)
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll()
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              const cookieOpts = {
+                ...options,
+                path: '/',
+                sameSite: 'lax' as const,
+              }
+              try {
+                cookieStore.set(name, value, cookieOpts)
+              } catch {}
+              response.cookies.set(name, value, cookieOpts)
+            })
+          },
+        },
       }
+    )
 
-      const response = NextResponse.redirect(redirectUrl)
-      
-      // Hapus cookie peta_kajian_auth_next setelah dipakai
-      response.cookies.delete('peta_kajian_auth_next')
-      response.cookies.set('peta_kajian_auth_next', '', {
-        path: '/',
-        maxAge: 0,
-        expires: new Date(0),
-      })
+    try {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      if (!error) {
+        // Hapus cookie peta_kajian_auth_next setelah dipakai
+        response.cookies.delete('peta_kajian_auth_next')
+        response.cookies.set('peta_kajian_auth_next', '', {
+          path: '/',
+          maxAge: 0,
+          expires: new Date(0),
+        })
 
-      // Pastikan cookie auth tersalin utuh ke header Set-Cookie pada respons redirect
-      cookieStore.getAll().forEach((cookie) => {
-        if (cookie.name !== 'peta_kajian_auth_next') {
-          response.cookies.set(cookie.name, cookie.value, {
-            path: '/',
-            sameSite: 'lax',
-            secure: !isLocalEnv && !origin.includes('localhost'),
-          })
-        }
-      })
-
-      return response
+        return response
+      } else {
+        console.error('Auth callback exchangeCodeForSession error:', error.message)
+      }
+    } catch (err) {
+      console.error('Auth callback exception during exchangeCodeForSession:', err)
     }
   }
 

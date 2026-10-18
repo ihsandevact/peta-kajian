@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import StudyLoginModal from '@/components/StudyLoginModal';
@@ -31,6 +32,9 @@ export default function FloatingStudyNotes() {
     playStream,
     maximizePlayer,
   } = useLivePlayer();
+
+  const pathname = usePathname();
+  const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
 
   // Auth & Login Guard
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -137,15 +141,24 @@ export default function FloatingStudyNotes() {
   useEffect(() => {
     async function initAuthAndPendingSession() {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      let foundUser: any = null;
+      try {
+        const { data } = await supabase.auth.getUser();
+        foundUser = data?.user || null;
+      } catch {}
 
-      setCurrentUser(user);
+      if (!foundUser) {
+        try {
+          const { data: sess } = await supabase.auth.getSession();
+          foundUser = sess?.session?.user || null;
+        } catch {}
+      }
+
+      setCurrentUser(foundUser);
       setAuthChecked(true);
 
       const pending = getPendingStudySession();
-      if (user && pending) {
+      if (foundUser && pending) {
         clearPendingStudySession();
         openStudyMode({
           videoId: pending.videoId,
@@ -173,7 +186,7 @@ export default function FloatingStudyNotes() {
 
   // 3. Gerbang Login: Jika user belum login saat membuka Mode Belajar
   useEffect(() => {
-    if (!authChecked) return;
+    if (isPipRoute || !authChecked) return;
 
     if (isStudyNotesOpen && studySession && !currentUser) {
       setPendingLoginSession({
@@ -186,7 +199,7 @@ export default function FloatingStudyNotes() {
       setIsLoginModalOpen(true);
       closeStudyNotes();
     }
-  }, [isStudyNotesOpen, studySession, currentUser, authChecked, closeStudyNotes]);
+  }, [isPipRoute, isStudyNotesOpen, studySession, currentUser, authChecked, closeStudyNotes]);
 
   // Inisialisasi Riwayat Histori
   const initHistory = useCallback((initialVal: string) => {
@@ -679,6 +692,10 @@ export default function FloatingStudyNotes() {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (isPipRoute) {
+    return null;
+  }
 
   if (!isStudyNotesOpen || !studySession || !currentUser) {
     return (

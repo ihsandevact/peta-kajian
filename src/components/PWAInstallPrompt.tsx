@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 
 // Global reference for install prompt across components
 declare global {
@@ -107,11 +108,15 @@ export function usePWAInstall() {
 }
 
 export default function PWAInstallPrompt() {
+  const pathname = usePathname();
+  const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
   const [showBanner, setShowBanner] = useState(false);
   const { canInstall, isInstalled, isIos, showIosGuide, setShowIosGuide, promptInstall } = usePWAInstall();
 
   // Register Service Worker safely
   useEffect(() => {
+    if (isPipRoute) return;
+
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js')
@@ -132,7 +137,7 @@ export default function PWAInstallPrompt() {
       }, 4000);
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [isPipRoute]);
 
   const handleDismiss = () => {
     setShowBanner(false);
@@ -145,6 +150,8 @@ export default function PWAInstallPrompt() {
     setShowBanner(false);
     await promptInstall();
   };
+
+  if (isPipRoute) return null;
 
   return (
     <>

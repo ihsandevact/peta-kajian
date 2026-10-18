@@ -93,7 +93,8 @@ export default function MobileNavDrawer({
     { id: 'admin-cron', href: '/admin/cron', label: 'Status Otomatisasi (Cron)', icon: 'schedule', desc: 'Pantau scheduler background worker' },
   ];
 
-  const displayName = currentUser?.name || currentUser?.email?.split('@')[0] || 'Relawan';
+  const userAvatar = currentUser?.avatarUrl || (currentUser as any)?.user_metadata?.avatar_url;
+  const displayName = currentUser?.name || (currentUser as any)?.user_metadata?.full_name || currentUser?.email?.split('@')[0] || 'Relawan';
 
   return (
     <>
@@ -141,9 +142,9 @@ export default function MobileNavDrawer({
         {currentUser && (
           <div className="p-3 mx-3 mt-3 rounded-2xl bg-surface-container-low/70 border border-surface-container-high/60 flex items-center gap-3">
             <div className="relative shrink-0">
-              {currentUser.avatarUrl && !avatarError ? (
+              {userAvatar && !avatarError ? (
                 <img
-                  src={currentUser.avatarUrl}
+                  src={userAvatar}
                   alt=""
                   className="w-10 h-10 rounded-full object-cover border border-surface-container-high"
                   onError={() => setAvatarError(true)}
