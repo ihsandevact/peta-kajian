@@ -291,7 +291,7 @@ export default function ContributorProfilePage() {
             {isAdmin && (
               <Link
                 href="/admin"
-                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800 dark:text-amber-200 bg-amber-100 dark:bg-amber-950/40 hover:bg-amber-200 border border-amber-300 dark:border-amber-800 px-2 sm:px-3 py-1.5 rounded-full transition-colors shadow-2xs"
+                className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-amber-800 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/50 hover:bg-amber-200 dark:hover:bg-amber-900/60 dark:hover:text-amber-100 border border-amber-300 dark:border-amber-700/60 px-2 sm:px-3 py-1.5 rounded-full transition-colors shadow-2xs"
               >
                 <span className="material-symbols-outlined text-[15px] sm:text-[16px]">admin_panel_settings</span>
                 <span>Portal Admin</span>

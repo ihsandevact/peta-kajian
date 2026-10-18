@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/context/ThemeContext";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { LivePlayerProvider } from "@/context/LivePlayerContext";
 import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePlayer";
@@ -49,6 +50,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('peta_kajian_theme')||'light';var d=t==='dark';if(d){document.documentElement.classList.add('dark')}else{document.documentElement.classList.remove('dark')}}catch(e){}})()`,
+          }}
+        />
         <link rel="icon" href="/favicon.ico?v=3" sizes="any" />
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=3" />
         <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=3" />
@@ -65,13 +71,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className="font-geist antialiased bg-surface text-on-surface h-full flex flex-col"
         suppressHydrationWarning
       >
-        <LivePlayerProvider>
-          {children}
-          <PersistentFloatingLivePlayer />
-          <FloatingStudyNotes />
-          <LoginNudgePrompt />
-          <PWAInstallPrompt />
-        </LivePlayerProvider>
+        <ThemeProvider>
+          <LivePlayerProvider>
+            {children}
+            <PersistentFloatingLivePlayer />
+            <FloatingStudyNotes />
+            <LoginNudgePrompt />
+            <PWAInstallPrompt />
+          </LivePlayerProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

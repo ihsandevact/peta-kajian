@@ -453,9 +453,9 @@ export default function DashboardPage() {
           {isAdmin && (
             <Link
               href="/admin"
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 hover:bg-amber-500/20 rounded-full text-xs font-semibold transition-colors shadow-2xs"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 dark:bg-amber-950/50 border border-amber-500/30 dark:border-amber-700/60 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 dark:hover:bg-amber-900/60 dark:hover:text-amber-100 rounded-full text-xs font-semibold transition-colors shadow-2xs"
             >
-              <span className="material-symbols-outlined text-[17px] text-amber-600">admin_panel_settings</span>
+              <span className="material-symbols-outlined text-[17px] text-amber-600 dark:text-amber-400">admin_panel_settings</span>
               <span>Portal Admin</span>
             </Link>
           )}

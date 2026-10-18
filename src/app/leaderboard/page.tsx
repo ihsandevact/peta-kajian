@@ -183,7 +183,7 @@ export default function LeaderboardPage() {
       <main className="flex-1 max-w-2xl w-full mx-auto px-3 sm:px-4 py-5 sm:py-6 flex flex-col gap-5 sm:gap-6">
         {/* Page Hero Header */}
         <div className="text-center flex flex-col items-center">
-          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-500/15 text-amber-700 flex items-center justify-center shadow-inner mb-2.5">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-500/15 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 flex items-center justify-center shadow-inner mb-2.5">
             <span className="material-symbols-outlined text-[28px] sm:text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>
               workspace_premium
             </span>
@@ -242,7 +242,7 @@ export default function LeaderboardPage() {
         ) : activeTab === 'volunteers' && data.volunteers.length === 0 ? (
           /* Empty State jika belum ada relawan yang menginput */
           <div className="py-12 px-6 text-center flex flex-col items-center gap-3.5 bg-surface-container-lowest border border-surface-container-high/60 rounded-3xl shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner border border-emerald-200">
+            <div className="w-16 h-16 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-inner border border-emerald-200 dark:border-emerald-800/60">
               <span className="material-symbols-outlined text-[36px]">volunteer_activism</span>
             </div>
             <div>
@@ -270,9 +270,9 @@ export default function LeaderboardPage() {
               <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end">
                 {/* Juara 2 (Perak - Kiri) */}
                 {top3[0] ? (
-                  <div className="flex flex-col items-center p-2.5 sm:p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center shadow-xs">
+                  <div className="flex flex-col items-center p-2.5 sm:p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 text-center shadow-xs">
                     <div className="relative mb-1.5 sm:mb-2">
-                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs sm:text-sm shadow-inner ring-2 ring-slate-300">
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 flex items-center justify-center font-bold text-xs sm:text-sm shadow-inner ring-2 ring-slate-300 dark:ring-slate-700">
                         {getInitials(top3[0].name)}
                       </div>
                       <span className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-500 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shadow">
@@ -284,7 +284,7 @@ export default function LeaderboardPage() {
                         {top3[0].name}
                       </span>
                     </div>
-                    <span className="mt-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-slate-200 text-[10px] sm:text-xs font-bold text-slate-800">
+                    <span className="mt-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] sm:text-xs font-bold text-slate-800 dark:text-slate-200">
                       {top3[0].count} <span className="font-normal opacity-75">kajian</span>
                     </span>
                   </div>
@@ -292,7 +292,7 @@ export default function LeaderboardPage() {
 
                 {/* Juara 1 (Emas - Tengah & Lebih Tinggi) */}
                 {top3[1] ? (
-                  <div className="flex flex-col items-center p-3 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-100/80 to-amber-50/70 border border-amber-300 text-center shadow-md relative scale-105 z-10">
+                  <div className="flex flex-col items-center p-3 sm:p-5 rounded-2xl bg-gradient-to-b from-amber-100/80 to-amber-50/70 dark:from-amber-950/40 dark:to-amber-900/20 border border-amber-300 dark:border-amber-600/50 text-center shadow-md relative scale-105 z-10">
                     <div className="absolute -top-3.5 sm:-top-4 text-amber-500 flex justify-center">
                       <span className="material-symbols-outlined text-[20px] sm:text-[24px]" style={{ fontVariationSettings: "'FILL' 1" }}>
                         crown
@@ -311,7 +311,7 @@ export default function LeaderboardPage() {
                         {top3[1].name}
                       </span>
                     </div>
-                    <span className="mt-1 px-2.5 sm:px-3 py-0.5 rounded-full bg-amber-400/40 text-[10px] sm:text-sm font-black text-amber-950 border border-amber-300">
+                    <span className="mt-1 px-2.5 sm:px-3 py-0.5 rounded-full bg-amber-400/40 dark:bg-amber-500/20 text-[10px] sm:text-sm font-black text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40">
                       {top3[1].count} <span className="font-normal text-[9px] sm:text-xs opacity-75">kajian</span>
                     </span>
                   </div>
@@ -319,9 +319,9 @@ export default function LeaderboardPage() {
 
                 {/* Juara 3 (Perunggu - Kanan) */}
                 {top3[2] ? (
-                  <div className="flex flex-col items-center p-2.5 sm:p-4 rounded-2xl bg-amber-50/50 border border-amber-200 text-center shadow-xs">
+                  <div className="flex flex-col items-center p-2.5 sm:p-4 rounded-2xl bg-amber-50/50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-center shadow-xs">
                     <div className="relative mb-1.5 sm:mb-2">
-                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-amber-100 text-amber-900 flex items-center justify-center font-bold text-xs sm:text-sm shadow-inner ring-2 ring-amber-700/30">
+                      <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-200 flex items-center justify-center font-bold text-xs sm:text-sm shadow-inner ring-2 ring-amber-700/30 dark:ring-amber-600/40">
                         {getInitials(top3[2].name)}
                       </div>
                       <span className="absolute -bottom-1 -right-1 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-amber-700 text-white text-[10px] sm:text-xs font-black flex items-center justify-center shadow">
@@ -333,7 +333,7 @@ export default function LeaderboardPage() {
                         {top3[2].name}
                       </span>
                     </div>
-                    <span className="mt-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-200/70 text-[10px] sm:text-xs font-bold text-amber-900">
+                    <span className="mt-1 px-2 sm:px-2.5 py-0.5 rounded-full bg-amber-200/70 dark:bg-amber-900/40 text-[10px] sm:text-xs font-bold text-amber-900 dark:text-amber-200 dark:border dark:border-amber-700/40">
                       {top3[2].count} <span className="font-normal opacity-75">kajian</span>
                     </span>
                   </div>
@@ -363,7 +363,7 @@ export default function LeaderboardPage() {
                       </div>
                     </div>
                     <div className="text-right shrink-0 pl-2">
-                      <span className="text-xs sm:text-sm font-bold text-emerald-700">
+                      <span className="text-xs sm:text-sm font-bold text-emerald-700 dark:text-emerald-400">
                         {contributor.count}
                       </span>
                       <span className="text-[10px] sm:text-[11px] text-outline ml-1">kajian</span>
@@ -377,16 +377,16 @@ export default function LeaderboardPage() {
 
         {/* Call to Action Box: Ditampilkan pada tab Kanal & Partner sebagai ajakan menjadi relawan */}
         {activeTab === 'channels' && (
-          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex flex-col gap-3 shadow-sm mt-2">
+          <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 flex flex-col gap-3 shadow-sm mt-2">
             <div className="flex items-start gap-3">
-              <span className="material-symbols-outlined text-emerald-700 text-[26px] shrink-0 mt-0.5">
+              <span className="material-symbols-outlined text-emerald-700 dark:text-emerald-400 text-[26px] shrink-0 mt-0.5">
                 volunteer_activism
               </span>
               <div>
-                <h3 className="text-sm font-bold text-emerald-950">
+                <h3 className="text-sm font-bold text-emerald-950 dark:text-emerald-100">
                   {currentUser ? 'Pemberat Timbangan Amal Kebaikan' : 'Ikut Beramal Jariyah Menjadi Relawan Dakwah'}
                 </h3>
-                <p className="text-xs text-emerald-800/90 mt-1 leading-relaxed">
+                <p className="text-xs text-emerald-800/90 dark:text-emerald-300/90 mt-1 leading-relaxed">
                   {currentUser
                     ? `Jazakallahu khairan atas keikutsertaan Anda, ${currentUserName}. Terus kirimkan jadwal kajian untuk memperluas manfaat ilmu syar'i bagi kaum muslimin.`
                     : 'Bantu sesama muslim menemukan majelis ilmu di kota Anda. Kirim jadwal kajian dari masjid terdekat dan raih pahala kebaikan yang mengalir.'}

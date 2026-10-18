@@ -636,7 +636,7 @@ export default function FAQPage() {
             {isAdmin && (
               <Link
                 href="/admin"
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-950/40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-950/40 dark:hover:text-purple-200 transition-colors"
               >
                 <span className="material-symbols-outlined text-[18px]">shield</span>
                 <span>Admin</span>
@@ -727,7 +727,7 @@ export default function FAQPage() {
               onClick={() => setActiveCategory('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 activeCategory === 'all'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white shadow-xs'
                   : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
               }`}
             >
@@ -739,7 +739,7 @@ export default function FAQPage() {
               onClick={() => setActiveCategory('jamaah')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 activeCategory === 'jamaah'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white shadow-xs'
                   : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
               }`}
             >
@@ -765,7 +765,7 @@ export default function FAQPage() {
               onClick={() => setActiveCategory('relawan')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 activeCategory === 'relawan'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white shadow-xs'
                   : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
               }`}
             >
@@ -778,7 +778,7 @@ export default function FAQPage() {
               onClick={() => setActiveCategory('telegram')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 activeCategory === 'telegram'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white shadow-xs'
                   : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
               }`}
             >
@@ -791,7 +791,7 @@ export default function FAQPage() {
               onClick={() => setActiveCategory('akun')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
                 activeCategory === 'akun'
-                  ? 'bg-primary text-white shadow-xs'
+                  ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white shadow-xs'
                   : 'bg-surface-container text-outline hover:text-on-surface hover:bg-surface-container-high'
               }`}
             >
@@ -862,7 +862,7 @@ export default function FAQPage() {
                       <span
                         className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
                           isOpen
-                            ? 'bg-primary text-white'
+                            ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white'
                             : 'bg-surface-container text-outline'
                         }`}
                       >
@@ -880,7 +880,7 @@ export default function FAQPage() {
 
                     <span
                       className={`material-symbols-outlined text-[20px] text-outline shrink-0 transition-transform duration-200 mt-1 sm:mt-0 ${
-                        isOpen ? 'rotate-180 text-primary' : ''
+                        isOpen ? 'rotate-180 text-primary dark:text-emerald-400' : ''
                       }`}
                     >
                       expand_more
@@ -912,7 +912,7 @@ export default function FAQPage() {
           <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-center">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-primary hover:bg-primary/90 text-white shadow-xs transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-primary hover:bg-primary/90 text-white dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:text-white shadow-xs transition-transform active:scale-95"
             >
               <span className="material-symbols-outlined text-[18px]">map</span>
               <span>Buka Peta Kajian</span>

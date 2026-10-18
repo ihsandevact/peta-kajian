@@ -6,6 +6,7 @@ import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import type { SelectedRegion } from '@/utils/regions';
 import VenueCard from './VenueCard';
 import OnlineStreamingOverlay from './OnlineStreamingOverlay';
+import { useTheme } from '@/context/ThemeContext';
 
 setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
 
@@ -25,6 +26,7 @@ export default function AppMap({
   flyToRegion,
 }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
+  const { resolvedTheme } = useTheme();
   
   const [viewState, setViewState] = React.useState({
     longitude: 118.0, // Titik Tengah Indonesia
@@ -95,7 +97,11 @@ export default function AppMap({
         ref={mapRef}
         {...viewState}
         onMove={evt => setViewState(evt.viewState)}
-        mapStyle={`https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`}
+        mapStyle={
+          resolvedTheme === 'dark'
+            ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`
+            : `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
+        }
       >
         <NavigationControl position="bottom-right" showCompass={false} />
         
@@ -132,7 +138,7 @@ export default function AppMap({
                 <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow transition-all group-hover:scale-105 cursor-pointer
                   ${isAkhwat 
                     ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary' 
-                    : 'bg-on-surface hover:bg-primary text-on-primary'
+                    : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
                   }
                 `}>
                   <span className="material-symbols-outlined text-[12px]">{isAkhwat ? 'female' : 'schedule'}</span>

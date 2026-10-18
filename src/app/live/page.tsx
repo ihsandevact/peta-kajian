@@ -14,6 +14,7 @@ import MobileNavDrawer from '@/components/MobileNavDrawer';
 import { checkIsAdmin } from '@/lib/services/admin';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { FEATURE_FLAGS } from '@/config/features';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export default function LiveStreamingPage() {
   const { playStream, openStudyMode } = useLivePlayer();
@@ -307,6 +308,9 @@ export default function LiveStreamingPage() {
                 <span>Belum Ada Siaran Aktif</span>
               </div>
             )}
+
+            {/* Tombol Pengalih Tema */}
+            <ThemeToggle variant="icon" />
 
             {/* Tombol Refresh */}
             <button

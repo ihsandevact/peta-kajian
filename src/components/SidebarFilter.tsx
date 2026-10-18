@@ -9,6 +9,7 @@ import type { SelectedRegion } from '@/utils/regions';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
+import ThemeToggle from './ThemeToggle';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -82,7 +83,7 @@ export default function SidebarFilter({
       onClick={onClick}
       className={`px-3 py-1 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors shadow-sm
         ${active 
-          ? 'bg-on-surface text-on-primary' 
+          ? 'bg-primary text-white dark:bg-emerald-600 dark:text-white font-semibold shadow-xs' 
           : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'}`}
     >
       {label}
@@ -135,9 +136,7 @@ export default function SidebarFilter({
               <span className="material-symbols-outlined text-[13px]">help</span>
               <span>FAQ</span>
             </Link>
-            <span className="text-[10px] uppercase tracking-wider text-outline px-2 py-0.5 rounded bg-surface-container-low">
-              Indonesia
-            </span>
+            <ThemeToggle variant="icon" />
           </div>
         </div>
         
