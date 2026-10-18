@@ -8,6 +8,7 @@ import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePla
 import FloatingStudyNotes from "@/components/FloatingStudyNotes";
 import LoginNudgePrompt from "@/components/LoginNudgePrompt";
 import QueryProvider from "@/components/providers/QueryProvider";
+import PWASplashScreen from "@/components/PWASplashScreen";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -74,6 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <QueryProvider>
           <ThemeProvider>
+            <PWASplashScreen />
             <LivePlayerProvider>
               {children}
               <PersistentFloatingLivePlayer />
