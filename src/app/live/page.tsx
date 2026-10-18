@@ -10,8 +10,6 @@ import {
   formatUpcomingTime,
   formatEndedTime,
 } from '@/lib/services/youtubeTracker';
-import type { StudySession } from '@/lib/services/kajian';
-import ShareModal from '@/components/ShareModal';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
 import { checkIsAdmin } from '@/lib/services/admin';
 import { useLivePlayer } from '@/context/LivePlayerContext';
@@ -19,6 +17,8 @@ import { FEATURE_FLAGS } from '@/config/features';
 import ThemeToggle from '@/components/ThemeToggle';
 import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
 import EndedStreamSkeleton from '@/components/live/EndedStreamSkeleton';
+import StudyLoginModal from '@/components/StudyLoginModal';
+import { type PendingStudySession } from '@/utils/studyNotes';
 
 export default function LiveStreamingPage() {
   const { playStream, openStudyMode } = useLivePlayer();
@@ -40,10 +40,32 @@ export default function LiveStreamingPage() {
     speakerName?: string;
   } | null>(null);
 
-  const [shareSession, setShareSession] = useState<StudySession | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [pendingStudyLogin, setPendingStudyLogin] = useState<PendingStudySession | null>(null);
+
+  // Handler Mode Belajar dengan Login Guard khusus kartu video di halaman live
+  const handleOpenStudyNotes = (sessionData: {
+    videoId: string;
+    title: string;
+    channelName?: string;
+    speakerName?: string;
+    sessionId?: string;
+  }) => {
+    if (!currentUser) {
+      // Pengguna belum login: Tampilkan modal login khusus Mode Belajar TANPA membuka mini player
+      setPendingStudyLogin({
+        videoId: sessionData.videoId,
+        title: sessionData.title,
+        channelName: sessionData.channelName,
+        speakerName: sessionData.speakerName,
+        sessionId: sessionData.sessionId,
+      });
+      return;
+    }
+    openStudyMode(sessionData);
+  };
 
   // Infinite Scroll state untuk tab Rekaman Selesai (Ended Streams)
   const [visibleEndedCount, setVisibleEndedCount] = useState<number>(12);
@@ -691,7 +713,7 @@ export default function LiveStreamingPage() {
                               </div>
 
                               {/* Action Buttons */}
-                              <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-container-high/60">
+                              <div className="flex items-center gap-2 pt-3 border-t border-surface-container-high/60">
                                 <button
                                   onClick={() =>
                                     setSelectedVideo({
@@ -701,85 +723,65 @@ export default function LiveStreamingPage() {
                                       speakerName: speaker,
                                     })
                                   }
-                                  className="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                                  className="flex-1 h-9 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                                 >
                                   <span className="material-symbols-outlined text-[18px]">play_circle</span>
                                   <span>Tonton</span>
                                 </button>
 
-                                {/* Tombol Putar Mini Player (PiP) */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    playStream({
-                                      videoId,
-                                      title,
-                                      channelName: channel.channel_name,
-                                      speakerName: speaker,
-                                      handle: channel.channel_handle,
-                                    })
-                                  }
-                                  className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                                  title="Putar di Mini Player (PiP pojok bawah)"
-                                  aria-label="Putar di Mini Player"
-                                >
-                                  <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
-                                </button>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {/* Tombol Putar Mini Player (PiP) */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      playStream({
+                                        videoId,
+                                        title,
+                                        channelName: channel.channel_name,
+                                        speakerName: speaker,
+                                        handle: channel.channel_handle,
+                                      })
+                                    }
+                                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-red-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                    title="Putar di Mini Player (PiP pojok bawah)"
+                                    aria-label="Putar di Mini Player"
+                                  >
+                                    <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
+                                  </button>
 
-                                {/* Tombol Mode Belajar & Catat Faidah */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openStudyMode({
-                                      videoId,
-                                      title,
-                                      channelName: channel.channel_name,
-                                      speakerName: speaker,
-                                      sessionId: channel.current_session_id || undefined,
-                                    })
-                                  }
-                                  className={`${
-                                    FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
-                                  } w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 items-center justify-center transition-colors cursor-pointer shrink-0`}
-                                  title="Mode Belajar & Catat Faidah (Wajib Login)"
-                                  aria-label="Mode Belajar"
-                                >
-                                  <span className="material-symbols-outlined text-[19px]">edit_note</span>
-                                </button>
+                                  {/* Tombol Mode Belajar & Catat Faidah */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOpenStudyNotes({
+                                        videoId,
+                                        title,
+                                        channelName: channel.channel_name,
+                                        speakerName: speaker,
+                                        sessionId: channel.current_session_id || undefined,
+                                      })
+                                    }
+                                    className={`${
+                                      FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
+                                    } w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 items-center justify-center transition-colors cursor-pointer shrink-0`}
+                                    title="Mode Belajar & Catat Faidah (Wajib Login)"
+                                    aria-label="Mode Belajar"
+                                  >
+                                    <span className="material-symbols-outlined text-[19px]">edit_note</span>
+                                  </button>
 
-                                {/* Share Button */}
-                                <button
-                                  onClick={() =>
-                                    setShareSession({
-                                      id: channel.current_session_id || channel.id,
-                                      venue_id: null,
-                                      title,
-                                      speaker_name: speaker,
-                                      is_online: true,
-                                      stream_url: streamUrl,
-                                      poster_url: posterUrl,
-                                      status: 'confirmed',
-                                      audience_type: 'umum',
-                                      is_recurring: false,
-                                      start_datetime: new Date().toISOString(),
-                                    })
-                                  }
-                                  className="p-2 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
-                                  title="Bagikan Kajian"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">share</span>
-                                </button>
-
-                                {/* External YouTube Link */}
-                                <a
-                                  href={streamUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-xl text-outline hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
-                                  title="Buka di YouTube"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                                </a>
+                                  {/* External YouTube Link */}
+                                  <a
+                                    href={streamUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-red-600 flex items-center justify-center transition-colors shrink-0"
+                                    title="Buka di YouTube"
+                                    aria-label="Buka di YouTube"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                  </a>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -966,7 +968,7 @@ export default function LiveStreamingPage() {
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-container-high/60">
+                            <div className="flex items-center gap-2 pt-3 border-t border-surface-container-high/60">
                               <button
                                 onClick={() =>
                                   setSelectedVideo({
@@ -976,64 +978,44 @@ export default function LiveStreamingPage() {
                                     speakerName: speaker,
                                   })
                                 }
-                                className="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                                className="flex-1 h-9 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                               >
                                 <span className="material-symbols-outlined text-[18px]">play_circle</span>
                                 <span>Waiting Room</span>
                               </button>
 
-                              {/* Tombol Putar Mini Player (PiP) */}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  playStream({
-                                    videoId,
-                                    title,
-                                    channelName: item.channelName,
-                                    speakerName: speaker,
-                                    handle: item.channel.channel_handle,
-                                  })
-                                }
-                                className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-amber-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                                title="Buka di Mini Player (PiP pojok bawah)"
-                                aria-label="Buka di Mini Player"
-                              >
-                                <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Tombol Putar Mini Player (PiP) */}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    playStream({
+                                      videoId,
+                                      title,
+                                      channelName: item.channelName,
+                                      speakerName: speaker,
+                                      handle: item.channel.channel_handle,
+                                    })
+                                  }
+                                  className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-amber-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                  title="Buka di Mini Player (PiP pojok bawah)"
+                                  aria-label="Buka di Mini Player"
+                                >
+                                  <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
+                                </button>
 
-                              {/* Share Button */}
-                              <button
-                                onClick={() =>
-                                  setShareSession({
-                                    id: `upcoming-${videoId}`,
-                                    venue_id: null,
-                                    title,
-                                    speaker_name: speaker,
-                                    is_online: true,
-                                    stream_url: streamUrl,
-                                    poster_url: posterUrl,
-                                    status: 'confirmed',
-                                    audience_type: 'umum',
-                                    is_recurring: false,
-                                    start_datetime: item.scheduledStartTime || new Date().toISOString(),
-                                  })
-                                }
-                                className="p-2 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container transition-colors"
-                                title="Bagikan Jadwal Kajian"
-                              >
-                                <span className="material-symbols-outlined text-[18px]">share</span>
-                              </button>
-
-                              {/* External YouTube Link */}
-                              <a
-                                href={streamUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 rounded-xl text-outline hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors"
-                                title="Buka di YouTube"
-                              >
-                                <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                              </a>
+                                {/* External YouTube Link */}
+                                <a
+                                  href={streamUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-amber-600 flex items-center justify-center transition-colors shrink-0"
+                                  title="Buka di YouTube"
+                                  aria-label="Buka di YouTube"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                </a>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1359,7 +1341,7 @@ export default function LiveStreamingPage() {
                               </div>
 
                               {/* Action Buttons */}
-                              <div className="flex items-center justify-between gap-2 pt-3 border-t border-surface-container-high/60">
+                              <div className="flex items-center gap-2 pt-3 border-t border-surface-container-high/60">
                                 <button
                                   onClick={() =>
                                     playStream({
@@ -1370,84 +1352,64 @@ export default function LiveStreamingPage() {
                                       handle: item.channel.channel_handle,
                                     })
                                   }
-                                  className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                                  className="flex-1 h-9 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                                 >
                                   <span className="material-symbols-outlined text-[18px]">play_arrow</span>
                                   <span>Putar Rekaman</span>
                                 </button>
 
-                                {/* Tombol Putar Mini Player (PiP) */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    playStream({
-                                      videoId,
-                                      title,
-                                      channelName: item.channelName,
-                                      speakerName: speaker,
-                                      handle: item.channel.channel_handle,
-                                    })
-                                  }
-                                  className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-blue-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                                  title="Buka di Mini Player (PiP pojok bawah)"
-                                  aria-label="Buka di Mini Player"
-                                >
-                                  <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
-                                </button>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {/* Tombol Putar Mini Player (PiP) */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      playStream({
+                                        videoId,
+                                        title,
+                                        channelName: item.channelName,
+                                        speakerName: speaker,
+                                        handle: item.channel.channel_handle,
+                                      })
+                                    }
+                                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-blue-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                                    title="Buka di Mini Player (PiP pojok bawah)"
+                                    aria-label="Buka di Mini Player"
+                                  >
+                                    <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
+                                  </button>
 
-                                {/* Tombol Mode Belajar & Catat Faidah */}
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openStudyMode({
-                                      videoId,
-                                      title,
-                                      channelName: item.channelName,
-                                      speakerName: speaker,
-                                    })
-                                  }
-                                  className={`${
-                                    FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
-                                  } w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 items-center justify-center transition-colors cursor-pointer shrink-0`}
-                                  title="Mode Belajar & Catat Faidah (Wajib Login)"
-                                  aria-label="Mode Belajar"
-                                >
-                                  <span className="material-symbols-outlined text-[19px]">edit_note</span>
-                                </button>
+                                  {/* Tombol Mode Belajar & Catat Faidah */}
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleOpenStudyNotes({
+                                        videoId,
+                                        title,
+                                        channelName: item.channelName,
+                                        speakerName: speaker,
+                                      })
+                                    }
+                                    className={`${
+                                      FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
+                                    } w-9 h-9 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-400 items-center justify-center transition-colors cursor-pointer shrink-0`}
+                                    title="Mode Belajar & Catat Faidah (Wajib Login)"
+                                    aria-label="Mode Belajar"
+                                  >
+                                    <span className="material-symbols-outlined text-[19px]">edit_note</span>
+                                  </button>
 
-                                {/* Share Button */}
-                                <button
-                                  onClick={() =>
-                                    setShareSession({
-                                      id: `ended-${videoId}`,
-                                      venue_id: null,
-                                      title,
-                                      speaker_name: speaker,
-                                      is_online: true,
-                                      stream_url: streamUrl,
-                                      poster_url: posterUrl,
-                                      status: 'confirmed',
-                                      audience_type: 'umum',
-                                      is_recurring: false,
-                                      start_datetime: item.endedAt || new Date().toISOString(),
-                                    })
-                                  }
-                                  className="p-2 rounded-xl text-outline hover:text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
-                                  title="Bagikan Rekaman Kajian"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">share</span>
-                                </button>
-
-                                {/* External YouTube Link */}
-                                <a
-                                  href={streamUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="p-2 rounded-xl text-outline hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                                  title="Buka di YouTube"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">open_in_new</span>
-                                </a>
+                                  {/* External YouTube Link */}
+                                  <a
+                                    href={streamUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-9 h-9 rounded-xl bg-surface-container hover:bg-surface-container-high text-outline hover:text-blue-600 flex items-center justify-center transition-colors shrink-0"
+                                    title="Buka di YouTube"
+                                    aria-label="Buka di YouTube"
+                                  >
+                                    <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                                  </a>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -1651,7 +1613,7 @@ export default function LiveStreamingPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    openStudyMode({
+                    handleOpenStudyNotes({
                       videoId: selectedVideo.videoId,
                       title: selectedVideo.title,
                       channelName: selectedVideo.channelName,
@@ -1704,14 +1666,12 @@ export default function LiveStreamingPage() {
         </div>
       )}
 
-      {/* MODAL SHARE */}
-      {shareSession && (
-        <ShareModal
-          isOpen={true}
-          onClose={() => setShareSession(null)}
-          session={shareSession}
-        />
-      )}
+      {/* MODAL AJAKAN LOGIN KHUSUS MODE BELAJAR DARI CARD LIVE */}
+      <StudyLoginModal
+        isOpen={!!pendingStudyLogin}
+        onClose={() => setPendingStudyLogin(null)}
+        pendingSession={pendingStudyLogin}
+      />
 
       {/* MOBILE NAV DRAWER */}
       <MobileNavDrawer
