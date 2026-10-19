@@ -566,7 +566,7 @@ export default function HomeClient() {
       }
 
       if (filters.time === 'tersimpan' && !bookmarks.includes(s.id)) return false;
-      if (filters.time === 'berlangsung' && !info.isLive) return false;
+      if ((filters.time === 'hari_ini' || filters.time === 'berlangsung') && (!info.isToday && !info.isLive)) return false;
       if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
       if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
       if (filters.time === 'rutin' && !isRutin) return false;

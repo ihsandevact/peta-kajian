@@ -65,6 +65,7 @@ const KajianSidebarCard = React.memo(
 
     const isLive = info.isLive;
     const isPast = info.isPast && !session.is_recurring;
+    const isToday = (info.isToday || info.isLive) && !isPast;
     const isRutin = session.is_recurring;
     const isAkhwatOnly = session.audience_type === 'akhwat';
 
@@ -98,7 +99,7 @@ const KajianSidebarCard = React.memo(
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
               <span
                 className={`text-[12px] font-bold truncate ${
-                  isLive
+                  isToday
                     ? 'text-red-600 dark:text-red-400'
                     : isAkhwatOnly
                     ? 'text-tertiary'
@@ -194,10 +195,10 @@ const KajianSidebarCard = React.memo(
         {/* Baris 5 (Paling Bawah): Status Badges, Kategori Audiens & Jarak */}
         <div className="mt-2.5 pt-1.5 border-t border-surface-container-high/40 flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
-            {isLive ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white uppercase tracking-wide shadow-xs animate-pulse">
-                <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
-                Live
+            {isToday ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white uppercase tracking-wide shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+                Hari Ini
               </span>
             ) : isRutin ? (
               <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] dark:bg-sky-950/50 dark:text-sky-300 uppercase tracking-wide border border-[#bae6fd] dark:border-sky-800">
@@ -447,9 +448,9 @@ export default function SidebarFilter({
             onClick={() => setFilters(p => ({ ...p, time: p.time === 'tersimpan' ? 'semua' : 'tersimpan', audience: ['umum', 'ikhwan', 'akhwat'] }))}
           />
           <Pill
-            active={filters.time === 'berlangsung'}
-            label="🔴 Berlangsung"
-            onClick={() => setFilters(p => ({ ...p, time: p.time === 'berlangsung' ? 'semua' : 'berlangsung', audience: ['umum', 'ikhwan', 'akhwat'] }))}
+            active={filters.time === 'hari_ini' || filters.time === 'berlangsung'}
+            label="Hari Ini"
+            onClick={() => setFilters(p => ({ ...p, time: (p.time === 'hari_ini' || p.time === 'berlangsung') ? 'semua' : 'hari_ini', audience: ['umum', 'ikhwan', 'akhwat'] }))}
           />
           <Pill
             active={filters.time === 'terdekat'}

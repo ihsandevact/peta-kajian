@@ -41,8 +41,6 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
         speakerName: session.speaker_name,
         channelName: session.venues?.name || session.speaker_name,
       });
-    } else if (session.stream_url) {
-      window.open(session.stream_url, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -86,11 +84,7 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
   );
 
   const hasRoute = hasPhysicalLocation(session);
-  const hasLive = Boolean(
-    session.stream_url &&
-    session.stream_url.trim() !== '' &&
-    session.stream_url.toLowerCase() !== 'null'
-  ) && !isPast;
+  const hasLive = Boolean(ytVideoId) && !isPast;
   const hasCalendar = hasDate && !isPast;
 
   // --- GOOGLE CALENDAR GENERATOR ---
@@ -328,8 +322,8 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
               </div>
             )}
 
-            {/* Baris Live Streaming (Online / Hybrid) */}
-            {session.is_online && (
+            {/* Baris Live Streaming (Online / Hybrid) - Hanya tampil jika stream_url valid & aktif */}
+            {session.is_online && hasLive && (
               <div className="flex items-center gap-2 text-red-600 font-semibold text-[11px]">
                 <span className="material-symbols-outlined text-[15px] shrink-0">videocam</span>
                 <span>Disiarkan secara live</span>
