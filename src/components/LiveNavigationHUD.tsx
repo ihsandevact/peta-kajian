@@ -8,17 +8,31 @@ import {
   formatDistanceText,
   formatDurationText,
   calculateDirectDistanceMeters,
+  calculateMinDistanceToPolyline,
 } from '@/lib/services/routing';
+import {
+  type NavigationVehicleIcon,
+  setStoredVehicleIcon,
+  VEHICLE_OPTIONS,
+  ALL_VEHICLE_OPTIONS,
+} from '@/utils/navigationVehicle';
+import { saveParkingSpot } from '@/utils/parkingSpot';
+import VehiclePickerModal from './VehiclePickerModal';
 
 interface LiveNavigationHUDProps {
   session: StudySession;
   routeResult: RouteResult;
   userLocation: { lat: number; lng: number } | null;
   userHeading?: number | null;
+  userAccuracy?: number | null;
   onExit: () => void;
   onFinish?: () => void;
+  onReroute?: (newOrigin: { lat: number; lng: number }) => Promise<void> | void;
   isMuted: boolean;
   onToggleMute: () => void;
+  vehicleIcon?: NavigationVehicleIcon;
+  onVehicleIconChange?: (icon: NavigationVehicleIcon) => void;
+  onParkingSaved?: () => void;
 }
 
 // Suara bel Ding-Dong kedatangan sintetis (Web Audio API - 0 dependensi & bekerja offline)
@@ -84,18 +98,39 @@ export default function LiveNavigationHUD({
   routeResult,
   userLocation,
   userHeading,
+  userAccuracy,
   onExit,
   onFinish,
+  onReroute,
   isMuted,
   onToggleMute,
+  vehicleIcon,
+  onVehicleIconChange,
+  onParkingSaved,
 }: LiveNavigationHUDProps) {
   const steps = routeResult.steps || [];
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [isStepsDrawerOpen, setIsStepsDrawerOpen] = useState<boolean>(false);
+  const [isVehiclePickerOpen, setIsVehiclePickerOpen] = useState<boolean>(false);
   const [hasArrived, setHasArrived] = useState<boolean>(false);
   const [showArrivalModal, setShowArrivalModal] = useState<boolean>(false);
+  const [isRerouting, setIsRerouting] = useState<boolean>(false);
+  const [parkingSaved, setParkingSaved] = useState<boolean>(false);
   const spokenStepsRef = useRef<Set<number>>(new Set());
   const hasAnnouncedArrivalRef = useRef<boolean>(false);
+  const offRouteCounterRef = useRef<number>(0);
+  const lastRerouteTimeRef = useRef<number>(0);
+
+  const activeVehicle = vehicleIcon || 'car';
+  const currentVehicleConfig =
+    ALL_VEHICLE_OPTIONS.find((v) => v.id === activeVehicle) || VEHICLE_OPTIONS[0];
+
+  const handleSelectVehicle = (newIcon: NavigationVehicleIcon) => {
+    setStoredVehicleIcon(newIcon);
+    if (onVehicleIconChange) {
+      onVehicleIconChange(newIcon);
+    }
+  };
 
   const currentStep: RouteStep | undefined = steps[currentStepIndex];
   const nextStep: RouteStep | undefined = steps[currentStepIndex + 1];
@@ -228,6 +263,49 @@ export default function LiveNavigationHUD({
     }
   }, [currentStepIndex, currentStep, isMuted, session, steps.length, hasArrived, speakText]);
 
+  // Deteksi Off-Route Otomatis saat Salah Jalan & Recalculate
+  useEffect(() => {
+    if (hasArrived || !userLocation || !routeResult.geometry?.coordinates || isRerouting) {
+      return;
+    }
+
+    const now = Date.now();
+    // Cooldown 12 detik antar reroute agar tidak memanggil berulang
+    if (now - lastRerouteTimeRef.current < 12000) {
+      return;
+    }
+
+    const distToRoute = calculateMinDistanceToPolyline(
+      [userLocation.lng, userLocation.lat],
+      routeResult.geometry.coordinates
+    );
+
+    // Jika deviasi lebih dari 45 meter dari jalur
+    if (distToRoute > 45) {
+      offRouteCounterRef.current += 1;
+      // Butuh 2 kali pembacaan berurutan untuk menyaring noise GPS
+      if (offRouteCounterRef.current >= 2) {
+        offRouteCounterRef.current = 0;
+        lastRerouteTimeRef.current = now;
+        setIsRerouting(true);
+
+        if (!isMuted) {
+          speakText('Menghitung ulang rute');
+        }
+
+        if (onReroute) {
+          Promise.resolve(onReroute(userLocation)).finally(() => {
+            setIsRerouting(false);
+          });
+        } else {
+          setIsRerouting(false);
+        }
+      }
+    } else {
+      offRouteCounterRef.current = 0;
+    }
+  }, [userLocation, routeResult, hasArrived, isRerouting, isMuted, onReroute, speakText]);
+
   const venue = session.venues;
   const googleMapsUrl = venue?.lat && venue?.lng
     ? `https://www.google.com/maps/dir/?api=1&destination=${venue.lat},${venue.lng}`
@@ -283,8 +361,26 @@ export default function LiveNavigationHUD({
                   {nextStep && (
                     <p className="text-[11px] text-outline truncate mt-0.5 flex items-center gap-1">
                       <span>Lalu:</span>
-                      <span className="font-medium text-on-surface-variant truncate">{nextStep.instruction}</span>
+                      <span className="font-medium text-on-surface-variant truncate">
+                        {nextStep.instruction}
+                      </span>
                     </p>
+                  )}
+
+                  {/* Status Rerouting Otomatis */}
+                  {isRerouting && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400 font-bold animate-pulse mt-1.5">
+                      <span className="material-symbols-outlined text-[15px] animate-spin">sync</span>
+                      <span>Menghitung ulang rute...</span>
+                    </div>
+                  )}
+
+                  {/* Indikator Akurasi GPS Rendah */}
+                  {typeof userAccuracy === 'number' && userAccuracy > 25 && !isRerouting && (
+                    <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/15 border border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 text-[10px] font-semibold mt-1.5">
+                      <span className="material-symbols-outlined text-[12px]">satellite_alt</span>
+                      <span>Akurasi GPS ±{Math.round(userAccuracy)}m</span>
+                    </div>
                   )}
                 </>
               )}
@@ -357,6 +453,21 @@ export default function LiveNavigationHUD({
                 <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
                 <span className="hidden sm:inline">Rincian</span>
               </button>
+
+              {/* Tombol Ganti Ikon Kendaraan (Hanya untuk moda berkendara) */}
+              {routeResult.mode === 'driving' && (
+                <button
+                  type="button"
+                  onClick={() => setIsVehiclePickerOpen(true)}
+                  className="px-2.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold flex items-center gap-1 border border-surface-container-high transition-colors cursor-pointer"
+                  title={`Kendaraan: ${currentVehicleConfig.label} (Klik untuk ganti)`}
+                >
+                  <span className="material-symbols-outlined text-[16px] text-primary">
+                    {currentVehicleConfig.icon}
+                  </span>
+                  <span className="hidden sm:inline">{currentVehicleConfig.label}</span>
+                </button>
+              )}
 
               {/* Tombol Selesai (saat tiba) atau Keluar Navigasi */}
               {hasArrived ? (
@@ -496,6 +607,38 @@ export default function LiveNavigationHUD({
 
             {/* Tombol Aksi Utama */}
             <div className="mt-5 space-y-2">
+              {/* Tombol Tandai Lokasi Parkir Kendaraan */}
+              {userLocation && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    saveParkingSpot(
+                      userLocation,
+                      venue?.name || session.title,
+                      vehicleIcon || 'car'
+                    );
+                    setParkingSaved(true);
+                    onParkingSaved?.();
+                  }}
+                  disabled={parkingSaved}
+                  className={`w-full py-2.5 px-4 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    parkingSaved
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 border-amber-300 dark:border-amber-700 text-amber-800 dark:text-amber-300 active:scale-95 shadow-2xs'
+                  }`}
+                  title="Simpan titik koordinat parkir kendaraan Anda"
+                >
+                  <span className="material-symbols-outlined text-[18px]">
+                    {parkingSaved ? 'check_circle' : 'local_parking'}
+                  </span>
+                  <span>
+                    {parkingSaved
+                      ? 'Lokasi Parkir Berhasil Ditandai!'
+                      : 'Tandai Lokasi Parkir Kendaraan Saya'}
+                  </span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -619,6 +762,14 @@ export default function LiveNavigationHUD({
           </div>
         </div>
       )}
+
+      {/* Modal Pemilih Kustomisasi Kendaraan */}
+      <VehiclePickerModal
+        isOpen={isVehiclePickerOpen}
+        onClose={() => setIsVehiclePickerOpen(false)}
+        currentIcon={activeVehicle}
+        onSelect={handleSelectVehicle}
+      />
     </>
   );
 }

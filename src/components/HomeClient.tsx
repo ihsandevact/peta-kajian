@@ -19,6 +19,11 @@ import InAppRoutePanel from '@/components/InAppRoutePanel';
 import LiveNavigationHUD from '@/components/LiveNavigationHUD';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
 import { Drawer } from 'vaul';
+import {
+  type NavigationVehicleIcon,
+  getStoredVehicleIcon,
+} from '@/utils/navigationVehicle';
+import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -80,8 +85,21 @@ export default function HomeClient() {
     mql.addEventListener('change', handler);
     return () => mql.removeEventListener('change', handler);
   }, []);
+  const [vehicleIcon, setVehicleIcon] = useState<NavigationVehicleIcon>('car');
+
+  useEffect(() => {
+    const stored = getStoredVehicleIcon();
+    setVehicleIcon(stored === 'motorcycle' ? 'motorcycle' : 'car');
+  }, []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
+  const [savedParkingSpot, setSavedParkingSpot] = useState<SavedParkingSpot | null>(null);
+
+  useEffect(() => {
+    setSavedParkingSpot(getSavedParkingSpot());
+  }, []);
+
   const [activeRouteSession, setActiveRouteSession] = useState<StudySession | null>(null);
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
   const [routeMode, setRouteMode] = useState<'driving' | 'walking'>('driving');
@@ -247,6 +265,9 @@ export default function HomeClient() {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setUserLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+          if (typeof position.coords.accuracy === 'number') {
+            setUserAccuracy(position.coords.accuracy);
+          }
         },
         (error) => {
           console.warn('Gagal mendapatkan lokasi GPS pengguna:', error);
@@ -274,6 +295,14 @@ export default function HomeClient() {
     setRouteError(null);
     setSelectedSession(null); // Tutup popup info agar tampilan peta bersih untuk rute
     setSnapPoint('224px'); // Ciutkan bottom sheet ke peek saat rute aktif/selesai
+
+    // Otomatis tentukan ikon kursor: jika jalan kaki -> person, jika kendaraan -> mobil/motor (default mobil)
+    if (routeMode === 'walking') {
+      setVehicleIcon('person');
+    } else {
+      const stored = getStoredVehicleIcon();
+      setVehicleIcon(stored === 'motorcycle' ? 'motorcycle' : 'car');
+    }
 
     let origin = userLocation;
     if (!origin) {
@@ -322,6 +351,15 @@ export default function HomeClient() {
   // Ganti moda transportasi (berkendara vs jalan kaki)
   const handleModeChange = useCallback(async (newMode: 'driving' | 'walking') => {
     setRouteMode(newMode);
+
+    // Otomatis sinkronkan ikon kursor: jalan kaki -> person, kendaraan -> mobil/motor
+    if (newMode === 'walking') {
+      setVehicleIcon('person');
+    } else {
+      const stored = getStoredVehicleIcon();
+      setVehicleIcon(stored === 'motorcycle' ? 'motorcycle' : 'car');
+    }
+
     if (activeRouteSession && userLocation && activeRouteSession.venues) {
       setIsRouteLoading(true);
       setRouteError(null);
@@ -369,6 +407,9 @@ export default function HomeClient() {
             setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
             if (typeof pos.coords.heading === 'number' && !isNaN(pos.coords.heading)) {
               setUserHeading(pos.coords.heading);
+            }
+            if (typeof pos.coords.accuracy === 'number') {
+              setUserAccuracy(pos.coords.accuracy);
             }
           },
           (err) => {
@@ -431,6 +472,37 @@ export default function HomeClient() {
       setSelectedSession({ ...prevSession });
     }
   }, [activeRouteSession, handleExitLiveNav]);
+
+  // Handler untuk rerouting otomatis saat off-route
+  const handleReroute = useCallback(async (newOrigin: { lat: number; lng: number }) => {
+    if (!activeRouteSession?.venues) return;
+    try {
+      const result = await fetchRoute(
+        [newOrigin.lng, newOrigin.lat],
+        [activeRouteSession.venues.lng, activeRouteSession.venues.lat],
+        routeMode
+      );
+      if (result) {
+        setActiveRoute(result);
+      }
+    } catch (err) {
+      console.warn('Gagal menghitung ulang rute:', err);
+    }
+  }, [activeRouteSession, routeMode]);
+
+  // Handler pemilihan rute alternatif OSRM
+  const handleSelectAlternativeRoute = useCallback((route: RouteResult) => {
+    setActiveRoute(route);
+  }, []);
+
+  // Handler saat posisi parkir disimpan atau dihapus
+  const handleParkingSaved = useCallback(() => {
+    setSavedParkingSpot(getSavedParkingSpot());
+  }, []);
+
+  const handleClearParking = useCallback(() => {
+    setSavedParkingSpot(null);
+  }, []);
 
   // Bersihkan GPS watch dan Wake Lock saat komponen unmount
   useEffect(() => {
@@ -920,6 +992,11 @@ export default function HomeClient() {
               onStartRoute={handleStartRoute}
               isNavigating={isNavigating}
               userHeading={userHeading}
+              vehicleIcon={vehicleIcon}
+              onVehicleIconChange={setVehicleIcon}
+              savedParkingSpot={savedParkingSpot}
+              onClearParkingSpot={handleClearParking}
+              onSelectAlternativeRoute={handleSelectAlternativeRoute}
             />
 
             {/* Panel Rute In-App Pratinjau (Tampil sebelum mulai navigasi langsung) */}
@@ -930,10 +1007,12 @@ export default function HomeClient() {
                 isLoading={isRouteLoading}
                 mode={routeMode}
                 onModeChange={handleModeChange}
+                onSelectAlternativeRoute={handleSelectAlternativeRoute}
                 onClose={handleCloseRoute}
                 userLocation={userLocation}
                 errorMessage={routeError}
                 onStartLiveNavigation={handleStartLiveNav}
+                isDesktop={isDesktop}
               />
             )}
 
@@ -944,10 +1023,15 @@ export default function HomeClient() {
                 routeResult={activeRoute}
                 userLocation={userLocation}
                 userHeading={userHeading}
+                userAccuracy={userAccuracy}
                 onExit={handleExitLiveNav}
                 onFinish={handleCloseRoute}
+                onReroute={handleReroute}
                 isMuted={isNavMuted}
                 onToggleMute={() => setIsNavMuted((prev) => !prev)}
+                vehicleIcon={vehicleIcon}
+                onVehicleIconChange={setVehicleIcon}
+                onParkingSaved={handleParkingSaved}
               />
             )}
           </div>
