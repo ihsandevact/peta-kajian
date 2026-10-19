@@ -11,12 +11,14 @@ import {
   toggleYoutubeChannelAction,
   deleteYoutubeChannelAction,
 } from '@/app/actions/youtube';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 export default function AdminYoutubeChannelsPage() {
   const [channels, setChannels] = useState<YoutubeChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Syncing state
@@ -163,8 +165,9 @@ export default function AdminYoutubeChannelsPage() {
     setAddLoading(false);
   };
 
+  // Filter channel berdasarkan query pencarian (debounced 300ms)
   const filteredChannels = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim();
+    const q = debouncedSearchQuery.toLowerCase().trim();
     if (!q) return channels;
     return channels.filter(
       (c) =>
@@ -172,7 +175,7 @@ export default function AdminYoutubeChannelsPage() {
         c.channel_handle.toLowerCase().includes(q) ||
         (c.default_speaker_name && c.default_speaker_name.toLowerCase().includes(q))
     );
-  }, [channels, searchQuery]);
+  }, [channels, debouncedSearchQuery]);
 
   const liveCount = useMemo(() => {
     return channels.filter((c) => c.is_currently_live).length;

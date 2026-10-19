@@ -9,6 +9,7 @@ import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useAttendance } from '@/utils/attendance';
 import AdminScraperModal from '@/components/AdminScraperModal';
 import { fetchActiveTelegramChannels, type TelegramChannel } from '@/lib/services/telegram';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -45,6 +46,7 @@ export default function AdminModerationPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'rejected' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [stats, setStats] = useState({ pending: 0, confirmed: 0, rejected: 0, total: 0, totalAttendees: 0 });
   const { getExtraCount } = useAttendance();
 
@@ -163,9 +165,9 @@ export default function AdminModerationPage() {
         return false;
       }
 
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      // Search query (debounced 300ms)
+      if (debouncedSearchQuery.trim()) {
+        const q = debouncedSearchQuery.toLowerCase();
         const mTitle = s.title?.toLowerCase().includes(q);
         const mSpeaker = s.speaker_name?.toLowerCase().includes(q);
         const mVenue = s.venues?.name?.toLowerCase().includes(q);
@@ -175,7 +177,7 @@ export default function AdminModerationPage() {
 
       return true;
     });
-  }, [sessions, activeTab, searchQuery]);
+  }, [sessions, activeTab, debouncedSearchQuery]);
 
   return (
     <div className="w-full font-geist text-on-surface">

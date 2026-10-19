@@ -10,6 +10,7 @@ import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 import ThemeToggle from './ThemeToggle';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface SidebarFilterProps {
   filters: FilterState;
@@ -27,6 +28,182 @@ interface SidebarFilterProps {
   hasConnectionError?: boolean;
   isOffline?: boolean;
 }
+
+interface KajianSidebarCardProps {
+  session: StudySession;
+  isSelected: boolean;
+  isBookmarked: boolean;
+  distanceLabel: string | null;
+  onSelect: (session: StudySession) => void;
+  onToggleBookmark: (sessionId: string, session: StudySession) => void;
+  currentUser: any;
+  isLast: boolean;
+  lastElementRef?: (node: HTMLDivElement) => void;
+}
+
+const KajianSidebarCard = React.memo(
+  function KajianSidebarCard({
+    session,
+    isSelected,
+    isBookmarked,
+    distanceLabel,
+    onSelect,
+    onToggleBookmark,
+    currentUser,
+    isLast,
+    lastElementRef,
+  }: KajianSidebarCardProps) {
+    const info = React.useMemo(() => {
+      return getEffectiveSessionInfo(session, new Date());
+    }, [session]);
+
+    const isLive = info.isLive;
+    const isPast = info.isPast && !session.is_recurring;
+    const isRutin = session.is_recurring;
+    const isAkhwatOnly = session.audience_type === 'akhwat';
+
+    return (
+      <div
+        data-id={session.id}
+        ref={isLast ? lastElementRef : null}
+        onClick={() => onSelect(session)}
+        style={{ contentVisibility: 'auto', containIntrinsicSize: '0 120px' }}
+        className={`cursor-pointer p-3.5 sm:p-4 transition-all relative border-b border-surface-container-high/50 group ${
+          isSelected
+            ? 'bg-primary-container/10 shadow-[inset_3px_0_0_0_#15803d]'
+            : isPast
+            ? 'bg-surface-container-low/30 opacity-80 hover:opacity-100 hover:bg-surface-container-low'
+            : 'hover:bg-surface-container-low'
+        }`}
+      >
+        {/* Baris 1: Tanggal & Bookmark Cepat (Ramping & Anti-Menumpuk) */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            <span
+              className={`text-[12px] font-bold truncate ${
+                isLive
+                  ? 'text-red-600 dark:text-red-400'
+                  : isAkhwatOnly
+                  ? 'text-tertiary'
+                  : 'text-primary'
+              }`}
+            >
+              {info.dateLabel}
+            </span>
+            {session.is_test && (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0">
+                <span className="material-symbols-outlined text-[12px]">science</span>
+                <span>TEST ADMIN</span>
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const willBookmark = !isBookmarked;
+              onToggleBookmark(session.id, session);
+              if (willBookmark && !currentUser) {
+                triggerLoginNudge({ type: 'bookmark', title: session.title });
+              }
+            }}
+            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+              isBookmarked
+                ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 shadow-2xs'
+                : 'text-outline hover:text-on-surface hover:bg-surface-container-high'
+            }`}
+            title={isBookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
+          >
+            <span
+              className="material-symbols-outlined text-[15px]"
+              style={{ fontVariationSettings: isBookmarked ? "'FILL' 1" : "'FILL' 0" }}
+            >
+              bookmark
+            </span>
+          </button>
+        </div>
+
+        {/* Baris 2: Judul Kajian & Nama Pemateri */}
+        <div className="mt-1">
+          <h2 className="text-[13px] sm:text-sm font-semibold text-on-surface group-hover:text-primary transition-colors line-clamp-2 leading-snug">
+            {session.title}
+          </h2>
+          <p className="text-xs font-medium text-on-surface-variant mt-0.5 truncate">
+            {session.speaker_name}
+          </p>
+        </div>
+
+        {/* Baris 3: Judul Kitab (Jika Ada) */}
+        {session.book_title && session.book_title.trim() !== '' && session.book_title.toLowerCase() !== 'null' && (
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-outline font-medium truncate" title={`Kitab: ${session.book_title}`}>
+            <span className="material-symbols-outlined text-[14px] shrink-0 text-outline">menu_book</span>
+            <span className="truncate">{session.book_title}</span>
+          </div>
+        )}
+
+        {/* Baris 4: Lokasi Masjid / Online */}
+        {session.venues ? (
+          <div className="mt-1 flex items-center gap-1.5 text-outline text-xs">
+            <span className="material-symbols-outlined text-[15px] shrink-0">location_on</span>
+            <span className="truncate">{session.venues.name}</span>
+          </div>
+        ) : (
+          <div className="mt-1 flex items-center gap-1.5 text-outline text-xs">
+            <span className="material-symbols-outlined text-[15px] text-[#dc2626] shrink-0">videocam</span>
+            <span className="truncate">Kajian Online / Live Streaming</span>
+          </div>
+        )}
+
+        {/* Baris 5 (Paling Bawah): Status Badges, Kategori Audiens & Jarak */}
+        <div className="mt-2.5 pt-1.5 border-t border-surface-container-high/40 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {isLive ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white uppercase tracking-wide shadow-xs animate-pulse">
+                <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
+                Live
+              </span>
+            ) : isRutin ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] dark:bg-sky-950/50 dark:text-sky-300 uppercase tracking-wide border border-[#bae6fd] dark:border-sky-800">
+                <span className="material-symbols-outlined text-[12px]">event_repeat</span>
+                Rutin
+              </span>
+            ) : isPast ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide border border-surface-container-high">
+                <span className="material-symbols-outlined text-[12px] text-outline">history</span>
+                Selesai
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#dcfce7] text-[#166534] dark:bg-emerald-950/50 dark:text-emerald-300 uppercase tracking-wide border border-[#bbf7d0] dark:border-emerald-800">
+                Akan Datang
+              </span>
+            )}
+
+            <span className="text-[10px] font-semibold text-on-surface-variant capitalize px-1.5 py-0.5 bg-surface-container-low rounded border border-surface-container-high/60">
+              {session.audience_type}
+            </span>
+          </div>
+
+          {distanceLabel && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
+              {distanceLabel}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.isSelected === next.isSelected &&
+      prev.isBookmarked === next.isBookmarked &&
+      prev.session === next.session &&
+      prev.distanceLabel === next.distanceLabel &&
+      prev.isLast === next.isLast &&
+      prev.currentUser === next.currentUser
+    );
+  }
+);
 
 export default function SidebarFilter({
   filters,
@@ -52,21 +229,19 @@ export default function SidebarFilter({
 
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
 
+  const debouncedSearchInput = useDebounce(searchInputValue, 280);
+
   // Sinkronkan state lokal jika filters.searchQuery berubah dari luar
   useEffect(() => {
     setSearchInputValue(filters.searchQuery);
   }, [filters.searchQuery]);
 
-  // Debounce 280ms sebelum memperbarui filters.searchQuery ke state global
+  // Perbarui filters.searchQuery ke state global setelah debounce 280ms
   useEffect(() => {
-    if (searchInputValue === filters.searchQuery) return;
-
-    const timer = setTimeout(() => {
-      setFilters(p => ({ ...p, searchQuery: searchInputValue }));
-    }, 280);
-
-    return () => clearTimeout(timer);
-  }, [searchInputValue, filters.searchQuery, setFilters]);
+    if (debouncedSearchInput !== filters.searchQuery) {
+      setFilters(p => ({ ...p, searchQuery: debouncedSearchInput }));
+    }
+  }, [debouncedSearchInput, filters.searchQuery, setFilters]);
 
   // Reset pagination saat pencarian atau filter berubah
   useEffect(() => {
@@ -408,14 +583,6 @@ export default function SidebarFilter({
           </div>
         ) : (
           sessions.slice(0, visibleCount).map((session, index) => {
-            const now = new Date();
-            const info = getEffectiveSessionInfo(session, now);
-            const isLive = info.isLive;
-            const isPast = info.isPast && !session.is_recurring;
-            const isRutin = session.is_recurring;
-            
-            const isAkhwatOnly = session.audience_type === 'akhwat';
-            
             // Haversine Distance Calculation
             let distanceLabel: string | null = null;
             if (userLocation && session.venues?.lat && session.venues?.lng) {
@@ -427,122 +594,18 @@ export default function SidebarFilter({
             const isLast = index === visibleCount - 1;
 
             return (
-              <div 
-                key={session.id} 
-                data-id={session.id}
-                ref={isLast ? lastElementRef : null}
-                onClick={() => onSelectSession(session)}
-                className={`cursor-pointer p-3.5 sm:p-4 transition-all relative border-b border-surface-container-high/50 group
-                  ${isSelected ? 'bg-primary-container/10 shadow-[inset_3px_0_0_0_#15803d]' : isPast ? 'bg-surface-container-low/30 opacity-80 hover:opacity-100 hover:bg-surface-container-low' : 'hover:bg-surface-container-low'}
-                `}
-              >
-                {/* Baris 1: Tanggal & Bookmark Cepat (Ramping & Anti-Menumpuk) */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                    <span className={`text-[12px] font-bold truncate ${isLive ? 'text-red-600 dark:text-red-400' : isAkhwatOnly ? 'text-tertiary' : 'text-primary'}`}>
-                      {info.dateLabel}
-                    </span>
-                    {session.is_test && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0">
-                        <span className="material-symbols-outlined text-[12px]">science</span>
-                        <span>TEST ADMIN</span>
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const willBookmark = !isBookmarked(session.id);
-                      toggleBookmark(session.id, session);
-                      if (willBookmark && !currentUser) {
-                        triggerLoginNudge({ type: 'bookmark', title: session.title });
-                      }
-                    }}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-                      isBookmarked(session.id)
-                        ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/60 shadow-2xs'
-                        : 'text-outline hover:text-on-surface hover:bg-surface-container-high'
-                    }`}
-                    title={isBookmarked(session.id) ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
-                  >
-                    <span
-                      className="material-symbols-outlined text-[15px]"
-                      style={{ fontVariationSettings: isBookmarked(session.id) ? "'FILL' 1" : "'FILL' 0" }}
-                    >
-                      bookmark
-                    </span>
-                  </button>
-                </div>
-
-                {/* Baris 2: Judul Kajian & Nama Pemateri */}
-                <div className="mt-1">
-                  <h2 className="text-[13px] sm:text-sm font-semibold text-on-surface group-hover:text-primary transition-colors line-clamp-2 leading-snug">
-                    {session.title}
-                  </h2>
-                  <p className="text-xs font-medium text-on-surface-variant mt-0.5 truncate">
-                    {session.speaker_name}
-                  </p>
-                </div>
-
-                {/* Baris 3: Judul Kitab (Jika Ada) */}
-                {session.book_title && session.book_title.trim() !== '' && session.book_title.toLowerCase() !== 'null' && (
-                  <div className="mt-1 flex items-center gap-1.5 text-xs text-outline font-medium truncate" title={`Kitab: ${session.book_title}`}>
-                    <span className="material-symbols-outlined text-[14px] shrink-0 text-outline">menu_book</span>
-                    <span className="truncate">{session.book_title}</span>
-                  </div>
-                )}
-
-                {/* Baris 4: Lokasi Masjid / Online */}
-                {session.venues ? (
-                  <div className="mt-1 flex items-center gap-1.5 text-outline text-xs">
-                    <span className="material-symbols-outlined text-[15px] shrink-0">location_on</span>
-                    <span className="truncate">{session.venues.name}</span>
-                  </div>
-                ) : (
-                  <div className="mt-1 flex items-center gap-1.5 text-outline text-xs">
-                    <span className="material-symbols-outlined text-[15px] text-[#dc2626] shrink-0">videocam</span>
-                    <span className="truncate">Kajian Online / Live Streaming</span>
-                  </div>
-                )}
-
-                {/* Baris 5 (Paling Bawah): Status Badges, Kategori Audiens & Jarak */}
-                <div className="mt-2.5 pt-1.5 border-t border-surface-container-high/40 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {isLive ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-600 text-white uppercase tracking-wide shadow-xs animate-pulse">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
-                        Live
-                      </span>
-                    ) : isRutin ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#e0f2fe] text-[#0369a1] dark:bg-sky-950/50 dark:text-sky-300 uppercase tracking-wide border border-[#bae6fd] dark:border-sky-800">
-                        <span className="material-symbols-outlined text-[12px]">event_repeat</span>
-                        Rutin
-                      </span>
-                    ) : isPast ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-surface-container-highest text-on-surface-variant uppercase tracking-wide border border-surface-container-high">
-                        <span className="material-symbols-outlined text-[12px] text-outline">history</span>
-                        Selesai
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#dcfce7] text-[#166534] dark:bg-emerald-950/50 dark:text-emerald-300 uppercase tracking-wide border border-[#bbf7d0] dark:border-emerald-800">
-                        Akan Datang
-                      </span>
-                    )}
-
-                    <span className="text-[10px] font-semibold text-on-surface-variant capitalize px-1.5 py-0.5 bg-surface-container-low rounded border border-surface-container-high/60">
-                      {session.audience_type}
-                    </span>
-                  </div>
-
-                  {distanceLabel && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
-                      {distanceLabel}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <KajianSidebarCard
+                key={session.id}
+                session={session}
+                isSelected={isSelected}
+                isBookmarked={isBookmarked(session.id)}
+                distanceLabel={distanceLabel}
+                onSelect={onSelectSession}
+                onToggleBookmark={toggleBookmark}
+                currentUser={currentUser}
+                isLast={isLast}
+                lastElementRef={lastElementRef}
+              />
             );
           })
         )}

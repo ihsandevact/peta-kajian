@@ -19,6 +19,7 @@ import {
 } from '@/app/actions/telegram';
 import AdminScraperModal from '@/components/AdminScraperModal';
 import { runBatchTelegramScraperAction } from '@/app/actions/scraper';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
@@ -28,6 +29,7 @@ export default function AdminTelegramChannelsPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -125,9 +127,9 @@ export default function AdminTelegramChannelsPage() {
       if (activeTab === 'approved' && item.status !== 'approved') return false;
       if (activeTab === 'rejected' && item.status !== 'rejected') return false;
 
-      // Search Query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      // Search Query (debounced 300ms)
+      if (debouncedSearchQuery.trim()) {
+        const q = debouncedSearchQuery.toLowerCase();
         const matchUser = item.channel_username.toLowerCase().includes(q);
         const matchTitle = item.channel_title.toLowerCase().includes(q);
         const matchCity = item.city?.toLowerCase().includes(q);
@@ -137,7 +139,7 @@ export default function AdminTelegramChannelsPage() {
 
       return true;
     });
-  }, [channels, activeTab, searchQuery]);
+  }, [channels, activeTab, debouncedSearchQuery]);
 
   // Handler: Setujui Channel
   const handleApprove = async (channel: TelegramChannel) => {

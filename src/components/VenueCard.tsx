@@ -6,8 +6,11 @@ import { useAttendance } from '@/utils/attendance';
 import { subscribeToPushNotifications } from '@/utils/webPushClient';
 import { isSessionReminded, toggleSessionReminder } from '@/utils/reminders';
 import NotificationReminderToggle from '@/components/NotificationReminderToggle';
-import ShareModal, { shareSessionNative } from '@/components/ShareModal';
-import KajianPreviewModal from '@/components/KajianPreviewModal';
+import dynamic from 'next/dynamic';
+import { shareSessionNative } from '@/components/ShareModal';
+
+const ShareModal = dynamic(() => import('@/components/ShareModal'), { ssr: false });
+const KajianPreviewModal = dynamic(() => import('@/components/KajianPreviewModal'), { ssr: false });
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';

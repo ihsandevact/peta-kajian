@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin, getUserRoleAndStatus, type AppUserRole } from '@/lib/services/admin';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 type FAQCategory = 'all' | 'jamaah' | 'live' | 'relawan' | 'telegram' | 'akun';
 
@@ -20,6 +21,7 @@ interface FAQItem {
 export default function FAQPage() {
   const [activeCategory, setActiveCategory] = useState<FAQCategory>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 280);
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({
     'apa-itu-peta-kajian': true, // Open by default for welcome
   });
@@ -580,9 +582,9 @@ export default function FAQPage() {
         return false;
       }
 
-      // Filter query pencarian
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+      // Filter query pencarian (debounced 280ms)
+      if (debouncedSearchQuery.trim()) {
+        const q = debouncedSearchQuery.toLowerCase();
         const matchQuestion = item.question.toLowerCase().includes(q);
         const matchCategory = item.categoryLabel.toLowerCase().includes(q);
         return matchQuestion || matchCategory;
@@ -590,7 +592,7 @@ export default function FAQPage() {
 
       return true;
     });
-  }, [faqList, activeCategory, searchQuery]);
+  }, [faqList, activeCategory, debouncedSearchQuery]);
 
   return (
     <div className="min-h-screen bg-surface-container-lowest text-on-surface font-geist selection:bg-primary-container selection:text-on-primary-container flex flex-col">

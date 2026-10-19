@@ -13,7 +13,6 @@ import { useBookmarks } from '@/utils/bookmarks';
 import { useOnlineStatus } from '@/utils/offlineCache';
 import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
-import RequestContributorModal from '@/components/RequestContributorModal';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
 import InAppRoutePanel from '@/components/InAppRoutePanel';
 import LiveNavigationHUD from '@/components/LiveNavigationHUD';
@@ -24,6 +23,10 @@ import {
   getStoredVehicleIcon,
 } from '@/utils/navigationVehicle';
 import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
+
+const RequestContributorModal = dynamic(() => import('@/components/RequestContributorModal'), {
+  ssr: false,
+});
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -574,26 +577,39 @@ export default function HomeClient() {
     });
   }, [sessions, filters, bookmarks]);
 
-  // SMART SORTING: Live -> Upcoming/Rutin di atas, Selesai di bawah
+  // SMART SORTING: Live -> Upcoming/Rutin di atas, Selesai di bawah (Dioptimasi dengan Schwartzian Transform O(N))
   const sortedSessions = useMemo(() => {
-    return [...filteredSessions].sort((a, b) => {
-      // Sorting Jarak (Terdekat) — kajian tanpa lokasi fisik ditaruh paling bawah
-      if (filters.time === 'terdekat' && userLocation) {
-        const aHasLoc = hasPhysicalLocation(a);
-        const bHasLoc = hasPhysicalLocation(b);
-        if (aHasLoc && !bHasLoc) return -1;
-        if (!aHasLoc && bHasLoc) return 1;
-        if (!aHasLoc && !bHasLoc) return 0;
-        const distA = calculateDistance(userLocation.lat, userLocation.lng, a.venues!.lat, a.venues!.lng);
-        const distB = calculateDistance(userLocation.lat, userLocation.lng, b.venues!.lat, b.venues!.lng);
-        return distA - distB;
+    const isNearby = filters.time === 'terdekat' && !!userLocation;
+    const now = new Date();
+
+    // 1. Decorate: Hitung info & jarak hanya 1x per sesi
+    const decorated = filteredSessions.map((session) => {
+      const hasLoc = hasPhysicalLocation(session);
+      const dist =
+        isNearby && hasLoc
+          ? calculateDistance(userLocation.lat, userLocation.lng, session.venues!.lat, session.venues!.lng)
+          : null;
+      const info = !isNearby ? getEffectiveSessionInfo(session, now) : null;
+      return {
+        session,
+        hasLoc,
+        dist,
+        info,
+      };
+    });
+
+    // 2. Sort: Komparator murni operasi numerik/boolean cepat tanpa re-parsing
+    decorated.sort((itemA, itemB) => {
+      if (isNearby) {
+        if (itemA.hasLoc && !itemB.hasLoc) return -1;
+        if (!itemA.hasLoc && itemB.hasLoc) return 1;
+        if (!itemA.hasLoc && !itemB.hasLoc) return 0;
+        return (itemA.dist ?? 0) - (itemB.dist ?? 0);
       }
 
-      // Default Sorting (Waktu menggunakan effectiveDate)
-      const now = new Date();
-      const infoA = getEffectiveSessionInfo(a, now);
-      const infoB = getEffectiveSessionInfo(b, now);
-      
+      const infoA = itemA.info!;
+      const infoB = itemB.info!;
+
       // 1. Prioritas Tertinggi: Sedang Berlangsung (Live)
       if (infoA.isLive && !infoB.isLive) return -1;
       if (!infoA.isLive && infoB.isLive) return 1;
@@ -606,20 +622,22 @@ export default function HomeClient() {
       if (!aIsFuture && bIsFuture) return 1;
 
       // 3. Kronologis waktu sesi
+      const timeA = infoA.effectiveDate ? infoA.effectiveDate.getTime() : null;
+      const timeB = infoB.effectiveDate ? infoB.effectiveDate.getTime() : null;
+
       if (aIsFuture && bIsFuture) {
-        if (infoA.effectiveDate && infoB.effectiveDate) {
-          return infoA.effectiveDate.getTime() - infoB.effectiveDate.getTime();
-        }
-        if (infoA.effectiveDate && !infoB.effectiveDate) return -1;
-        if (!infoA.effectiveDate && infoB.effectiveDate) return 1;
+        if (timeA !== null && timeB !== null) return timeA - timeB;
+        if (timeA !== null && timeB === null) return -1;
+        if (timeA === null && timeB !== null) return 1;
         return 0;
       } else {
-        if (infoA.effectiveDate && infoB.effectiveDate) {
-          return infoB.effectiveDate.getTime() - infoA.effectiveDate.getTime();
-        }
+        if (timeA !== null && timeB !== null) return timeB - timeA;
         return 0;
       }
     });
+
+    // 3. Undecorate: Kembalikan daftar sesi asli
+    return decorated.map((d) => d.session);
   }, [filteredSessions, filters.time, userLocation]);
 
   // Deep-linking: auto-select session from ?session=<id> in URL

@@ -10,6 +10,7 @@ import {
   type CityItem,
 } from '@/utils/regions';
 import type { StudySession } from '@/lib/services/kajian';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface RegionPickerModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ export default function RegionPickerModal({
   sessions,
 }: RegionPickerModalProps) {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search, 250);
   const [expandedProvince, setExpandedProvince] = useState<string | null>(null);
 
   // Hitung jumlah kajian per wilayah
@@ -58,9 +60,9 @@ export default function RegionPickerModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Filter provinsi & kota berdasarkan query pencarian di dalam modal
+  // Filter provinsi & kota berdasarkan query pencarian di dalam modal (debounced 250ms)
   const filteredProvinces = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = debouncedSearch.trim().toLowerCase();
     if (!q) return INDONESIA_PROVINCES;
 
     return INDONESIA_PROVINCES.map((prov) => {

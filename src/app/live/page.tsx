@@ -19,6 +19,7 @@ import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
 import EndedStreamSkeleton from '@/components/live/EndedStreamSkeleton';
 import StudyLoginModal from '@/components/StudyLoginModal';
 import { type PendingStudySession } from '@/utils/studyNotes';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 export default function LiveStreamingPage() {
   const { playStream, openStudyMode } = useLivePlayer();
@@ -32,6 +33,7 @@ export default function LiveStreamingPage() {
 
   const [activeTab, setActiveTab] = useState<'live' | 'upcoming' | 'ended'>('live');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [selectedEndedChannelId, setSelectedEndedChannelId] = useState<string>('all');
   const [selectedVideo, setSelectedVideo] = useState<{
     videoId: string;
@@ -189,10 +191,10 @@ export default function LiveStreamingPage() {
     return items;
   }, [channels]);
 
-  // Filter pencarian khusus untuk siaran live yang sedang tayang
+  // Filter pencarian khusus untuk siaran live yang sedang tayang (debounced 300ms)
   const filteredLiveChannels = useMemo(() => {
     return liveChannels.filter((c) => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = debouncedSearchQuery.toLowerCase().trim();
       if (!q) return true;
       return (
         c.channel_name.toLowerCase().includes(q) ||
@@ -201,12 +203,12 @@ export default function LiveStreamingPage() {
         (c.current_video_title && c.current_video_title.toLowerCase().includes(q))
       );
     });
-  }, [liveChannels, searchQuery]);
+  }, [liveChannels, debouncedSearchQuery]);
 
-  // Filter pencarian untuk siaran mendatang
+  // Filter pencarian untuk siaran mendatang (debounced 300ms)
   const filteredUpcomingStreams = useMemo(() => {
     return upcomingStreams.filter((item) => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = debouncedSearchQuery.toLowerCase().trim();
       if (!q) return true;
       return (
         item.title.toLowerCase().includes(q) ||
@@ -215,7 +217,7 @@ export default function LiveStreamingPage() {
         item.channel.channel_handle.toLowerCase().includes(q)
       );
     });
-  }, [upcomingStreams, searchQuery]);
+  }, [upcomingStreams, debouncedSearchQuery]);
 
   // Daftar rekaman siaran live yang telah berakhir dari seluruh channel
   const endedStreams = useMemo(() => {
@@ -253,13 +255,13 @@ export default function LiveStreamingPage() {
     return items;
   }, [channels]);
 
-  // Filter pencarian dan channel untuk rekaman siaran yang telah berakhir
+  // Filter pencarian dan channel untuk rekaman siaran yang telah berakhir (debounced 300ms)
   const filteredEndedStreams = useMemo(() => {
     return endedStreams.filter((item) => {
       if (selectedEndedChannelId !== 'all' && item.channel.id !== selectedEndedChannelId) {
         return false;
       }
-      const q = searchQuery.toLowerCase().trim();
+      const q = debouncedSearchQuery.toLowerCase().trim();
       if (!q) return true;
       return (
         item.title.toLowerCase().includes(q) ||
@@ -268,7 +270,7 @@ export default function LiveStreamingPage() {
         item.channel.channel_handle.toLowerCase().includes(q)
       );
     });
-  }, [endedStreams, searchQuery, selectedEndedChannelId]);
+  }, [endedStreams, debouncedSearchQuery, selectedEndedChannelId]);
 
   // Daftar channel yang memiliki setidaknya 1 rekaman live selesai
   const endedChannelsList = useMemo(() => {
@@ -292,7 +294,7 @@ export default function LiveStreamingPage() {
   // Reset paginasi saat kata kunci pencarian atau filter channel berubah
   useEffect(() => {
     setVisibleEndedCount(12);
-  }, [searchQuery, selectedEndedChannelId]);
+  }, [debouncedSearchQuery, selectedEndedChannelId]);
 
   const hasMoreEnded = visibleEndedCount < filteredEndedStreams.length;
 
@@ -334,7 +336,7 @@ export default function LiveStreamingPage() {
     return filteredEndedStreams.slice(0, visibleEndedCount);
   }, [filteredEndedStreams, visibleEndedCount]);
 
-  // Filter pencarian untuk channel (khusus admin, deduplikasi handle)
+  // Filter pencarian untuk channel (khusus admin, deduplikasi handle, debounced 300ms)
   const filteredAllChannels = useMemo(() => {
     const map = new Map<string, YoutubeChannel>();
     channels.forEach((c) => {
@@ -346,7 +348,7 @@ export default function LiveStreamingPage() {
     const uniqueChannels = Array.from(map.values());
 
     return uniqueChannels.filter((c) => {
-      const q = searchQuery.toLowerCase().trim();
+      const q = debouncedSearchQuery.toLowerCase().trim();
       if (!q) return true;
       return (
         c.channel_name.toLowerCase().includes(q) ||
@@ -354,7 +356,7 @@ export default function LiveStreamingPage() {
         (c.default_speaker_name && c.default_speaker_name.toLowerCase().includes(q))
       );
     });
-  }, [channels, searchQuery]);
+  }, [channels, debouncedSearchQuery]);
 
   return (
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">

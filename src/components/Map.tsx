@@ -15,12 +15,104 @@ import {
   VEHICLE_OPTIONS,
   ALL_VEHICLE_OPTIONS,
 } from '@/utils/navigationVehicle';
+import dynamic from 'next/dynamic';
 import { clearParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
-import VehiclePickerModal from './VehiclePickerModal';
+
+const VehiclePickerModal = dynamic(() => import('./VehiclePickerModal'), { ssr: false });
 
 setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL';
+
+interface KajianMapMarkerProps {
+  session: StudySession;
+  isSelected: boolean;
+  onSelect: (session: StudySession) => void;
+  onFlyTo: (session: StudySession) => void;
+}
+
+const KajianMapMarker = React.memo(
+  function KajianMapMarker({ session, isSelected, onSelect, onFlyTo }: KajianMapMarkerProps) {
+    const lat = session.venues?.lat || 0;
+    const lng = session.venues?.lng || 0;
+    const hasDate = !!session.start_datetime;
+    const sessionTime = React.useMemo(() => {
+      return hasDate
+        ? new Date(session.start_datetime!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
+        : 'Rutin';
+    }, [hasDate, session.start_datetime]);
+    const isAkhwat = session.audience_type === 'akhwat';
+
+    const handleClick = React.useCallback(
+      (e: any) => {
+        e.originalEvent.stopPropagation();
+        onSelect(session);
+        onFlyTo(session);
+      },
+      [session, onSelect, onFlyTo]
+    );
+
+    return (
+      <Marker
+        longitude={lng}
+        latitude={lat}
+        anchor="center"
+        style={{ zIndex: isSelected ? 35 : 20 }}
+        onClick={handleClick}
+      >
+        {isSelected ? (
+          <div className="relative cursor-pointer group">
+            <div
+              className={`absolute -inset-2 rounded-full animate-ping ${
+                session.is_test ? 'bg-amber-500/30' : 'bg-primary-container/30'
+              }`}
+            />
+            <div
+              className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full shadow-md transition-transform group-hover:scale-105 ${
+                session.is_test
+                  ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+                  : 'bg-primary-container text-on-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">
+                {session.is_test ? 'science' : 'mosque'}
+              </span>
+              <span className="text-[13px] font-semibold tracking-tight">
+                {session.is_test ? 'TEST' : sessionTime}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow transition-all group-hover:scale-105 cursor-pointer ${
+              session.is_test
+                ? 'bg-amber-500 text-white ring-1 ring-amber-300'
+                : isAkhwat
+                ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary'
+                : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[12px]">
+              {session.is_test ? 'science' : isAkhwat ? 'female' : 'schedule'}
+            </span>
+            <span className="text-[11px] font-medium">{session.is_test ? 'TEST' : sessionTime}</span>
+          </div>
+        )}
+      </Marker>
+    );
+  },
+  (prev, next) => {
+    return (
+      prev.isSelected === next.isSelected &&
+      prev.session.id === next.session.id &&
+      prev.session.start_datetime === next.session.start_datetime &&
+      prev.session.is_test === next.session.is_test &&
+      prev.session.audience_type === next.session.audience_type &&
+      prev.session.venues?.lat === next.session.venues?.lat &&
+      prev.session.venues?.lng === next.session.venues?.lng
+    );
+  }
+);
 
 interface AppMapProps {
   sessions: StudySession[];
@@ -102,12 +194,6 @@ export default function AppMap({
       onVehicleIconChange(newIcon);
     }
   };
-  
-  const [viewState, setViewState] = React.useState({
-    longitude: 118.0, // Titik Tengah Indonesia
-    latitude: -2.0,
-    zoom: 4.5
-  });
 
   // Menambahkan layer 3D Building Extrusion MapTiler saat style dimuat
   const add3DBuildings = React.useCallback(() => {
@@ -399,7 +485,11 @@ export default function AppMap({
     <div className="w-full h-full relative">
       <Map
         ref={mapRef}
-        {...viewState}
+        initialViewState={{
+          longitude: 118.0, // Titik Tengah Indonesia
+          latitude: -2.0,
+          zoom: 4.5,
+        }}
         onLoad={handleMapLoad}
         onDragStart={() => {
           if (isNavigating) {
@@ -411,7 +501,6 @@ export default function AppMap({
             setIsFollowingUser(false);
           }
         }}
-        onMove={evt => setViewState(evt.viewState)}
         mapStyle={
           isSatelliteMode
             ? `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`
@@ -617,55 +706,15 @@ export default function AppMap({
           </Marker>
         )}
         
-        {mappableSessions.map(session => {
-          const isSelected = selectedSession?.id === session.id;
-          const hasDate = !!session.start_datetime;
-          const sessionTime = hasDate 
-            ? new Date(session.start_datetime!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
-            : 'Rutin';
-          const isAkhwat = session.audience_type === 'akhwat';
-          
-          return (
-            <Marker 
-              key={session.id} 
-              longitude={getLng(session)} 
-              latitude={getLat(session)} 
-              anchor="center"
-              style={{ zIndex: isSelected ? 35 : 20 }}
-              onClick={e => {
-                e.originalEvent.stopPropagation();
-                onSelectSession(session);
-                flyToSession(session);
-              }}
-            >
-              {isSelected ? (
-                <div className="relative cursor-pointer group">
-                  <div className={`absolute -inset-2 rounded-full animate-ping ${session.is_test ? 'bg-amber-500/30' : 'bg-primary-container/30'}`}></div>
-                  <div className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full shadow-md transition-transform group-hover:scale-105 ${
-                    session.is_test
-                      ? 'bg-amber-600 text-white ring-2 ring-amber-300'
-                      : 'bg-primary-container text-on-primary'
-                  }`}>
-                    <span className="material-symbols-outlined text-[14px]">{session.is_test ? 'science' : 'mosque'}</span>
-                    <span className="text-[13px] font-semibold tracking-tight">{session.is_test ? 'TEST' : sessionTime}</span>
-                  </div>
-                </div>
-              ) : (
-                <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow transition-all group-hover:scale-105 cursor-pointer
-                  ${session.is_test
-                    ? 'bg-amber-500 text-white ring-1 ring-amber-300'
-                    : isAkhwat 
-                      ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary' 
-                      : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
-                  }
-                `}>
-                  <span className="material-symbols-outlined text-[12px]">{session.is_test ? 'science' : isAkhwat ? 'female' : 'schedule'}</span>
-                  <span className="text-[11px] font-medium">{session.is_test ? 'TEST' : sessionTime}</span>
-                </div>
-              )}
-            </Marker>
-          );
-        })}
+        {mappableSessions.map(session => (
+          <KajianMapMarker
+            key={session.id}
+            session={session}
+            isSelected={selectedSession?.id === session.id}
+            onSelect={onSelectSession}
+            onFlyTo={flyToSession}
+          />
+        ))}
 
         {selectedSession && selectedHasLocation && (
           <Popup

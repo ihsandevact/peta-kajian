@@ -9,6 +9,7 @@ import {
   rejectContributorRequest,
 } from '@/app/actions/admin';
 import { ADMIN_EMAILS, type AppUserRole, type ContributorRequestStatus } from '@/lib/services/admin';
+import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface ContributorItem {
   userId?: string;
@@ -34,6 +35,7 @@ export default function AdminUsersPage() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Rejection modal state
   const [rejectingItem, setRejectingItem] = useState<ContributorItem | null>(null);
@@ -177,9 +179,9 @@ export default function AdminUsersPage() {
       if (activeTab === 'admin' && u.role !== 'admin') return false;
       if (activeTab === 'user' && u.role !== 'user') return false;
 
-      // Filter Pencarian
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
+      // Filter Pencarian (debounced 300ms)
+      if (debouncedSearchQuery.trim()) {
+        const query = debouncedSearchQuery.toLowerCase().trim();
         const matchName = u.name.toLowerCase().includes(query);
         const matchEmail = u.email ? u.email.toLowerCase().includes(query) : false;
         const matchCommunity = u.communityName ? u.communityName.toLowerCase().includes(query) : false;
@@ -189,7 +191,7 @@ export default function AdminUsersPage() {
 
       return true;
     });
-  }, [users, activeTab, searchQuery]);
+  }, [users, activeTab, debouncedSearchQuery]);
 
   const handleToggleTrusted = async (userItem: ContributorItem) => {
     if (!userItem.userId) {
