@@ -933,6 +933,7 @@ export default function HomeClient() {
                 userLocation={userLocation}
                 userHeading={userHeading}
                 onExit={handleExitLiveNav}
+                onFinish={handleCloseRoute}
                 isMuted={isNavMuted}
                 onToggleMute={() => setIsNavMuted((prev) => !prev)}
               />

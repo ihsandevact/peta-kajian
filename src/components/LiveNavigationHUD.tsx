@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import type { StudySession } from '@/lib/services/kajian';
 import {
   type RouteResult,
@@ -16,8 +16,67 @@ interface LiveNavigationHUDProps {
   userLocation: { lat: number; lng: number } | null;
   userHeading?: number | null;
   onExit: () => void;
+  onFinish?: () => void;
   isMuted: boolean;
   onToggleMute: () => void;
+}
+
+// Suara bel Ding-Dong kedatangan sintetis (Web Audio API - 0 dependensi & bekerja offline)
+function playArrivalChime() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+
+    // Nada 1: E5 (659.25 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, ctx.currentTime);
+    gain1.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(ctx.currentTime);
+    osc1.stop(ctx.currentTime + 0.35);
+
+    // Nada 2: A5 (880 Hz) - jeda 160ms (Ding-Dong!)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.16);
+    gain2.gain.setValueAtTime(0.22, ctx.currentTime + 0.16);
+    gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.65);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(ctx.currentTime + 0.16);
+    osc2.stop(ctx.currentTime + 0.65);
+  } catch (err) {
+    console.warn('Audio chime error:', err);
+  }
+}
+
+// Selector otomatis suara penutur pria Bahasa Indonesia
+function getIndonesianMaleVoice(): SpeechSynthesisVoice | null {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return null;
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices || voices.length === 0) return null;
+
+  // Filter suara bahasa Indonesia
+  const idVoices = voices.filter((v) => v.lang.toLowerCase().startsWith('id'));
+  if (idVoices.length === 0) return null;
+
+  // 1. Cari suara yang spesifik penutur pria (Andika, Ardi, Male, Pria, David)
+  const maleVoice = idVoices.find((v) =>
+    /andika|ardi|male|pria|david/i.test(v.name)
+  );
+  if (maleVoice) return maleVoice;
+
+  // 2. Cari suara Google Bahasa Indonesia
+  const googleVoice = idVoices.find((v) => /google/i.test(v.name));
+  if (googleVoice) return googleVoice;
+
+  return idVoices[0];
 }
 
 export default function LiveNavigationHUD({
@@ -26,16 +85,40 @@ export default function LiveNavigationHUD({
   userLocation,
   userHeading,
   onExit,
+  onFinish,
   isMuted,
   onToggleMute,
 }: LiveNavigationHUDProps) {
   const steps = routeResult.steps || [];
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [isStepsDrawerOpen, setIsStepsDrawerOpen] = useState<boolean>(false);
+  const [hasArrived, setHasArrived] = useState<boolean>(false);
+  const [showArrivalModal, setShowArrivalModal] = useState<boolean>(false);
   const spokenStepsRef = useRef<Set<number>>(new Set());
+  const hasAnnouncedArrivalRef = useRef<boolean>(false);
 
   const currentStep: RouteStep | undefined = steps[currentStepIndex];
   const nextStep: RouteStep | undefined = steps[currentStepIndex + 1];
+
+  // Koordinat tujuan akhir
+  const destinationCoord = useMemo<[number, number] | null>(() => {
+    if (session.venues?.lng && session.venues?.lat) {
+      return [session.venues.lng, session.venues.lat];
+    }
+    if (routeResult.geometry.coordinates.length > 0) {
+      return routeResult.geometry.coordinates[routeResult.geometry.coordinates.length - 1];
+    }
+    return null;
+  }, [session.venues, routeResult.geometry.coordinates]);
+
+  // Jarak langsung realtime ke lokasi tujuan akhir
+  const distanceToDestination = useMemo(() => {
+    if (!userLocation || !destinationCoord) return Infinity;
+    return calculateDirectDistanceMeters(
+      [userLocation.lng, userLocation.lat],
+      destinationCoord
+    );
+  }, [userLocation, destinationCoord]);
 
   // Hitung jarak dinamis dari pengguna ke titik belokan berikutnya
   const distanceToNextManeuver = useMemo(() => {
@@ -55,8 +138,72 @@ export default function LiveNavigationHUD({
     }
   }, [distanceToNextManeuver, nextStep, currentStepIndex, steps.length]);
 
-  // Panduan Suara Otomatis (Web Speech Synthesis API dalam Bahasa Indonesia)
+  // Fungsi pengucapan narator suara pria Bahasa Indonesia dengan artikulasi jelas
+  const speakText = useCallback(
+    (text: string) => {
+      if (isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        return;
+      }
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'id-ID';
+
+        const selectedVoice = getIndonesianMaleVoice();
+        if (selectedVoice) {
+          utterance.voice = selectedVoice;
+        }
+
+        // Tuning nada (pitch) & kecepatan (rate) untuk suara pria yang mantap, tenang & artikulatif
+        utterance.pitch = 0.88;
+        utterance.rate = 0.95;
+
+        window.speechSynthesis.speak(utterance);
+      } catch (err) {
+        console.warn('Speech synthesis error:', err);
+      }
+    },
+    [isMuted]
+  );
+
+  // Trigger kedatangan tujuan
+  const triggerArrival = useCallback(() => {
+    if (hasAnnouncedArrivalRef.current) return;
+    hasAnnouncedArrivalRef.current = true;
+    setHasArrived(true);
+    setShowArrivalModal(true);
+
+    // 1. Bel Ding-Dong Chime
+    if (!isMuted) {
+      playArrivalChime();
+    }
+
+    // 2. Getar Haptic
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([150, 80, 150, 80, 250]);
+      } catch {}
+    }
+
+    // 3. Suara Narator Pria Bahasa Indonesia
+    const placeName = session.venues?.name || session.title;
+    speakText(`Alhamdulillah, Anda telah tiba di lokasi tujuan: ${placeName}`);
+  }, [isMuted, session, speakText]);
+
+  // Deteksi kedatangan otomatis saat mendekati tujuan (< 35m) atau langkah terakhir dicapai (<= 50m)
   useEffect(() => {
+    if (hasArrived) return;
+    const isVeryClose = distanceToDestination <= 35;
+    const isLastStepAndClose = currentStepIndex === steps.length - 1 && distanceToDestination <= 50;
+
+    if (isVeryClose || isLastStepAndClose) {
+      triggerArrival();
+    }
+  }, [distanceToDestination, currentStepIndex, steps.length, hasArrived, triggerArrival]);
+
+  // Panduan Suara Otomatis Belokan (Narator Pria Bahasa Indonesia)
+  useEffect(() => {
+    if (hasArrived) return;
     if (isMuted || typeof window === 'undefined' || !('speechSynthesis' in window)) {
       return;
     }
@@ -69,26 +216,17 @@ export default function LiveNavigationHUD({
 
       let textToSpeak = '';
       if (currentStepIndex === 0) {
-        textToSpeak = `Mulai navigasi menuju ${session.venues?.name || session.title}. ${stepToAnnounce.instruction}`;
+        textToSpeak = `Bismillah, mulai navigasi menuju ${session.venues?.name || session.title}. ${stepToAnnounce.instruction}`;
       } else if (currentStepIndex === steps.length - 1) {
-        textToSpeak = `Anda telah tiba di lokasi kajian: ${session.venues?.name || session.title}`;
+        textToSpeak = `Mendekati lokasi kajian: ${session.venues?.name || session.title}`;
       } else {
         const distText = formatDistanceText(stepToAnnounce.distanceMeters);
         textToSpeak = `Dalam ${distText}, ${stepToAnnounce.instruction}`;
       }
 
-      try {
-        window.speechSynthesis.cancel(); // Hentikan suara sebelumnya jika ada antrean
-        const utterance = new SpeechSynthesisUtterance(textToSpeak);
-        utterance.lang = 'id-ID';
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        window.speechSynthesis.speak(utterance);
-      } catch (err) {
-        console.warn('Speech synthesis error:', err);
-      }
+      speakText(textToSpeak);
     }
-  }, [currentStepIndex, currentStep, isMuted, session]);
+  }, [currentStepIndex, currentStep, isMuted, session, steps.length, hasArrived, speakText]);
 
   const venue = session.venues;
   const googleMapsUrl = venue?.lat && venue?.lng
@@ -97,35 +235,58 @@ export default function LiveNavigationHUD({
 
   return (
     <>
-      {/* 1. TOP HUD BANNER (Petunjuk Belokan Aktif) */}
+      {/* 1. TOP HUD BANNER (Petunjuk Belokan Aktif atau Status Tiba) */}
       <div className="fixed md:absolute top-3 md:top-4 inset-x-3 md:inset-x-auto md:left-6 md:w-[420px] z-40 animate-in slide-in-from-top-4 duration-300 font-geist select-none">
         <div className="bg-surface-container-lowest/95 backdrop-blur-md border border-surface-container-high/80 rounded-2xl shadow-2xl p-3 sm:p-4 text-on-surface">
           <div className="flex items-start gap-3">
-            {/* Kotak Ikon Belokan */}
-            <div className="w-13 h-13 rounded-2xl bg-emerald-600 dark:bg-emerald-500 text-white flex items-center justify-center shadow-lg shrink-0">
+            {/* Kotak Ikon Belokan atau Ceklis Kedatangan */}
+            <div
+              className={`w-13 h-13 rounded-2xl ${
+                hasArrived
+                  ? 'bg-gradient-to-tr from-emerald-600 to-teal-500 ring-4 ring-emerald-500/20 shadow-emerald-600/30'
+                  : 'bg-emerald-600 dark:bg-emerald-500'
+              } text-white flex items-center justify-center shadow-lg shrink-0 transition-all`}
+            >
               <span className="material-symbols-outlined text-[32px] font-bold">
-                {currentStep?.iconName || 'navigation'}
+                {hasArrived ? 'check_circle' : currentStep?.iconName || 'navigation'}
               </span>
             </div>
 
-            {/* Teks Instruksi & Jarak Belokan */}
+            {/* Teks Instruksi & Jarak Belokan / Status Tiba */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-extrabold text-on-surface tracking-tight leading-none">
-                  {formatDistanceText(distanceToNextManeuver)}
-                </span>
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                  lagi
-                </span>
-              </div>
-              <h3 className="font-bold text-sm sm:text-base text-on-surface mt-1 line-clamp-1 leading-snug">
-                {currentStep?.instruction || 'Lurus terus ikuti jalur'}
-              </h3>
-              {nextStep && (
-                <p className="text-[11px] text-outline truncate mt-0.5 flex items-center gap-1">
-                  <span>Lalu:</span>
-                  <span className="font-medium text-on-surface-variant truncate">{nextStep.instruction}</span>
-                </p>
+              {hasArrived ? (
+                <div>
+                  <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    Tiba di Tujuan
+                  </span>
+                  <h3 className="font-extrabold text-sm sm:text-base text-on-surface mt-0.5 line-clamp-1 leading-snug">
+                    {venue?.name || session.title}
+                  </h3>
+                  <p className="text-[11px] text-outline truncate mt-0.5">
+                    Alhamdulillah perjalanan Anda telah selesai
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl sm:text-3xl font-extrabold text-on-surface tracking-tight leading-none">
+                      {formatDistanceText(distanceToNextManeuver)}
+                    </span>
+                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                      lagi
+                    </span>
+                  </div>
+                  <h3 className="font-bold text-sm sm:text-base text-on-surface mt-1 line-clamp-1 leading-snug">
+                    {currentStep?.instruction || 'Lurus terus ikuti jalur'}
+                  </h3>
+                  {nextStep && (
+                    <p className="text-[11px] text-outline truncate mt-0.5 flex items-center gap-1">
+                      <span>Lalu:</span>
+                      <span className="font-medium text-on-surface-variant truncate">{nextStep.instruction}</span>
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -148,12 +309,18 @@ export default function LiveNavigationHUD({
 
               <button
                 type="button"
-                onClick={onExit}
-                className="px-2.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer border border-surface-container-high shadow-2xs"
-                title="Keluar dari Navigasi Langsung dan Kembali ke Pratinjau Rute"
+                onClick={hasArrived && onFinish ? onFinish : onExit}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 transition-colors cursor-pointer border shadow-2xs ${
+                  hasArrived
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                    : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-surface-container-high'
+                }`}
+                title={hasArrived ? 'Selesai dan Buka Kajian' : 'Keluar dari Navigasi Langsung'}
               >
-                <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-                <span className="hidden sm:inline">Keluar</span>
+                <span className="material-symbols-outlined text-[16px]">
+                  {hasArrived ? 'check' : 'arrow_back'}
+                </span>
+                <span className="hidden sm:inline">{hasArrived ? 'Selesai' : 'Keluar'}</span>
               </button>
             </div>
           </div>
@@ -191,21 +358,57 @@ export default function LiveNavigationHUD({
                 <span className="hidden sm:inline">Rincian</span>
               </button>
 
-              {/* Tombol Keluar Navigasi yang Sangat Jelas */}
-              <button
-                type="button"
-                onClick={onExit}
-                className="px-2.5 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                title="Keluar dari Navigasi Langsung"
-              >
-                <span className="material-symbols-outlined text-[16px]">close</span>
-                <span>Keluar</span>
-              </button>
+              {/* Tombol Selesai (saat tiba) atau Keluar Navigasi */}
+              {hasArrived ? (
+                <button
+                  type="button"
+                  onClick={onFinish ? onFinish : onExit}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-95"
+                  title="Selesai Navigasi dan Buka Kajian"
+                >
+                  <span className="material-symbols-outlined text-[16px]">check</span>
+                  <span>Selesai</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onExit}
+                  className="px-2.5 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 flex items-center gap-1 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                  title="Keluar dari Navigasi Langsung"
+                >
+                  <span className="material-symbols-outlined text-[16px]">close</span>
+                  <span>Keluar</span>
+                </button>
+              )}
             </div>
           </div>
 
+          {/* Tombol Bantuan Manual 'Saya Sudah Sampai' saat berada dalam radius 150m */}
+          {!hasArrived && distanceToDestination <= 150 && (
+            <button
+              type="button"
+              onClick={triggerArrival}
+              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 active:scale-[0.98] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20 transition-all cursor-pointer animate-in fade-in zoom-in-95"
+            >
+              <span className="material-symbols-outlined text-[16px]">check_circle</span>
+              <span>Saya Sudah Sampai di Lokasi ({formatDistanceText(distanceToDestination)})</span>
+            </button>
+          )}
+
+          {/* Tombol Tampilkan Kartu Kedatangan jika dialog ditutup pengguna */}
+          {hasArrived && !showArrivalModal && (
+            <button
+              type="button"
+              onClick={() => setShowArrivalModal(true)}
+              className="w-full py-2 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[16px]">info</span>
+              <span>Buka Kartu Tiba di Tujuan</span>
+            </button>
+          )}
+
           {/* Baris 2: Tombol Navigasi Google Maps Eksternal (Cadangan) */}
-          {googleMapsUrl && (
+          {googleMapsUrl && !hasArrived && (
             <a
               href={googleMapsUrl}
               target="_blank"
@@ -220,6 +423,106 @@ export default function LiveNavigationHUD({
           )}
         </div>
       </div>
+
+      {/* 3. MODAL / BOTTOM SHEET KEDATANGAN (Google Maps Style) */}
+      {showArrivalModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-end md:items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200 font-geist"
+          onClick={() => setShowArrivalModal(false)}
+        >
+          <div
+            className="w-full md:max-w-md bg-surface-container-lowest rounded-3xl border-2 border-emerald-500/80 shadow-2xl p-5 sm:p-6 text-on-surface animate-in slide-in-from-bottom-8 duration-300 relative text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Tombol Tutup Silang */}
+            <button
+              type="button"
+              onClick={() => setShowArrivalModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+              title="Tutup dialog kedatangan"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+
+            {/* Badge Ikon Ceklis Animasi */}
+            <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-emerald-600/30 ring-4 ring-emerald-500/20">
+              <span className="material-symbols-outlined text-[34px] font-bold">check_circle</span>
+            </div>
+
+            <p className="text-[11px] font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+              TIBA DI TUJUAN
+            </p>
+            <h3 className="text-xl sm:text-2xl font-black text-on-surface mt-1 tracking-tight">
+              Alhamdulillah, Anda Telah Sampai!
+            </h3>
+
+            {/* Info Lokasi & Kajian */}
+            <div className="mt-4 p-3.5 rounded-2xl bg-surface-container-low/80 border border-surface-container-high/60 text-left space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px] text-emerald-600 dark:text-emerald-400 shrink-0">
+                  mosque
+                </span>
+                <h4 className="font-bold text-sm text-on-surface line-clamp-1">
+                  {venue?.name || session.title}
+                </h4>
+              </div>
+              {venue?.address && (
+                <p className="text-xs text-outline line-clamp-2 pl-6">
+                  {venue.address}
+                </p>
+              )}
+              {session.speaker_name && (
+                <p className="text-[11px] text-on-surface-variant font-medium pl-6 pt-1">
+                  Pemateri: <span className="font-bold text-on-surface">{session.speaker_name}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Statistik Perjalanan */}
+            <div className="grid grid-cols-2 gap-2 mt-3 text-left">
+              <div className="p-2.5 rounded-xl bg-surface-container/60 border border-surface-container-high/40">
+                <p className="text-[10px] text-outline font-semibold uppercase">Jarak Tempuh</p>
+                <p className="text-sm font-black text-on-surface mt-0.5">
+                  {formatDistanceText(routeResult.distanceMeters)}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-container/60 border border-surface-container-high/40">
+                <p className="text-[10px] text-outline font-semibold uppercase">Waktu Perjalanan</p>
+                <p className="text-sm font-black text-on-surface mt-0.5">
+                  {formatDurationText(routeResult.durationMinutes)}
+                </p>
+              </div>
+            </div>
+
+            {/* Tombol Aksi Utama */}
+            <div className="mt-5 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowArrivalModal(false);
+                  if (onFinish) {
+                    onFinish();
+                  } else {
+                    onExit();
+                  }
+                }}
+                className="w-full py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[20px]">check</span>
+                <span>Selesai Navigasi & Buka Kajian</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowArrivalModal(false)}
+                className="w-full py-2 text-xs font-semibold text-outline hover:text-on-surface transition-colors cursor-pointer"
+              >
+                Tetap Tampilkan Peta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 3. STEP-BY-STEP DIRECTIONS DRAWER (Modal Lembar Rincian Belokan) */}
       {isStepsDrawerOpen && (
