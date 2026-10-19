@@ -393,9 +393,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                   <button
                     type="button"
                     onClick={() => onStartRoute(session)}
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25 cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                    <span className="material-symbols-outlined text-[16px]">directions</span>
                     <span>Petunjuk Rute ke Lokasi</span>
                   </button>
                 ) : (
@@ -403,9 +403,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                     href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25"
                   >
-                    <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                    <span className="material-symbols-outlined text-[16px]">directions</span>
                     <span>Petunjuk Rute ke Lokasi</span>
                   </a>
                 )
@@ -423,9 +423,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                   <button
                     type="button"
                     onClick={() => onStartRoute(session)}
-                    className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                    className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2 px-2.5 rounded-xl transition-all shadow-md shadow-emerald-600/25 cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span className="material-symbols-outlined text-[16px]">directions</span>
                     <span>Rute Maps</span>
                   </button>
                 ) : (
@@ -433,9 +433,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                     href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                    className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2 px-2.5 rounded-xl transition-all shadow-md shadow-emerald-600/25"
                   >
-                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span className="material-symbols-outlined text-[16px]">directions</span>
                     <span>Rute Maps</span>
                   </a>
                 )}
@@ -443,9 +443,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                 <button
                   type="button"
                   onClick={handleWatchLive}
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 py-2 px-2.5 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[15px] text-red-600">play_circle</span>
+                  <span className="material-symbols-outlined text-[16px] text-red-600">play_circle</span>
                   <span>Tonton Live</span>
                 </button>
               </div>
@@ -492,9 +492,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                 <button
                   type="button"
                   onClick={() => onStartRoute(session)}
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2 px-2.5 rounded-xl transition-all shadow-md shadow-emerald-600/25 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                  <span className="material-symbols-outlined text-[16px]">directions</span>
                   <span>Rute Maps</span>
                 </button>
               ) : (
@@ -502,9 +502,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                   href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                  className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2 px-2.5 rounded-xl transition-all shadow-md shadow-emerald-600/25"
                 >
-                  <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                  <span className="material-symbols-outlined text-[16px]">directions</span>
                   <span>Rute Maps</span>
                 </a>
               )}
@@ -513,9 +513,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                 href={gCalUrl.toString()}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-1.5 px-2 rounded-xl transition-all active:scale-95 shadow-2xs"
+                className="flex items-center justify-center gap-1.5 text-xs font-semibold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2 px-2.5 rounded-xl transition-all active:scale-95 shadow-2xs"
               >
-                <span className="material-symbols-outlined text-[15px]">event_available</span>
+                <span className="material-symbols-outlined text-[16px]">event_available</span>
                 <span>Simpan Kalender</span>
               </a>
             </div>
@@ -574,9 +574,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                   <button
                     type="button"
                     onClick={() => onStartRoute(session)}
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25 cursor-pointer"
                   >
-                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span className="material-symbols-outlined text-[16px]">directions</span>
                     <span>Petunjuk Rute Maps</span>
                   </button>
                 ) : (
@@ -584,9 +584,9 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                     href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                    className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25"
                   >
-                    <span className="material-symbols-outlined text-[15px]">directions_car</span>
+                    <span className="material-symbols-outlined text-[16px]">directions</span>
                     <span>Petunjuk Rute Maps</span>
                   </a>
                 )

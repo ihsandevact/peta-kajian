@@ -166,7 +166,7 @@ export default function KajianPreviewModal({
       >
         {/* Modal Container: Split Kiri (Poster) & Kanan (Deskripsi) di layar md: ke atas */}
         <div
-          className="relative w-full max-w-5xl bg-surface-container-lowest rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border border-surface-container-high/80 flex flex-col md:flex-row max-h-[94vh] md:h-[84vh] animate-in zoom-in-95 duration-200"
+          className="relative w-full max-w-5xl bg-surface-container-lowest rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden border border-surface-container-high/80 flex flex-col md:flex-row max-h-[94vh] md:h-[90vh] animate-in zoom-in-95 duration-200"
           onClick={(e) => e.stopPropagation()}
         >
           {/* ================= SISI KIRI: POSTER VISUAL ================= */}
@@ -186,7 +186,7 @@ export default function KajianPreviewModal({
                 <img
                   src={session.poster_url}
                   alt={`Poster ${session.title}`}
-                  className={`max-h-[32vh] md:max-h-[72vh] w-auto h-auto max-w-full object-contain rounded-xl sm:rounded-2xl shadow-2xl transition-transform duration-300 hover:scale-[1.02] ${
+                  className={`max-h-[32vh] md:max-h-[78vh] w-auto h-auto max-w-full object-contain rounded-xl sm:rounded-2xl shadow-2xl transition-transform duration-300 hover:scale-[1.02] ${
                     isPast ? 'grayscale-[30%] brightness-90' : ''
                   }`}
                   onError={() => setImgError(true)}
@@ -259,8 +259,9 @@ export default function KajianPreviewModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="p-1.5 rounded-full hover:bg-surface-container text-outline hover:text-on-surface transition-colors cursor-pointer"
+                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full hover:bg-surface-container text-outline hover:text-on-surface transition-colors cursor-pointer shrink-0"
                   title="Tutup Modal"
+                  aria-label="Tutup Modal"
                 >
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
@@ -494,9 +495,9 @@ export default function KajianPreviewModal({
                         onClose();
                         onStartRoute(session);
                       }}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25 cursor-pointer"
                     >
-                      <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                      <span className="material-symbols-outlined text-[16px]">directions</span>
                       <span>Petunjuk Rute ke Lokasi Masjid</span>
                     </button>
                   ) : (
@@ -504,9 +505,9 @@ export default function KajianPreviewModal({
                       href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-primary hover:text-on-primary bg-primary/10 hover:bg-primary border border-primary/20 py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25"
                     >
-                      <span className="material-symbols-outlined text-[16px]">directions_car</span>
+                      <span className="material-symbols-outlined text-[16px]">directions</span>
                       <span>Petunjuk Rute ke Lokasi Masjid</span>
                     </a>
                   )
@@ -521,9 +522,9 @@ export default function KajianPreviewModal({
                           onClose();
                           onStartRoute(session);
                         }}
-                        className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer"
+                        className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25 cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
+                        <span className="material-symbols-outlined text-[16px]">directions</span>
                         <span>Petunjuk Rute</span>
                       </button>
                     ) : (
@@ -531,9 +532,9 @@ export default function KajianPreviewModal({
                         href={`https://www.google.com/maps/dir/?api=1&destination=${session.venues?.lat},${session.venues?.lng}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 text-xs font-bold text-on-surface hover:text-primary bg-surface-container hover:bg-surface-container-high border border-surface-container-high py-2.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs"
+                        className="flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 py-2.5 px-3 rounded-xl transition-all shadow-md shadow-emerald-600/25"
                       >
-                        <span className="material-symbols-outlined text-[16px] text-primary">directions_car</span>
+                        <span className="material-symbols-outlined text-[16px]">directions</span>
                         <span>Petunjuk Rute</span>
                       </a>
                     )
