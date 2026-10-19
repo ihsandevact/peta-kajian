@@ -684,16 +684,16 @@ export default function ContributorProfilePage() {
             <button
               type="button"
               onClick={() => handleTabChange('buku-saku')}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'buku-saku'
                   ? 'bg-surface-container-lowest text-emerald-700 dark:text-emerald-400 shadow-xs font-bold'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
-              <span className="material-symbols-outlined text-[18px] sm:text-[20px]">auto_stories</span>
-              <span>Buku Saku</span>
+              <span className="material-symbols-outlined text-[18px] sm:text-[20px] shrink-0">auto_stories</span>
+              <span className="truncate">Buku Saku</span>
               <span
-                className={`text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold transition-colors ${
+                className={`text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold transition-colors shrink-0 ${
                   activeTab === 'buku-saku'
                     ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
                     : 'bg-surface-container text-outline'
@@ -705,16 +705,16 @@ export default function ContributorProfilePage() {
             <button
               type="button"
               onClick={() => handleTabChange('riwayat')}
-              className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+              className={`flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
                 activeTab === 'riwayat'
                   ? 'bg-surface-container-lowest text-primary dark:text-emerald-400 shadow-xs font-bold'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
-              <span className="material-symbols-outlined text-[18px] sm:text-[20px]">history_edu</span>
-              <span>Riwayat</span>
+              <span className="material-symbols-outlined text-[18px] sm:text-[20px] shrink-0">history_edu</span>
+              <span className="truncate">Riwayat</span>
               <span
-                className={`text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold transition-colors ${
+                className={`text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold transition-colors shrink-0 ${
                   activeTab === 'riwayat'
                     ? 'bg-primary/15 text-primary dark:text-emerald-400'
                     : 'bg-surface-container text-outline'
@@ -729,20 +729,21 @@ export default function ContributorProfilePage() {
         {/* ================= TAB 1: BUKU SAKU FAIDAH ================= */}
         {activeTab === 'buku-saku' && (
           <div className="flex flex-col gap-4 animate-in fade-in duration-300">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
-                <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[22px]">auto_stories</span>
+            <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 xs:gap-3">
+              <h2 className="text-sm sm:text-base font-bold text-on-surface flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
+                <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-[20px] sm:text-[22px] shrink-0">auto_stories</span>
                 <span>Buku Saku Faidah</span>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300">
+                <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 shrink-0">
                   {studyNotes.length}
                 </span>
               </h2>
               <Link
                 href="/live"
-                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                className="text-[11px] sm:text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 whitespace-nowrap self-start xs:self-auto shrink-0"
               >
-                <span>Mencatat dari Siaran Live</span>
-                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                <span className="hidden sm:inline">Mencatat dari Siaran Live</span>
+                <span className="sm:hidden inline">Dari Siaran Live</span>
+                <span className="material-symbols-outlined text-[13px] sm:text-[14px]">arrow_forward</span>
               </Link>
             </div>
 
@@ -890,17 +891,17 @@ export default function ContributorProfilePage() {
               <>
                 {/* Aktivitas Jamaah (Jadwal Tersimpan & RSVP Kehadiran) - Khusus Role 'user' */}
                 <div className="flex flex-col gap-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
-                      <span className="material-symbols-outlined text-primary text-[22px]">event_upcoming</span>
+                  <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1.5 xs:gap-3">
+                    <h2 className="text-sm sm:text-base font-bold text-on-surface flex items-center gap-1.5 sm:gap-2 whitespace-nowrap">
+                      <span className="material-symbols-outlined text-primary text-[20px] sm:text-[22px] shrink-0">event_upcoming</span>
                       <span>Aktivitas & Riwayat Saya</span>
                     </h2>
                     <Link
                       href="/"
-                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                      className="text-[11px] sm:text-xs font-semibold text-primary hover:underline flex items-center gap-1 whitespace-nowrap self-start xs:self-auto shrink-0"
                     >
                       <span>Buka di Peta</span>
-                      <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                      <span className="material-symbols-outlined text-[13px] sm:text-[14px]">arrow_forward</span>
                     </Link>
                   </div>
 

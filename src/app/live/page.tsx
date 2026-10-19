@@ -1577,18 +1577,19 @@ export default function LiveStreamingPage() {
           <div className="bg-surface-container-lowest rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col border border-surface-container-high">
             
             {/* Modal Header */}
-            <div className="px-4 py-3 bg-surface-container flex items-center justify-between gap-3 border-b border-surface-container-high">
+            <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface-container flex items-center justify-between gap-3 border-b border-surface-container-high">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
-                <h3 className="font-bold text-sm sm:text-base text-on-surface truncate">
+                <h3 className="font-bold text-xs sm:text-base text-on-surface truncate">
                   {selectedVideo.title}
                 </h3>
               </div>
               <button
                 onClick={() => setSelectedVideo(null)}
-                className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-on-surface transition-colors shrink-0"
+                className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-on-surface transition-colors shrink-0 cursor-pointer"
+                aria-label="Tutup Pemutar Video"
               >
-                <span className="material-symbols-outlined text-[20px]">close</span>
+                <span className="material-symbols-outlined text-[19px] sm:text-[20px]">close</span>
               </button>
             </div>
 
@@ -1605,12 +1606,19 @@ export default function LiveStreamingPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-surface-container-lowest flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <span className="text-xs font-bold text-red-600">{selectedVideo.channelName}</span>
+            <div className="p-3.5 sm:p-4 bg-surface-container-lowest flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-surface-container-high/60">
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-red-600 truncate block">
+                  {selectedVideo.channelName}
+                </span>
+                {selectedVideo.speakerName && (
+                  <span className="text-[11px] text-outline truncate block mt-0.5">
+                    {selectedVideo.speakerName}
+                  </span>
+                )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
                 {/* Tombol Mode Belajar */}
                 <button
                   type="button"
@@ -1623,13 +1631,14 @@ export default function LiveStreamingPage() {
                     });
                     setSelectedVideo(null);
                   }}
-                  className="px-3.5 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  className="h-9 sm:h-auto px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
                   title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
                 >
                   <span className="material-symbols-outlined text-[16px]">edit_note</span>
                   <span>Mode Belajar</span>
                 </button>
 
+                {/* Tombol Putar di Mini Player */}
                 <button
                   type="button"
                   onClick={() => {
@@ -1641,24 +1650,29 @@ export default function LiveStreamingPage() {
                     });
                     setSelectedVideo(null);
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="h-9 sm:h-auto px-3 py-2 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center justify-center gap-1.5 transition-colors cursor-pointer active:scale-95 whitespace-nowrap"
                   title="Lanjutkan di Mini Player pojok kanan bawah"
                 >
                   <span className="material-symbols-outlined text-[16px] text-red-600">picture_in_picture_alt</span>
                   <span>Putar di Pojok</span>
                 </button>
+
+                {/* Tombol Buka di YouTube */}
                 <a
                   href={`https://www.youtube.com/watch?v=${selectedVideo.videoId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="px-3.5 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center gap-1.5 transition-colors"
+                  className="h-9 sm:h-auto px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center justify-center gap-1.5 transition-colors active:scale-95 whitespace-nowrap"
                 >
                   <span className="material-symbols-outlined text-[16px]">open_in_new</span>
                   <span>YouTube</span>
                 </a>
+
+                {/* Tombol Tutup */}
                 <button
+                  type="button"
                   onClick={() => setSelectedVideo(null)}
-                  className="px-4 py-1.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-colors cursor-pointer"
+                  className="h-9 sm:h-auto px-4 py-2 sm:py-1.5 rounded-xl bg-surface-container-high sm:bg-primary text-on-surface sm:text-on-primary text-xs font-semibold hover:bg-surface-container-highest sm:hover:bg-primary/90 transition-colors cursor-pointer active:scale-95 flex items-center justify-center whitespace-nowrap"
                 >
                   Tutup
                 </button>
