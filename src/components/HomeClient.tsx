@@ -18,6 +18,7 @@ import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
 import InAppRoutePanel from '@/components/InAppRoutePanel';
 import LiveNavigationHUD from '@/components/LiveNavigationHUD';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
+import { Drawer } from 'vaul';
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
@@ -67,7 +68,18 @@ export default function HomeClient() {
   });
 
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
-  const [isSheetExpanded, setIsSheetExpanded] = useState<boolean>(true);
+  const [snapPoint, setSnapPoint] = useState<string | number | null>(0.65);
+  const [isMounted, setIsMounted] = useState<boolean>(false);
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const mql = window.matchMedia('(min-width: 768px)');
+    setIsDesktop(mql.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, []);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [activeRouteSession, setActiveRouteSession] = useState<StudySession | null>(null);
@@ -261,7 +273,7 @@ export default function HomeClient() {
     setIsRouteLoading(true);
     setRouteError(null);
     setSelectedSession(null); // Tutup popup info agar tampilan peta bersih untuk rute
-    setIsSheetExpanded(false); // Ciutkan bottom sheet di tampilan mobile
+    setSnapPoint('224px'); // Ciutkan bottom sheet ke peek saat rute aktif/selesai
 
     let origin = userLocation;
     if (!origin) {
@@ -403,7 +415,7 @@ export default function HomeClient() {
     }
     setSelectedSession(session);
     if (session) {
-      setIsSheetExpanded(false);
+      setSnapPoint('224px');
     }
   }, [activeRouteSession, handleExitLiveNav]);
 
@@ -551,7 +563,7 @@ export default function HomeClient() {
             setFilters(p => ({ ...p, time: 'selesai' }));
           }
           setSelectedSession(found);
-          setIsSheetExpanded(false);
+          setSnapPoint('224px');
         }
       }
     }
@@ -940,24 +952,9 @@ export default function HomeClient() {
             )}
           </div>
           
-          {/* Kolom Kiri: Search & List (Menjadi Bottom Sheet di Mobile, tersembunyi saat rute aktif untuk Fullscreen Mode) */}
-          <div className={`
-            absolute bottom-[64px] left-0 w-full z-20 rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)]
-            ${isSheetExpanded ? 'h-[65vh]' : 'h-[160px]'}
-            md:relative md:w-[410px] lg:w-[430px] md:h-full md:rounded-none md:shadow-[1px_0_0_0_rgba(226,232,240,0.8)] md:bottom-auto
-            shrink-0 flex flex-col bg-surface-container-lowest overflow-hidden transition-all duration-300 ease-in-out
-            md:order-first
-            ${activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none md:translate-y-0 md:opacity-100 md:pointer-events-auto' : ''}
-          `}>
-            {/* Drag Handle Indicator (Hanya tampil di Mobile) */}
-            <div 
-              className="md:hidden w-full flex justify-center pt-3 pb-2 shrink-0 cursor-pointer hover:bg-surface-container-low transition-colors"
-              onClick={() => setIsSheetExpanded(!isSheetExpanded)}
-            >
-              <div className="w-12 h-1.5 rounded-full bg-outline/60"></div>
-            </div>
-
-            <div className="flex-1 overflow-hidden">
+          {/* Kolom Kiri Desktop: Search & List (hanya tampil di layar md ke atas) */}
+          {(!isMounted || isDesktop) && (
+            <aside className="hidden md:flex w-[410px] lg:w-[430px] h-full shrink-0 flex-col bg-surface-container-lowest shadow-[1px_0_0_0_rgba(226,232,240,0.8)] order-first overflow-hidden">
               <SidebarFilter 
                 filters={filters} 
                 setFilters={setFilters} 
@@ -974,8 +971,58 @@ export default function HomeClient() {
                 hasConnectionError={hasConnectionError}
                 isOffline={isOffline}
               />
+            </aside>
+          )}
+
+          {/* Kolom Kiri Mobile: Vaul Bottom Sheet Drawer dengan Native Gestures & Snap Points */}
+          {isMounted && !isDesktop && (
+            <div className="md:hidden">
+              <Drawer.Root
+                snapPoints={['224px', 0.65, 0.92]}
+                activeSnapPoint={snapPoint}
+                setActiveSnapPoint={setSnapPoint}
+                modal={false}
+                dismissible={false}
+                open={!activeRouteSession}
+              >
+                <Drawer.Portal>
+                  <Drawer.Content 
+                    className="md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col h-[92dvh] max-h-[92dvh] bg-surface-container-lowest rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-surface-container-high/60 focus:outline-none pb-[calc(64px+env(safe-area-inset-bottom,0px))]"
+                  >
+                    <Drawer.Title className="sr-only">Daftar &amp; Filter Kajian</Drawer.Title>
+                    <Drawer.Description className="sr-only">Navigasi dan filter daftar jadwal kajian</Drawer.Description>
+                    
+                    {/* Drag Handle Indicator */}
+                    <div 
+                      className="w-full flex justify-center pt-3 pb-2 shrink-0 cursor-pointer hover:bg-surface-container-low transition-colors touch-none"
+                      onClick={() => setSnapPoint(prev => (prev === '224px' ? 0.65 : '224px'))}
+                    >
+                      <Drawer.Handle className="w-12 h-1.5 rounded-full bg-outline/60" />
+                    </div>
+
+                    <div className="flex-1 overflow-hidden min-h-0">
+                      <SidebarFilter 
+                        filters={filters} 
+                        setFilters={setFilters} 
+                        sessions={sortedSessions} 
+                        allSessions={sessions}
+                        selectedSession={selectedSession}
+                        onSelectSession={handleSelectSession}
+                        isLoading={isLoading}
+                        userLocation={userLocation}
+                        onRequestLocation={requestUserLocation}
+                        isRefreshing={isRefreshing}
+                        onRefresh={handleManualRefresh}
+                        currentUser={currentUser}
+                        hasConnectionError={hasConnectionError}
+                        isOffline={isOffline}
+                      />
+                    </div>
+                  </Drawer.Content>
+                </Drawer.Portal>
+              </Drawer.Root>
             </div>
-          </div>
+          )}
           
         </main>
 
