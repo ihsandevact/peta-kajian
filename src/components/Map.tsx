@@ -56,7 +56,26 @@ export default function AppMap({
   onSelectAlternativeRoute,
 }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
-  const { resolvedTheme } = useTheme();
+  const { resolvedTheme, toggleTheme } = useTheme();
+  const [isSatelliteMode, setIsSatelliteMode] = React.useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return localStorage.getItem('peta_kajian_satellite') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSatelliteMode = React.useCallback(() => {
+    setIsSatelliteMode((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('peta_kajian_satellite', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const [isMapLoaded, setIsMapLoaded] = React.useState(false);
   const [isFollowingUser, setIsFollowingUser] = React.useState(true);
   const [cameraOrientation, setCameraOrientation] = React.useState<'heads-up' | 'north-up'>('heads-up');
@@ -157,10 +176,10 @@ export default function AppMap({
   }, [add3DBuildings]);
 
   React.useEffect(() => {
-    if (isMapLoaded) {
+    if (isMapLoaded && !isSatelliteMode) {
       add3DBuildings();
     }
-  }, [isMapLoaded, resolvedTheme, add3DBuildings]);
+  }, [isMapLoaded, resolvedTheme, isSatelliteMode, add3DBuildings]);
 
   // Reset mode mengikuti pengguna saat navigasi dimulai
   React.useEffect(() => {
@@ -394,12 +413,14 @@ export default function AppMap({
         }}
         onMove={evt => setViewState(evt.viewState)}
         mapStyle={
-          resolvedTheme === 'dark'
+          isSatelliteMode
+            ? `https://api.maptiler.com/maps/hybrid/style.json?key=${MAPTILER_KEY}`
+            : resolvedTheme === 'dark'
             ? `https://api.maptiler.com/maps/streets-v2-dark/style.json?key=${MAPTILER_KEY}`
             : `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
         }
       >
-        <NavigationControl position="bottom-right" showCompass={false} />
+        {!isNavigating && <NavigationControl position="bottom-right" showCompass={false} />}
 
         {/* LAYER RUTE ALTERNATIF OSRM (JIKA ADA) */}
         {inactiveAlternativeRoutes.map((altRoute, altIdx) => (
@@ -676,29 +697,75 @@ export default function AppMap({
         />
       )}
 
-      {/* Floating Tombol Toggle Kompas (Heads-Up vs North-Up) saat Navigasi */}
-      {isNavigating && (
-        <div className="fixed md:absolute top-3 md:top-4 right-3 md:right-4 z-40 animate-in fade-in zoom-in-95 duration-200">
+      {/* Floating Map Navigation Controls (Kompas, Mode Satelit, Switch Dark Mode) */}
+      {(isNavigating || activeRoute) && (
+        <div
+          className={`fixed md:absolute right-3 md:right-6 z-40 flex flex-col gap-2 items-center animate-in fade-in zoom-in-95 duration-200 ${
+            isNavigating ? 'top-[164px] md:top-6' : 'top-4 md:top-6'
+          }`}
+        >
+          {/* 1. Tombol Kompas (Hanya saat Live Navigation) */}
+          {isNavigating && (
+            <button
+              type="button"
+              onClick={toggleCameraOrientation}
+              className="w-10 h-10 rounded-2xl bg-surface-container-lowest/95 backdrop-blur-md hover:bg-surface-container text-primary flex items-center justify-center shadow-xl border border-surface-container-high/80 transition-all active:scale-95 cursor-pointer"
+              title={
+                cameraOrientation === 'heads-up'
+                  ? 'Orientasi: Mengikuti Arah Kendaraan (Klik untuk Hadap Utara)'
+                  : 'Orientasi: Menghadap Utara (Klik untuk Mengikuti Arah Kendaraan)'
+              }
+              aria-label="Ubah Orientasi Kamera Kompas"
+            >
+              <span
+                className="material-symbols-outlined text-[22px] transition-transform duration-300"
+                style={{
+                  transform:
+                    cameraOrientation === 'heads-up'
+                      ? `rotate(${-(userHeading || 0)}deg)`
+                      : 'rotate(0deg)',
+                }}
+              >
+                explore
+              </span>
+            </button>
+          )}
+
+          {/* 2. Tombol Toggle Mode Satelit Hybrid */}
           <button
             type="button"
-            onClick={toggleCameraOrientation}
-            className="w-10 h-10 rounded-2xl bg-surface-container-lowest/95 backdrop-blur-md hover:bg-surface-container text-primary flex items-center justify-center shadow-xl border border-surface-container-high/80 transition-all active:scale-95 cursor-pointer"
+            onClick={toggleSatelliteMode}
+            className={`w-10 h-10 rounded-2xl flex items-center justify-center shadow-xl border transition-all active:scale-95 cursor-pointer backdrop-blur-md ${
+              isSatelliteMode
+                ? 'bg-emerald-600 text-white border-emerald-500 shadow-emerald-600/30 ring-2 ring-emerald-400'
+                : 'bg-surface-container-lowest/95 hover:bg-surface-container text-on-surface border-surface-container-high/80'
+            }`}
             title={
-              cameraOrientation === 'heads-up'
-                ? 'Orientasi: Mengikuti Arah Kendaraan (Klik untuk Hadap Utara)'
-                : 'Orientasi: Menghadap Utara (Klik untuk Mengikuti Arah Kendaraan)'
+              isSatelliteMode
+                ? 'Mode Satelit: Aktif (Klik untuk Mode Jalanan)'
+                : 'Beralih ke Tampilan Citra Satelit Hybrid'
             }
+            aria-label="Toggle Mode Satelit"
           >
-            <span
-              className="material-symbols-outlined text-[22px] transition-transform duration-300"
-              style={{
-                transform:
-                  cameraOrientation === 'heads-up'
-                    ? `rotate(${-(userHeading || 0)}deg)`
-                    : 'rotate(0deg)',
-              }}
-            >
-              explore
+            <span className="material-symbols-outlined text-[20px]">
+              satellite_alt
+            </span>
+          </button>
+
+          {/* 3. Tombol Switch Dark Mode / Light Mode (Hanya di Mobile, karena Desktop sudah ada di sidebar) */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="md:hidden w-10 h-10 rounded-2xl bg-surface-container-lowest/95 backdrop-blur-md hover:bg-surface-container text-on-surface flex items-center justify-center shadow-xl border border-surface-container-high/80 transition-all active:scale-95 cursor-pointer"
+            title={
+              resolvedTheme === 'dark'
+                ? 'Tema: Gelap (Klik untuk Mode Terang)'
+                : 'Tema: Terang (Klik untuk Mode Gelap)'
+            }
+            aria-label="Toggle Dark Mode"
+          >
+            <span className="material-symbols-outlined text-[20px] text-amber-500 dark:text-amber-400">
+              {resolvedTheme === 'dark' ? 'light_mode' : 'dark_mode'}
             </span>
           </button>
         </div>
