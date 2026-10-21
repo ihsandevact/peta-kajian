@@ -42,6 +42,72 @@ export default function LiveStreamingPage() {
     speakerName?: string;
   } | null>(null);
 
+  const modalIframeRef = useRef<HTMLIFrameElement>(null);
+  const [isModalMuted, setIsModalMuted] = useState(true);
+
+  // Helper picu playVideo & unMute pada Modal Player
+  const sendModalPlay = useCallback(() => {
+    try {
+      if (modalIframeRef.current?.contentWindow) {
+        modalIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+      }
+    } catch {}
+  }, []);
+
+  const sendModalUnmute = useCallback(() => {
+    try {
+      if (modalIframeRef.current?.contentWindow) {
+        modalIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+          '*'
+        );
+        modalIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
+          '*'
+        );
+        modalIframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+        setIsModalMuted(false);
+      }
+    } catch {}
+  }, []);
+
+  // Pantau event postMessage dari YouTube iframe modal
+  useEffect(() => {
+    if (!selectedVideo) {
+      setIsModalMuted(true);
+      return;
+    }
+
+    const handleYtMessage = (e: MessageEvent) => {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        if (data?.event === 'onReady') {
+          sendModalPlay();
+          // Coba unmute otomatis karena pengguna baru saja mengklik tombol 'Tonton' (gesture aktif)
+          setTimeout(() => {
+            sendModalUnmute();
+          }, 350);
+        }
+        if (typeof data?.info?.muted === 'boolean') {
+          setIsModalMuted(data.info.muted);
+        }
+        const playerState = data?.info?.playerState;
+        if (playerState === 5 || playerState === -1 || playerState === 2) {
+          sendModalPlay();
+        }
+      } catch {}
+    };
+
+    window.addEventListener('message', handleYtMessage);
+    return () => window.removeEventListener('message', handleYtMessage);
+  }, [selectedVideo, sendModalPlay, sendModalUnmute]);
+
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1596,13 +1662,47 @@ export default function LiveStreamingPage() {
             {/* Embed Video Iframe */}
             <div className="relative aspect-video w-full bg-black">
               <iframe
-                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1&rel=0`}
+                ref={modalIframeRef}
+                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&rel=0`}
                 title={selectedVideo.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 className="w-full h-full border-0"
+                onLoad={() => {
+                  try {
+                    modalIframeRef.current?.contentWindow?.postMessage(
+                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                      '*'
+                    );
+                    setTimeout(() => {
+                      sendModalPlay();
+                      sendModalUnmute();
+                    }, 400);
+                  } catch {}
+                }}
               />
+
+              {/* Overlay Ringan Sekali Sentuh/Klik untuk Mengaktifkan Suara jika dibatasi Browser */}
+              {isModalMuted && (
+                <div
+                  onClick={sendModalUnmute}
+                  className="absolute bottom-4 left-4 z-20 cursor-pointer select-none animate-in fade-in duration-200"
+                  title="Klik untuk menyalakan suara kajian"
+                >
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      sendModalUnmute();
+                    }}
+                    className="px-3.5 py-1.5 rounded-full bg-black/80 hover:bg-black/95 backdrop-blur-md text-white text-xs font-semibold flex items-center gap-1.5 shadow-xl border border-white/20 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px] text-amber-400 animate-pulse">volume_off</span>
+                    <span>Klik untuk Nyalakan Suara</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

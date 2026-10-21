@@ -66,6 +66,7 @@ interface LivePlayerContextType {
   activeStream: ActiveLiveStream | null;
   isOpen: boolean;
   isMinimized: boolean;
+  isModalExpanded: boolean;
   isPipActive: boolean;
   initialResumeTime: number;
   playStream: (stream: ActiveLiveStream) => void;
@@ -73,6 +74,8 @@ interface LivePlayerContextType {
   toggleMinimize: () => void;
   minimizePlayer: () => void;
   maximizePlayer: () => void;
+  expandToModal: () => void;
+  collapseModal: () => void;
   setIsPipActive: (active: boolean) => void;
   updateStoredPlaybackTime: (time: number) => void;
   // Floating Study Sticky Notes
@@ -94,6 +97,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   const [activeStream, setActiveStream] = useState<ActiveLiveStream | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isModalExpanded, setIsModalExpanded] = useState(false);
   const [isPipActive, setIsPipActive] = useState(false);
   const [initialResumeTime, setInitialResumeTime] = useState<number>(0);
 
@@ -144,6 +148,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     setActiveStream(stream);
     setIsOpen(true);
     setIsMinimized(false);
+    setIsModalExpanded(false);
     setIsPipActive(false);
     setInitialResumeTime(0);
     saveSessionToStorage({
@@ -158,6 +163,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     setIsOpen(false);
     setActiveStream(null);
     setIsPipActive(false);
+    setIsModalExpanded(false);
     setInitialResumeTime(0);
     clearSessionFromStorage();
   }, []);
@@ -171,6 +177,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const minimizePlayer = useCallback(() => {
+    setIsModalExpanded(false);
     setIsMinimized(true);
     saveSessionToStorage({ isMinimized: true });
   }, []);
@@ -178,6 +185,15 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   const maximizePlayer = useCallback(() => {
     setIsMinimized(false);
     saveSessionToStorage({ isMinimized: false });
+  }, []);
+
+  const expandToModal = useCallback(() => {
+    setIsMinimized(false);
+    setIsModalExpanded(true);
+  }, []);
+
+  const collapseModal = useCallback(() => {
+    setIsModalExpanded(false);
   }, []);
 
   const updateStoredPlaybackTime = useCallback((time: number) => {
@@ -259,6 +275,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       activeStream,
       isOpen,
       isMinimized,
+      isModalExpanded,
       isPipActive,
       initialResumeTime,
       playStream,
@@ -266,6 +283,8 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       toggleMinimize,
       minimizePlayer,
       maximizePlayer,
+      expandToModal,
+      collapseModal,
       setIsPipActive,
       updateStoredPlaybackTime,
       studySession,
@@ -283,6 +302,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       activeStream,
       isOpen,
       isMinimized,
+      isModalExpanded,
       isPipActive,
       initialResumeTime,
       playStream,
@@ -290,6 +310,8 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       toggleMinimize,
       minimizePlayer,
       maximizePlayer,
+      expandToModal,
+      collapseModal,
       setIsPipActive,
       updateStoredPlaybackTime,
       studySession,

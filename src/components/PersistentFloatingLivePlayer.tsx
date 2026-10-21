@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
@@ -13,12 +12,15 @@ export default function PersistentFloatingLivePlayer() {
     activeStream,
     isOpen,
     isMinimized,
+    isModalExpanded,
     isPipActive,
     initialResumeTime,
     closePlayer,
     toggleMinimize,
     maximizePlayer,
     minimizePlayer,
+    expandToModal,
+    collapseModal,
     setIsPipActive,
     updateStoredPlaybackTime,
     openStudyMode,
@@ -37,12 +39,34 @@ export default function PersistentFloatingLivePlayer() {
   const [activeCorner, setActiveCorner] = useState<'top-left' | 'bottom-left' | 'bottom-right' | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [resumeTime, setResumeTime] = useState<number>(0);
+  const [isPlayerMuted, setIsPlayerMuted] = useState(false);
   const currentPlaybackTimeRef = useRef<number>(0);
   const playbackStartEpochRef = useRef<number>(Date.now());
   const lastStorageSyncRef = useRef<number>(Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
+
+  // Helper untuk membuka suara (unMute) & memastikan pemutaran video aktif
+  const sendUnmuteMiniPlayer = useCallback(() => {
+    try {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+        setIsPlayerMuted(false);
+      }
+    } catch {}
+  }, []);
   const pipCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const dragStartRef = useRef<{
     pointerX: number;
@@ -101,8 +125,23 @@ export default function PersistentFloatingLivePlayer() {
     [isMinimized, playerWidth]
   );
 
+  // Tutup modal (kembali ke mini player) saat tombol ESC ditekan
+  useEffect(() => {
+    if (!isModalExpanded) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        collapseModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalExpanded, collapseModal]);
+
   // Handler Pointer Drag
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Abaikan jika sedang dalam mode modal layar penuh
+    if (isModalExpanded) return;
+
     // Hanya proses sentuhan atau klik tombol utama mouse
     if (e.button !== 0 && e.pointerType === 'mouse') return;
 
@@ -402,9 +441,41 @@ export default function PersistentFloatingLivePlayer() {
         } catch {}
         handlePipClosedEvent(e.data?.currentTime);
       } else {
-        // Pantau update waktu langsung dari iframe YouTube (postMessage API)
+        // Pantau update status pemutaran, mute, dan waktu langsung dari iframe YouTube (postMessage API)
         try {
           const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+
+          // Tangani event onReady dari YouTube widget -> segera picu playVideo
+          if (data?.event === 'onReady') {
+            try {
+              iframeRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+                '*'
+              );
+              setTimeout(() => {
+                iframeRef.current?.contentWindow?.postMessage(
+                  JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+                  '*'
+                );
+              }, 350);
+            } catch {}
+          }
+
+          // Sinkronkan status muted dari YouTube player
+          if (typeof data?.info?.muted === 'boolean') {
+            setIsPlayerMuted(data.info.muted);
+          }
+
+          const playerState = data?.info?.playerState;
+          if (playerState === 5 || playerState === -1 || playerState === 2) {
+            try {
+              iframeRef.current?.contentWindow?.postMessage(
+                JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+                '*'
+              );
+            } catch {}
+          }
+
           const time = data?.info?.currentTime ?? data?.currentTime;
           if (typeof time === 'number' && !isNaN(time)) {
             const roundedTime = Math.floor(time);
@@ -678,22 +749,35 @@ export default function PersistentFloatingLivePlayer() {
 
       <div 
         ref={containerRef}
-        style={{
-          width: isMinimized ? undefined : `${playerWidth}px`,
-          ...(position ? {
-            position: 'fixed',
-            left: `${position.x}px`,
-            top: `${position.y}px`,
-            right: 'auto',
-            bottom: 'auto',
-            zIndex: 50,
-          } : {}),
+        onClick={(e) => {
+          if (isModalExpanded && e.target === e.currentTarget) {
+            collapseModal();
+          }
         }}
-        className={`fixed z-50 max-w-[calc(100vw-24px)] ${
-          isResizing ? 'transition-none select-none' : 'transition-shadow duration-200'
-        } ${
-          !position ? 'bottom-[72px] md:bottom-4 right-3 sm:right-4' : ''
-        } ${isDragging || isResizing ? 'shadow-2xl scale-[1.01]' : ''}`}
+        style={
+          isModalExpanded
+            ? undefined
+            : {
+                width: isMinimized ? undefined : `${playerWidth}px`,
+                ...(position ? {
+                  position: 'fixed',
+                  left: `${position.x}px`,
+                  top: `${position.y}px`,
+                  right: 'auto',
+                  bottom: 'auto',
+                  zIndex: 50,
+                } : {}),
+              }
+        }
+        className={
+          isModalExpanded
+            ? "fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
+            : `fixed z-50 max-w-[calc(100vw-24px)] ${
+                isResizing ? 'transition-none select-none' : 'transition-shadow duration-200'
+              } ${
+                !position ? 'bottom-[72px] md:bottom-4 right-3 sm:right-4' : ''
+              } ${isDragging || isResizing ? 'shadow-2xl scale-[1.01]' : ''}`
+        }
       >
         {/* 
           PENTING: Iframe YouTube harus selalu berada di DOM 
@@ -701,9 +785,9 @@ export default function PersistentFloatingLivePlayer() {
         */}
         {/* 
           1. MODE MINIMIZED / COMPACT AUDIO BAR (DRAGGABLE)
-          Dirender saat isMinimized === true. 
+          Dirender saat isMinimized === true dan tidak dalam mode modal diperbesar. 
         */}
-        {isMinimized && (
+        {isMinimized && !isModalExpanded && (
           <div 
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -719,6 +803,16 @@ export default function PersistentFloatingLivePlayer() {
                 <div className="flex items-center gap-1 text-indigo-500 dark:text-indigo-400">
                   <span className="material-symbols-outlined text-[18px] animate-pulse">picture_in_picture_alt</span>
                 </div>
+              ) : isPlayerMuted ? (
+                <button
+                  type="button"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={sendUnmuteMiniPlayer}
+                  className="flex items-center gap-1 text-amber-500 hover:text-amber-400 text-[11px] font-bold cursor-pointer"
+                  title="Klik untuk menyalakan suara"
+                >
+                  <span className="material-symbols-outlined text-[18px] animate-pulse">volume_off</span>
+                </button>
               ) : (
                 <>
                   <span className="relative flex h-2.5 w-2.5">
@@ -806,7 +900,18 @@ export default function PersistentFloatingLivePlayer() {
                 title="Perbesar Tampilan Video"
                 aria-label="Perbesar Video"
               >
-                <span className="material-symbols-outlined text-[17px]">expand_less</span>
+                <span className="material-symbols-outlined text-[16px]">expand_less</span>
+              </button>
+
+              {/* Tombol Maximize ke Modal Layar Penuh dari Bar Audio */}
+              <button
+                type="button"
+                onClick={expandToModal}
+                className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                title="Perbesar Penuh (Modal)"
+                aria-label="Perbesar Penuh"
+              >
+                <span className="material-symbols-outlined text-[16px]">open_in_full</span>
               </button>
 
               <button
@@ -816,7 +921,7 @@ export default function PersistentFloatingLivePlayer() {
                 title="Tutup Player"
                 aria-label="Tutup Player"
               >
-                <span className="material-symbols-outlined text-[17px]">close</span>
+                <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
             </div>
           </div>
@@ -830,127 +935,144 @@ export default function PersistentFloatingLivePlayer() {
         */}
         <div 
           className={
-            isMinimized
+            isMinimized && !isModalExpanded
               ? "absolute bottom-0 right-0 w-[240px] h-[135px] opacity-0 pointer-events-none -z-50 overflow-hidden"
+              : isModalExpanded
+              ? "bg-surface-container-lowest rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col border border-surface-container-high animate-in zoom-in-95 duration-200 max-h-[92vh]"
               : "relative w-full rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border border-surface-container-high/80 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300"
           }
         >
-          {/* HUD Dimensi Realtime saat Resize */}
-          {isResizing && (
-            <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-all animate-in fade-in duration-150">
-              <div className="px-3.5 py-1.5 rounded-full bg-neutral-900/95 text-white text-xs font-mono font-medium shadow-2xl border border-white/20 flex items-center gap-1.5 tracking-wide">
-                <span className="material-symbols-outlined text-[15px] text-primary">aspect_ratio</span>
-                <span>{playerWidth} × {Math.round(playerWidth * 9 / 16)} px</span>
+          {isModalExpanded ? (
+            /* Modal Header Layar Penuh */
+            <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface-container flex items-center justify-between gap-3 border-b border-surface-container-high select-none">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-600" />
+                </span>
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-red-600 text-white shrink-0">
+                  LIVE
+                </span>
+                <h3 className="font-bold text-xs sm:text-base text-on-surface truncate">
+                  {activeStream.title}
+                </h3>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Tombol Perkecil ke Mini Player */}
+                <button
+                  type="button"
+                  onClick={collapseModal}
+                  className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-on-surface transition-colors shrink-0 cursor-pointer"
+                  title="Kecilkan ke Mini Player"
+                  aria-label="Kecilkan ke Mini Player"
+                >
+                  <span className="material-symbols-outlined text-[19px]">close_fullscreen</span>
+                </button>
+                {/* Tombol Tutup Pemutar */}
+                <button
+                  type="button"
+                  onClick={handleClosePlayer}
+                  className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-red-500 transition-colors shrink-0 cursor-pointer"
+                  title="Tutup Pemutar"
+                  aria-label="Tutup Pemutar"
+                >
+                  <span className="material-symbols-outlined text-[19px]">close</span>
+                </button>
               </div>
             </div>
+          ) : (
+            <>
+              {/* HUD Dimensi Realtime saat Resize */}
+              {isResizing && (
+                <div className="absolute inset-0 z-30 pointer-events-none flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-all animate-in fade-in duration-150">
+                  <div className="px-3.5 py-1.5 rounded-full bg-neutral-900/95 text-white text-xs font-mono font-medium shadow-2xl border border-white/20 flex items-center gap-1.5 tracking-wide">
+                    <span className="material-symbols-outlined text-[15px] text-primary">aspect_ratio</span>
+                    <span>{playerWidth} × {Math.round(playerWidth * 9 / 16)} px</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Header Card sebagai Pegangan Drag (Handle) */}
+              <div 
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                style={{ touchAction: 'none' }}
+                className="px-3.5 py-2.5 bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none relative"
+                title="Klik dan tahan di sini untuk menggeser posisi video"
+              >
+                {/* Gagang Resize Sudut Kiri-Atas (Top-Left) */}
+                <div 
+                  onPointerDown={(e) => handleResizeDown(e, 'top-left')}
+                  onPointerMove={handleResizeMove}
+                  onPointerUp={handleResizeUp}
+                  onPointerCancel={handleResizeUp}
+                  style={{ touchAction: 'none' }}
+                  className="absolute top-0 left-0 w-6 h-6 z-20 flex items-start justify-start p-1 cursor-nwse-resize text-outline/40 hover:text-primary transition-colors group/tl"
+                  title="Tarik sudut untuk mengubah ukuran video"
+                >
+                  <svg className="w-2.5 h-2.5 text-outline/40 group-hover/tl:text-primary transition-colors" viewBox="0 0 10 10" fill="currentColor">
+                    <circle cx="2.5" cy="2.5" r="1.3" />
+                    <circle cx="2.5" cy="6.5" r="1.3" />
+                    <circle cx="6.5" cy="2.5" r="1.3" />
+                  </svg>
+                </div>
+
+                <div className="flex items-center gap-2 min-w-0 pl-2">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
+                  </span>
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-red-600 text-white shrink-0">
+                    LIVE
+                  </span>
+                  <span className="text-xs font-bold text-on-surface truncate min-w-0">
+                    {activeStream.channelName}
+                  </span>
+                </div>
+
+                {/* Kontrol Kanan (Mencegah event drag terpicu saat tombol diklik) */}
+                <div 
+                  className="flex items-center gap-1 shrink-0"
+                  onPointerDown={(e) => e.stopPropagation()}
+                >
+                  {/* Tombol Minimize ke Audio Bar */}
+                  <button
+                    type="button"
+                    onClick={minimizePlayer}
+                    className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    title="Kecilkan ke Bar Audio"
+                    aria-label="Kecilkan ke Bar Audio"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">expand_more</span>
+                  </button>
+
+                  {/* Tombol Maximize / Perbesar ke Modal */}
+                  <button
+                    type="button"
+                    onClick={expandToModal}
+                    className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    title="Perbesar Tampilan (Modal)"
+                    aria-label="Perbesar Tampilan Modal"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+                  </button>
+
+                  {/* Tombol Tutup */}
+                  <button
+                    type="button"
+                    onClick={handleClosePlayer}
+                    className="w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    title="Tutup Pemutar"
+                    aria-label="Tutup Pemutar"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">close</span>
+                  </button>
+                </div>
+              </div>
+            </>
           )}
-
-          {/* Header Card sebagai Pegangan Drag (Handle) */}
-          <div 
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            style={{ touchAction: 'none' }}
-            className="px-3.5 py-2.5 bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none relative"
-            title="Klik dan tahan di sini untuk menggeser posisi video"
-          >
-            {/* Gagang Resize Sudut Kiri-Atas (Top-Left) */}
-            <div 
-              onPointerDown={(e) => handleResizeDown(e, 'top-left')}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              onPointerCancel={handleResizeUp}
-              style={{ touchAction: 'none' }}
-              className="absolute top-0 left-0 w-6 h-6 z-20 flex items-start justify-start p-1 cursor-nwse-resize text-outline/40 hover:text-primary transition-colors group/tl"
-              title="Tarik sudut untuk mengubah ukuran video"
-            >
-              <svg className="w-2.5 h-2.5 text-outline/40 group-hover/tl:text-primary transition-colors" viewBox="0 0 10 10" fill="currentColor">
-                <circle cx="2.5" cy="2.5" r="1.3" />
-                <circle cx="2.5" cy="6.5" r="1.3" />
-                <circle cx="6.5" cy="2.5" r="1.3" />
-              </svg>
-            </div>
-
-            <div className="flex items-center gap-2 min-w-0 pl-2">
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600" />
-              </span>
-              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-red-600 text-white shrink-0">
-                LIVE
-              </span>
-              <span className="text-xs font-bold text-on-surface truncate min-w-0">
-                {activeStream.channelName}
-              </span>
-            </div>
-
-            {/* Kontrol Kanan (Mencegah event drag terpicu saat tombol diklik) */}
-            <div 
-              className="flex items-center gap-0.5 shrink-0"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              {/* Tombol Minimize ke Audio Bar */}
-              <button
-                type="button"
-                onClick={minimizePlayer}
-                className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer"
-                title="Kecilkan ke Bar Audio"
-                aria-label="Kecilkan ke Bar Audio"
-              >
-                <span className="material-symbols-outlined text-[18px]">expand_more</span>
-              </button>
-
-              {/* Tombol Mode Belajar (Buku Saku Faidah) */}
-              <button
-                type="button"
-                onClick={() => {
-                  if (isStudyNotesOpen) {
-                    toggleMinimizeStudyNotes();
-                  } else {
-                    openStudyMode({
-                      videoId: activeStream.videoId,
-                      title: activeStream.title,
-                      speakerName: activeStream.speakerName,
-                      channelName: activeStream.channelName,
-                    });
-                  }
-                }}
-                className={`${
-                  FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
-                } w-7 h-7 rounded-lg items-center justify-center transition-colors cursor-pointer ${
-                  isStudyNotesOpen
-                    ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 font-bold'
-                    : 'text-outline hover:text-emerald-600 hover:bg-emerald-500/10'
-                }`}
-                title={isStudyNotesOpen ? 'Sembunyikan / Tampilkan Catatan' : 'Buka Catatan Faidah (Sticky Note)'}
-                aria-label="Mode Belajar"
-              >
-                <span className="material-symbols-outlined text-[17px]">edit_note</span>
-              </button>
-
-              {/* Tombol Buka Halaman Penuh /live */}
-              <Link
-                href="/live"
-                className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors"
-                title="Buka Halaman Live Streaming"
-                aria-label="Buka Halaman Live"
-              >
-                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-              </Link>
-
-              {/* Tombol Tutup */}
-              <button
-                type="button"
-                onClick={handleClosePlayer}
-                className="w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors cursor-pointer ml-0.5"
-                title="Tutup Pemutar"
-                aria-label="Tutup Pemutar"
-              >
-                <span className="material-symbols-outlined text-[18px]">close</span>
-              </button>
-            </div>
-          </div>
 
           {/* Frame Video YouTube 16:9 */}
           <div className="relative aspect-video w-full bg-black">
@@ -975,99 +1097,236 @@ export default function PersistentFloatingLivePlayer() {
                 </button>
               </div>
             ) : (
-              <iframe
-                ref={iframeRef}
-                key={`${activeStream.videoId}-${resumeTime}`}
-                src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1`}
-                title={activeStream.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                referrerPolicy="strict-origin-when-cross-origin"
-                onLoad={() => {
-                  try {
-                    iframeRef.current?.contentWindow?.postMessage(
-                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-                      '*'
-                    );
-                  } catch {}
-                }}
-                className="w-full h-full border-0"
-              />
+              <>
+                <iframe
+                  ref={iframeRef}
+                  key={`${activeStream.videoId}-${resumeTime}`}
+                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1`}
+                  title={activeStream.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  onLoad={() => {
+                    try {
+                      iframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                        '*'
+                      );
+                      setTimeout(() => {
+                        try {
+                          iframeRef.current?.contentWindow?.postMessage(
+                            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+                            '*'
+                          );
+                          iframeRef.current?.contentWindow?.postMessage(
+                            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+                            '*'
+                          );
+                        } catch {}
+                      }, 400);
+                    } catch {}
+                  }}
+                  className="w-full h-full border-0"
+                />
+
+                {/* Tombol Nyalakan Suara jika dibatasi Browser saat autoplay */}
+                {isPlayerMuted && (
+                  <div
+                    onClick={sendUnmuteMiniPlayer}
+                    className="absolute bottom-2.5 left-2.5 sm:bottom-4 sm:left-4 z-20 cursor-pointer select-none animate-in fade-in duration-200"
+                    title="Klik untuk menyalakan suara kajian"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        sendUnmuteMiniPlayer();
+                      }}
+                      className="px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full bg-black/80 hover:bg-black/95 backdrop-blur-md text-white text-[11px] sm:text-xs font-semibold flex items-center gap-1 sm:gap-1.5 shadow-xl border border-white/20 active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[14px] sm:text-[16px] text-amber-400 animate-pulse">volume_off</span>
+                      <span>Klik untuk Nyalakan Suara</span>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
-          {/* Footer Info Judul & Tombol Audio */}
-          <div 
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            style={{ touchAction: 'none' }}
-            className="p-3 bg-surface-container-lowest/90 dark:bg-neutral-900/90 hover:bg-surface-container-low transition-colors flex items-start justify-between gap-2.5 cursor-move select-none relative"
-            title="Klik dan tahan untuk menggeser posisi"
-          >
-            {/* Gagang Resize Sudut Kiri-Bawah (Bottom-Left) */}
+          {/* Footer Info Judul & Tombol Kontrol */}
+          {isModalExpanded ? (
+            /* Modal Footer Layar Penuh */
+            <div className="p-3.5 sm:p-4 bg-surface-container-lowest flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-surface-container-high/60">
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-red-600 truncate block">
+                  {activeStream.channelName}
+                </span>
+                {activeStream.speakerName && (
+                  <span className="text-[11px] text-outline truncate block mt-0.5">
+                    {activeStream.speakerName}
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+                {/* Tombol Mode Belajar */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    openStudyMode({
+                      videoId: activeStream.videoId,
+                      title: activeStream.title,
+                      channelName: activeStream.channelName,
+                      speakerName: activeStream.speakerName || '',
+                    });
+                    collapseModal();
+                  }}
+                  className="h-9 sm:h-auto px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
+                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
+                >
+                  <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                  <span>Mode Belajar</span>
+                </button>
+
+                {/* Tombol Putar di Mini Player / Perkecil */}
+                <button
+                  type="button"
+                  onClick={collapseModal}
+                  className="h-9 sm:h-auto px-3 py-2 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center justify-center gap-1.5 transition-colors cursor-pointer active:scale-95 whitespace-nowrap"
+                  title="Kembalikan ke Mini Player di pojok layar"
+                >
+                  <span className="material-symbols-outlined text-[16px] text-red-600">picture_in_picture_alt</span>
+                  <span>Putar di Pojok</span>
+                </button>
+
+                {/* Tombol Buka di YouTube */}
+                <a
+                  href={`https://www.youtube.com/watch?v=${activeStream.videoId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="h-9 sm:h-auto px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface flex items-center justify-center gap-1.5 transition-colors active:scale-95 whitespace-nowrap"
+                >
+                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                  <span>YouTube</span>
+                </a>
+
+                {/* Tombol Tutup */}
+                <button
+                  type="button"
+                  onClick={handleClosePlayer}
+                  className="h-9 sm:h-auto px-4 py-2 sm:py-1.5 rounded-xl bg-surface-container-high sm:bg-primary text-on-surface sm:text-on-primary text-xs font-semibold hover:bg-surface-container-highest sm:hover:bg-primary/90 transition-colors cursor-pointer active:scale-95 flex items-center justify-center whitespace-nowrap"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Footer Info Judul & Tombol Audio Floating Biasa */
             <div 
-              onPointerDown={(e) => handleResizeDown(e, 'bottom-left')}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              onPointerCancel={handleResizeUp}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
               style={{ touchAction: 'none' }}
-              className="absolute bottom-0 left-0 w-6 h-6 z-20 flex items-end justify-start p-1 cursor-nesw-resize text-outline/40 hover:text-primary transition-colors group/bl"
-              title="Tarik sudut untuk mengubah ukuran video"
+              className="p-3 bg-surface-container-lowest/90 dark:bg-neutral-900/90 hover:bg-surface-container-low transition-colors flex items-start justify-between gap-2.5 cursor-move select-none relative"
+              title="Klik dan tahan untuk menggeser posisi"
             >
-              <svg className="w-2.5 h-2.5 text-outline/40 group-hover/bl:text-primary transition-colors" viewBox="0 0 10 10" fill="currentColor">
-                <circle cx="2.5" cy="7.5" r="1.3" />
-                <circle cx="2.5" cy="3.5" r="1.3" />
-                <circle cx="6.5" cy="7.5" r="1.3" />
-              </svg>
-            </div>
+              {/* Gagang Resize Sudut Kiri-Bawah (Bottom-Left) */}
+              <div 
+                onPointerDown={(e) => handleResizeDown(e, 'bottom-left')}
+                onPointerMove={handleResizeMove}
+                onPointerUp={handleResizeUp}
+                onPointerCancel={handleResizeUp}
+                style={{ touchAction: 'none' }}
+                className="absolute bottom-0 left-0 w-6 h-6 z-20 flex items-end justify-start p-1 cursor-nesw-resize text-outline/40 hover:text-primary transition-colors group/bl"
+                title="Tarik sudut untuk mengubah ukuran video"
+              >
+                <svg className="w-2.5 h-2.5 text-outline/40 group-hover/bl:text-primary transition-colors" viewBox="0 0 10 10" fill="currentColor">
+                  <circle cx="2.5" cy="7.5" r="1.3" />
+                  <circle cx="2.5" cy="3.5" r="1.3" />
+                  <circle cx="6.5" cy="7.5" r="1.3" />
+                </svg>
+              </div>
 
-            <div className="min-w-0 flex-1 pl-2 pr-2">
-              <h4 className="text-xs font-semibold text-on-surface line-clamp-2 leading-snug">
-                {activeStream.title}
-              </h4>
-            </div>
+              <div className="min-w-0 flex-1 pl-2 pr-2">
+                <h4 className="text-xs font-semibold text-on-surface line-clamp-2 leading-snug">
+                  {activeStream.title}
+                </h4>
+              </div>
 
-            {/* Tombol PiP OS (Pop-out di Luar Browser - Hanya Desktop) */}
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={handleTogglePip}
-              className={`hidden md:flex items-center justify-center shrink-0 transition-colors cursor-pointer p-1 ${
-                isPipActive
-                  ? 'text-indigo-600 dark:text-indigo-400 font-bold'
-                  : 'text-outline hover:text-indigo-600 dark:hover:text-indigo-400'
-              }`}
-              title={
-                isPipActive
-                  ? 'Kembalikan Video ke Tab Web Ini'
-                  : currentUser
-                  ? 'Buka Jendela Melayang di Luar Browser (PiP OS)'
-                  : 'Buka Jendela Melayang di Luar Browser (Khusus Pengguna Masuk Akun)'
-              }
-              aria-label="Picture in Picture OS"
-            >
-              <span className="material-symbols-outlined text-[20px]">picture_in_picture_alt</span>
-            </button>
+              {/* Grup Tombol Aksi Bawah: Catatan Faidah & PiP OS */}
+              <div 
+                className="flex items-center gap-1 shrink-0 ml-1"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                {/* Tombol Mode Belajar (Buku Saku Faidah / Catatan) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isStudyNotesOpen) {
+                      toggleMinimizeStudyNotes();
+                    } else {
+                      openStudyMode({
+                        videoId: activeStream.videoId,
+                        title: activeStream.title,
+                        speakerName: activeStream.speakerName,
+                        channelName: activeStream.channelName,
+                      });
+                    }
+                  }}
+                  className={`${
+                    FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
+                  } w-7 h-7 rounded-lg items-center justify-center transition-colors cursor-pointer ${
+                    isStudyNotesOpen
+                      ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 font-bold'
+                      : 'text-outline hover:text-emerald-600 hover:bg-emerald-500/10'
+                  }`}
+                  title={isStudyNotesOpen ? 'Sembunyikan / Tampilkan Catatan' : 'Buka Catatan Faidah (Sticky Note)'}
+                  aria-label="Mode Belajar"
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit_note</span>
+                </button>
 
-            {/* Gagang Resize Sudut Kanan-Bawah (Bottom-Right) */}
-            <div 
-              onPointerDown={(e) => handleResizeDown(e, 'bottom-right')}
-              onPointerMove={handleResizeMove}
-              onPointerUp={handleResizeUp}
-              onPointerCancel={handleResizeUp}
-              style={{ touchAction: 'none' }}
-              className="absolute bottom-0 right-0 w-6 h-6 z-20 flex items-end justify-end p-1 cursor-nwse-resize text-outline/40 hover:text-primary transition-colors group/br"
-              title="Tarik sudut untuk mengubah ukuran video"
-            >
-              <svg className="w-2.5 h-2.5 text-outline/40 group-hover/br:text-primary transition-colors" viewBox="0 0 10 10" fill="currentColor">
-                <circle cx="7.5" cy="7.5" r="1.3" />
-                <circle cx="7.5" cy="3.5" r="1.3" />
-                <circle cx="3.5" cy="7.5" r="1.3" />
-              </svg>
+                {/* Tombol PiP OS (Pop-out di Luar Browser - Hanya Desktop) */}
+                <button
+                  type="button"
+                  onClick={handleTogglePip}
+                  className={`hidden md:flex w-7 h-7 rounded-lg items-center justify-center transition-colors cursor-pointer ${
+                    isPipActive
+                      ? 'text-indigo-600 dark:text-indigo-400 font-bold'
+                      : 'text-outline hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-surface-container'
+                  }`}
+                  title={
+                    isPipActive
+                      ? 'Kembalikan Video ke Tab Web Ini'
+                      : currentUser
+                      ? 'Buka Jendela Melayang di Luar Browser (PiP OS)'
+                      : 'Buka Jendela Melayang di Luar Browser (Khusus Pengguna Masuk Akun)'
+                  }
+                  aria-label="Picture in Picture OS"
+                >
+                  <span className="material-symbols-outlined text-[19px]">picture_in_picture_alt</span>
+                </button>
+              </div>
+
+              {/* Gagang Resize Sudut Kanan-Bawah (Bottom-Right) */}
+              <div 
+                onPointerDown={(e) => handleResizeDown(e, 'bottom-right')}
+                onPointerMove={handleResizeMove}
+                onPointerUp={handleResizeUp}
+                onPointerCancel={handleResizeUp}
+                style={{ touchAction: 'none' }}
+                className="absolute bottom-0 right-0 w-6 h-6 z-20 flex items-end justify-end p-1 cursor-nwse-resize text-outline/40 hover:text-primary transition-colors group/br"
+                title="Tarik sudut untuk mengubah ukuran video"
+              >
+                <svg className="w-2.5 h-2.5 text-outline/40 group-hover/br:text-primary transition-colors" viewBox="0 0 10 10" fill="currentColor">
+                  <circle cx="7.5" cy="7.5" r="1.3" />
+                  <circle cx="7.5" cy="3.5" r="1.3" />
+                  <circle cx="3.5" cy="7.5" r="1.3" />
+                </svg>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </>
