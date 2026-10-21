@@ -7,6 +7,7 @@ import {
   toggleUserTrusted,
   approveContributorRequest,
   rejectContributorRequest,
+  syncAndFetchAdminUsers,
 } from '@/app/actions/admin';
 import { ADMIN_EMAILS, type AppUserRole, type ContributorRequestStatus } from '@/lib/services/admin';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -15,6 +16,7 @@ interface ContributorItem {
   userId?: string;
   name: string;
   count: number;
+  rsvpCount?: number;
   role: AppUserRole;
   isTrusted: boolean;
   email?: string | null;
@@ -43,6 +45,18 @@ export default function AdminUsersPage() {
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
+    try {
+      // Prioritas 1: Gunakan server action yang menyinkronkan auth.users dan session_attendees
+      const res = await syncAndFetchAdminUsers();
+      if (res.success && res.users) {
+        setUsers(res.users as ContributorItem[]);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('syncAndFetchAdminUsers fallback to client query:', e);
+    }
+
     const supabase = createClient();
     try {
       // 1. Ambil semua study_sessions untuk menghitung kontribusi per nama & user_id
@@ -704,6 +718,13 @@ export default function AdminUsersPage() {
                           {/* Info Tambahan & Kontak */}
                           <div className="flex items-center gap-x-3 gap-y-1 mt-1 text-xs text-on-surface-variant flex-wrap">
                             <span>Total: <strong>{u.count} kajian</strong></span>
+
+                            {u.rsvpCount !== undefined && u.rsvpCount > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/60 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">
+                                <span className="material-symbols-outlined text-[13px]">how_to_reg</span>
+                                <span>{u.rsvpCount} RSVP Hadir</span>
+                              </span>
+                            )}
 
                             {u.email && (
                               <span className="font-mono text-[11px] text-outline">

@@ -54,6 +54,35 @@ export async function GET(request: Request) {
     try {
       const { error } = await supabase.auth.exchangeCodeForSession(code)
       if (!error) {
+        // Sinkronisasi otomatis ke user_roles agar tercatat di manajemen admin
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: existingRole } = await supabase
+              .from('user_roles')
+              .select('role, email')
+              .eq('user_id', user.id)
+              .maybeSingle();
+
+            if (!existingRole) {
+              await supabase.from('user_roles').insert({
+                user_id: user.id,
+                email: user.email,
+                role: 'user',
+                is_trusted: false,
+                request_status: 'none',
+              });
+            } else if (!existingRole.email && user.email) {
+              await supabase
+                .from('user_roles')
+                .update({ email: user.email })
+                .eq('user_id', user.id);
+            }
+          }
+        } catch (syncErr) {
+          console.warn('Auto-sync user_roles warning:', syncErr);
+        }
+
         // Hapus cookie peta_kajian_auth_next setelah dipakai
         response.cookies.delete('peta_kajian_auth_next')
         response.cookies.set('peta_kajian_auth_next', '', {

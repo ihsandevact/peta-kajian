@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import { ADMIN_EMAILS } from '@/lib/services/admin';
 
@@ -365,3 +366,166 @@ export async function rejectContributorRequest(targetUserId: string, reason?: st
   }
 }
 
+
+
+/**
+ * Menyinkronkan seluruh akun auth.users ke user_roles dan mengambil daftar pengguna lengkap untuk admin
+ */
+
+/**
+ * Menyinkronkan seluruh akun auth.users ke user_roles dan mengambil daftar pengguna lengkap untuk admin
+ */
+export async function syncAndFetchAdminUsers() {
+  try {
+    const { supabase } = await verifyAdminAuth();
+    const adminClient = createAdminClient();
+
+    // 1. Jika service role key tersedia, sinkronkan pengguna auth.users ke user_roles
+    try {
+      const { data: authUsersData, error: authUsersError } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
+
+      if (!authUsersError && authUsersData?.users) {
+        // Ambil user_roles yang sudah ada
+        const { data: existingRoles } = await adminClient
+          .from('user_roles')
+          .select('user_id, email, role');
+
+        const existingMap = new Map((existingRoles || []).map((r: any) => [r.user_id, r]));
+
+        const missingUsers = authUsersData.users.filter((u: any) => !existingMap.has(u.id));
+
+        if (missingUsers.length > 0) {
+          const rowsToInsert = missingUsers.map((u: any) => ({
+            user_id: u.id,
+            email: u.email || null,
+            role: 'user',
+            is_trusted: false,
+            request_status: 'none',
+          }));
+
+          // Insert batch baris baru
+          await adminClient.from('user_roles').insert(rowsToInsert);
+        }
+
+        // Perbarui email yang null di user_roles jika di auth.users tersedia
+        for (const u of authUsersData.users) {
+          const roleRecord: any = existingMap.get(u.id);
+          if (roleRecord && !roleRecord.email && u.email) {
+            await adminClient
+              .from('user_roles')
+              .update({ email: u.email })
+              .eq('user_id', u.id);
+          }
+        }
+      }
+    } catch (authSyncErr) {
+      console.warn('Sync auth users to user_roles warning (service role might not be set):', authSyncErr);
+    }
+
+    // 2. Ambil data sesi kajian (untuk menghitung kontribusi)
+    const { data: sessionRows } = await supabase
+      .from('study_sessions')
+      .select('created_by, contributor_name');
+
+    // 3. Ambil data role lengkap
+    const { data: roleRows } = await supabase
+      .from('user_roles')
+      .select('*');
+
+    // 4. Ambil data RSVP kehadiran per user_id dari session_attendees
+    const rsvpCountByUserId: Record<string, number> = {};
+    try {
+      const { data: attendeeRows } = await supabase
+        .from('session_attendees')
+        .select('user_id')
+        .not('user_id', 'is', null);
+
+      (attendeeRows || []).forEach((a: any) => {
+        if (a.user_id) {
+          rsvpCountByUserId[a.user_id] = (rsvpCountByUserId[a.user_id] || 0) + 1;
+        }
+      });
+    } catch {}
+
+    // Hitung sesi per user_id & nama
+    const sessionCountByUserId: Record<string, number> = {};
+    const sessionNameByUserId: Record<string, string> = {};
+
+    (sessionRows || []).forEach((s: any) => {
+      if (s.created_by) {
+        sessionCountByUserId[s.created_by] = (sessionCountByUserId[s.created_by] || 0) + 1;
+        if (s.contributor_name && !sessionNameByUserId[s.created_by]) {
+          sessionNameByUserId[s.created_by] = s.contributor_name;
+        }
+      }
+    });
+
+    const userMap: Record<string, any> = {};
+
+    // Masukkan semua user dari user_roles
+    (roleRows || []).forEach((r: any) => {
+      const uid = r.user_id;
+      const count = sessionCountByUserId[uid] || 0;
+      const rsvpCount = rsvpCountByUserId[uid] || 0;
+      const fallbackName =
+        r.community_name ||
+        sessionNameByUserId[uid] ||
+        (r.email ? r.email.split('@')[0] : 'Pengguna ' + uid.slice(0, 6));
+
+      userMap[uid] = {
+        userId: uid,
+        name: fallbackName,
+        count,
+        rsvpCount,
+        role: r.role || 'user',
+        isTrusted: r.is_trusted || false,
+        email: r.email || null,
+        requestStatus: r.request_status || 'none',
+        communityName: r.community_name || null,
+        whatsappNumber: r.whatsapp_number || null,
+        requestNote: r.request_note || null,
+        requestedAt: r.requested_at || null,
+        reviewedAt: r.reviewed_at || null,
+      };
+    });
+
+    // Tambahkan kontributor sesi lama yang belum ada di user_roles
+    const legacyMap: Record<string, number> = {};
+    (sessionRows || []).forEach((s: any) => {
+      if (s.created_by && !userMap[s.created_by]) {
+        const uid = s.created_by;
+        userMap[uid] = {
+          userId: uid,
+          name: s.contributor_name || 'Relawan Dakwah',
+          count: 1,
+          rsvpCount: rsvpCountByUserId[uid] || 0,
+          role: 'kontributor',
+          isTrusted: false,
+          requestStatus: 'none',
+        };
+      } else if (!s.created_by && s.contributor_name) {
+        legacyMap[s.contributor_name] = (legacyMap[s.contributor_name] || 0) + 1;
+      }
+    });
+
+    Object.entries(legacyMap).forEach(([name, count]) => {
+      userMap[`legacy_${name}`] = {
+        name,
+        count,
+        rsvpCount: 0,
+        role: 'kontributor',
+        isTrusted: false,
+        requestStatus: 'none',
+      };
+    });
+
+    const userList = Object.values(userMap);
+    return { success: true, users: userList };
+  } catch (err: any) {
+    console.error('syncAndFetchAdminUsers error:', err);
+    return { success: false, error: err.message || 'Gagal menyinkronkan data pengguna.' };
+  }
+}

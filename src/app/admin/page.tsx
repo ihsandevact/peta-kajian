@@ -296,12 +296,14 @@ export default function AdminModerationPage() {
 
             <div
               className="p-3 sm:p-4 rounded-2xl border transition-all bg-surface-container-lowest border-surface-container-high/70"
+              title="Total akumulasi klik 'Insya Allah Hadir' dari seluruh kajian (mencakup jamaah login & anonim)"
             >
               <div className="flex items-center justify-between">
                 <span className="text-[11px] sm:text-xs font-semibold text-teal-700 dark:text-teal-400">Total Jamaah RSVP</span>
                 <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-teal-600">groups</span>
               </div>
               <p className="text-xl sm:text-2xl font-black text-teal-800 dark:text-teal-300 mt-1">{effectiveTotalAttendees}</p>
+              <span className="text-[10px] text-outline block mt-0.5">Akumulasi kehadiran kajian</span>
             </div>
           </div>
         </div>
