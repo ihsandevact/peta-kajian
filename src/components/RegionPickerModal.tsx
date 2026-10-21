@@ -13,12 +13,22 @@ import {
 import type { StudySession } from '@/lib/services/kajian';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
+export const KAJIAN_FACILITY_OPTIONS = [
+  { id: 'parking_car', label: 'Parkir Mobil', icon: 'local_parking' },
+  { id: 'kids_friendly', label: 'Ramah Anak', icon: 'family_restroom' },
+  { id: 'wheelchair_accessible', label: 'Kursi Roda', icon: 'accessible' },
+  { id: 'air_conditioned', label: 'Ruangan AC', icon: 'ac_unit' },
+] as const;
+
 interface RegionPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedRegion: SelectedRegion | null;
   onSelectRegion: (region: SelectedRegion | null) => void;
   sessions: StudySession[];
+  selectedFacilities?: string[];
+  onToggleFacility?: (facilityId: string) => void;
+  onResetAll?: () => void;
 }
 
 export default function RegionPickerModal({
@@ -27,6 +37,9 @@ export default function RegionPickerModal({
   selectedRegion,
   onSelectRegion,
   sessions,
+  selectedFacilities = [],
+  onToggleFacility,
+  onResetAll,
 }: RegionPickerModalProps) {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search, 250);
@@ -41,11 +54,17 @@ export default function RegionPickerModal({
     return () => mql.removeEventListener('change', handler);
   }, []);
 
-  // Hitung jumlah kajian per wilayah
-  const { cityCounts, provinceCounts, activeCities } = useMemo(
-    () => countActiveSessionsByRegion(sessions),
-    [sessions]
-  );
+  // Hitung jumlah kajian per wilayah secara lazy hanya saat modal terbuka
+  const { cityCounts, provinceCounts, activeCities } = useMemo(() => {
+    if (!isOpen) {
+      return {
+        cityCounts: {} as Record<string, number>,
+        provinceCounts: {} as Record<string, number>,
+        activeCities: [] as CityItem[],
+      };
+    }
+    return countActiveSessionsByRegion(sessions);
+  }, [isOpen, sessions]);
 
   // Auto-expand provinsi jika wilayah aktif dipilih
   useEffect(() => {
@@ -127,8 +146,8 @@ export default function RegionPickerModal({
   const renderHeader = () => (
     <>
       <div className="flex items-center gap-2">
-        <span className="material-symbols-outlined text-primary text-[22px]">location_on</span>
-        <h2 className="text-base sm:text-lg font-bold text-on-surface">Pilih Wilayah Kajian</h2>
+        <span className="material-symbols-outlined text-primary text-[22px]">tune</span>
+        <h2 className="text-base sm:text-lg font-bold text-on-surface">Filter &amp; Wilayah Kajian</h2>
       </div>
       <button
         type="button"
@@ -169,9 +188,47 @@ export default function RegionPickerModal({
     </div>
   );
 
-  // 3. Scrollable List Body (Seluruh Indonesia, Kota Populer, Provinsi & Kota)
+  // 3. Scrollable List Body (Fasilitas Masjid, Seluruh Indonesia, Kota Populer, Provinsi & Kota)
   const renderBody = () => (
     <>
+      {/* 0. Filter Fasilitas Masjid (Tampil saat tidak sedang mengetik pencarian kota) */}
+      {!search && onToggleFacility && (
+        <div>
+          <p className="text-[11px] font-bold text-outline uppercase tracking-wider mb-2">
+            Fasilitas Masjid
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {KAJIAN_FACILITY_OPTIONS.map((fac) => {
+              const isSelected = selectedFacilities.includes(fac.id);
+              return (
+                <button
+                  type="button"
+                  key={fac.id}
+                  onClick={() => onToggleFacility(fac.id)}
+                  className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                    isSelected
+                      ? 'bg-primary/10 border-primary text-primary shadow-2xs'
+                      : 'bg-surface-container-low/60 border-surface-container-high hover:bg-surface-container text-on-surface'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="material-symbols-outlined text-[16px] shrink-0">
+                      {fac.icon}
+                    </span>
+                    <span className="truncate">{fac.label}</span>
+                  </div>
+                  {isSelected && (
+                    <span className="material-symbols-outlined text-[16px] text-primary shrink-0">
+                      check_circle
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 1. Opsi Seluruh Indonesia */}
       <button
         type="button"
@@ -340,20 +397,37 @@ export default function RegionPickerModal({
     </>
   );
 
+  const hasAnyActiveFilter = Boolean(selectedRegion || selectedFacilities.length > 0);
+
   // 4. Footer Bar
   const renderFooter = () => (
     <>
-      <p className="text-xs text-outline truncate">
-        {selectedRegion
-          ? `Wilayah aktif: ${selectedRegion.name}`
-          : 'Menampilkan seluruh wilayah'}
-      </p>
+      <div className="flex items-center gap-2 min-w-0">
+        {hasAnyActiveFilter && onResetAll ? (
+          <button
+            type="button"
+            onClick={() => {
+              onResetAll();
+            }}
+            className="text-xs font-semibold text-red-600 dark:text-red-400 hover:underline flex items-center gap-1 cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-[15px]">restart_alt</span>
+            <span>Reset Filter</span>
+          </button>
+        ) : (
+          <p className="text-xs text-outline truncate">
+            {selectedRegion
+              ? `Wilayah aktif: ${selectedRegion.name}`
+              : 'Menampilkan seluruh wilayah'}
+          </p>
+        )}
+      </div>
       <button
         type="button"
         onClick={onClose}
-        className="px-4 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface font-semibold text-xs rounded-xl transition-colors shrink-0 cursor-pointer"
+        className="px-4 py-2 bg-primary hover:bg-primary/90 text-white font-semibold text-xs rounded-xl transition-colors shrink-0 cursor-pointer shadow-xs"
       >
-        Tutup
+        Terapkan
       </button>
     </>
   );
@@ -415,8 +489,10 @@ export default function RegionPickerModal({
               <div className="shrink-0 px-4 pb-3 border-b border-surface-container-high/60 bg-surface-container-lowest flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-[22px]">location_on</span>
-                    <Drawer.Title className="text-base font-bold text-on-surface">Pilih Wilayah Kajian</Drawer.Title>
+                    <span className="material-symbols-outlined text-primary text-[22px]">tune</span>
+                    <Drawer.Title className="text-base font-bold text-on-surface">
+                      Filter &amp; Wilayah Kajian
+                    </Drawer.Title>
                   </div>
                   <button
                     type="button"

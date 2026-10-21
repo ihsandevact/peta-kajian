@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "predev": "node scripts/copy-maplibre-worker.mjs",
-    "prebuild": "node scripts/copy-maplibre-worker.mjs"
+    "prebuild": "node scripts/copy-maplibre-worker.mjs",
+    "import:mosques": "node scripts/import-overture-mosques.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
@@ -32,6 +33,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@duckdb/node-api": "^1.5.6-r.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

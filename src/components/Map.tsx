@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import type { SelectedRegion } from '@/utils/regions';
 import type { RouteResult } from '@/lib/services/routing';
+import { calculateDistance } from '@/utils/distance';
 import VenueCard from './VenueCard';
 import OnlineStreamingOverlay from './OnlineStreamingOverlay';
 import { useTheme } from '@/context/ThemeContext';
@@ -24,15 +25,67 @@ setWorkerUrl('/lib/maplibre/maplibre-gl-worker.mjs');
 
 const MAPTILER_KEY = process.env.NEXT_PUBLIC_MAPTILER_KEY || 'get_your_own_OpIi9ZULNHzrESv6T2vL';
 
+function getBoundsFromRadiusKm(
+  lat: number,
+  lng: number,
+  radiusKm: number
+): [[number, number], [number, number]] {
+  const latDelta = radiusKm / 111.32;
+  const cosLat = Math.max(0.1, Math.cos((lat * Math.PI) / 180));
+  const lngDelta = radiusKm / (111.32 * cosLat);
+  return [
+    [lng - lngDelta, lat - latDelta],
+    [lng + lngDelta, lat + latDelta],
+  ];
+}
+
+function createGeoJsonCircle(
+  lat: number,
+  lng: number,
+  radiusKm: number,
+  points = 64
+) {
+  const coords: [number, number][] = [];
+  const distanceX = radiusKm / (111.32 * Math.max(0.1, Math.cos((lat * Math.PI) / 180)));
+  const distanceY = radiusKm / 110.574;
+
+  for (let i = 0; i <= points; i++) {
+    const theta = (i / points) * (2 * Math.PI);
+    const x = distanceX * Math.cos(theta);
+    const y = distanceY * Math.sin(theta);
+    coords.push([lng + x, lat + y]);
+  }
+
+  return {
+    type: 'Feature' as const,
+    properties: {},
+    geometry: {
+      type: 'Polygon' as const,
+      coordinates: [coords],
+    },
+  };
+}
+
 interface KajianMapMarkerProps {
   session: StudySession;
   isSelected: boolean;
+  isHovered: boolean;
   onSelect: (session: StudySession) => void;
   onFlyTo: (session: StudySession) => void;
+  onHoverEnter: (session: StudySession) => void;
+  onHoverLeave: () => void;
 }
 
 const KajianMapMarker = React.memo(
-  function KajianMapMarker({ session, isSelected, onSelect, onFlyTo }: KajianMapMarkerProps) {
+  function KajianMapMarker({
+    session,
+    isSelected,
+    isHovered,
+    onSelect,
+    onFlyTo,
+    onHoverEnter,
+    onHoverLeave,
+  }: KajianMapMarkerProps) {
     const lat = session.venues?.lat || 0;
     const lng = session.venues?.lng || 0;
     const hasDate = !!session.start_datetime;
@@ -52,58 +105,71 @@ const KajianMapMarker = React.memo(
       [session, onSelect, onFlyTo]
     );
 
+    const handleMouseEnter = React.useCallback(() => {
+      onHoverEnter(session);
+    }, [session, onHoverEnter]);
+
+    const isHighlighted = isSelected || isHovered;
+
     return (
       <Marker
         longitude={lng}
         latitude={lat}
         anchor="center"
-        style={{ zIndex: isSelected ? 35 : 20 }}
+        style={{ zIndex: isSelected ? 36 : isHovered ? 34 : 20 }}
         onClick={handleClick}
       >
-        {isSelected ? (
-          <div className="relative cursor-pointer group">
+        <div
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={onHoverLeave}
+          className="cursor-pointer group"
+        >
+          {isHighlighted ? (
+            <div className="relative">
+              <div
+                className={`absolute -inset-2 rounded-full animate-ping ${
+                  session.is_test ? 'bg-amber-500/30' : 'bg-primary-container/30'
+                }`}
+              />
+              <div
+                className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full shadow-md transition-transform group-hover:scale-105 ${
+                  session.is_test
+                    ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+                    : 'bg-primary-container text-on-primary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[14px]">
+                  {session.is_test ? 'science' : 'mosque'}
+                </span>
+                <span className="text-[13px] font-semibold tracking-tight">
+                  {session.is_test ? 'TEST' : sessionTime}
+                </span>
+              </div>
+            </div>
+          ) : (
             <div
-              className={`absolute -inset-2 rounded-full animate-ping ${
-                session.is_test ? 'bg-amber-500/30' : 'bg-primary-container/30'
-              }`}
-            />
-            <div
-              className={`relative flex items-center gap-1 px-2.5 py-1 rounded-full shadow-md transition-transform group-hover:scale-105 ${
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow transition-all group-hover:scale-105 ${
                 session.is_test
-                  ? 'bg-amber-600 text-white ring-2 ring-amber-300'
-                  : 'bg-primary-container text-on-primary'
+                  ? 'bg-amber-500 text-white ring-1 ring-amber-300'
+                  : isAkhwat
+                  ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary'
+                  : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
               }`}
             >
-              <span className="material-symbols-outlined text-[14px]">
-                {session.is_test ? 'science' : 'mosque'}
+              <span className="material-symbols-outlined text-[12px]">
+                {session.is_test ? 'science' : isAkhwat ? 'female' : 'schedule'}
               </span>
-              <span className="text-[13px] font-semibold tracking-tight">
-                {session.is_test ? 'TEST' : sessionTime}
-              </span>
+              <span className="text-[11px] font-medium">{session.is_test ? 'TEST' : sessionTime}</span>
             </div>
-          </div>
-        ) : (
-          <div
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-full shadow transition-all group-hover:scale-105 cursor-pointer ${
-              session.is_test
-                ? 'bg-amber-500 text-white ring-1 ring-amber-300'
-                : isAkhwat
-                ? 'bg-tertiary-container hover:bg-tertiary text-on-tertiary'
-                : 'bg-slate-900 dark:bg-slate-800 hover:bg-primary dark:hover:bg-emerald-600 text-white'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[12px]">
-              {session.is_test ? 'science' : isAkhwat ? 'female' : 'schedule'}
-            </span>
-            <span className="text-[11px] font-medium">{session.is_test ? 'TEST' : sessionTime}</span>
-          </div>
-        )}
+          )}
+        </div>
       </Marker>
     );
   },
   (prev, next) => {
     return (
       prev.isSelected === next.isSelected &&
+      prev.isHovered === next.isHovered &&
       prev.session.id === next.session.id &&
       prev.session.start_datetime === next.session.start_datetime &&
       prev.session.is_test === next.session.is_test &&
@@ -119,6 +185,8 @@ interface AppMapProps {
   selectedSession: StudySession | null;
   onSelectSession: (s: StudySession | null) => void;
   flyToRegion?: SelectedRegion | null;
+  isNearbyFilter?: boolean;
+  radiusKm?: number;
   activeRoute?: RouteResult | null;
   userLocation?: { lat: number; lng: number } | null;
   onStartRoute?: (session: StudySession) => void;
@@ -136,6 +204,8 @@ export default function AppMap({
   selectedSession,
   onSelectSession,
   flyToRegion,
+  isNearbyFilter = false,
+  radiusKm = 25,
   activeRoute,
   userLocation,
   onStartRoute,
@@ -172,7 +242,46 @@ export default function AppMap({
   const [isFollowingUser, setIsFollowingUser] = React.useState(true);
   const [cameraOrientation, setCameraOrientation] = React.useState<'heads-up' | 'north-up'>('heads-up');
   const [selectedParkingPopup, setSelectedParkingPopup] = React.useState(false);
+  const [hoveredSession, setHoveredSession] = React.useState<StudySession | null>(null);
+  const hoverCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevRegionRef = React.useRef<SelectedRegion | null | undefined>(undefined);
+  const prevNearbyRef = React.useRef<boolean>(false);
+
+  const cancelHoverClose = React.useCallback(() => {
+    if (hoverCloseTimerRef.current) {
+      clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const handleMarkerHoverEnter = React.useCallback(
+    (session: StudySession) => {
+      if (isNavigating || activeRoute) return;
+      cancelHoverClose();
+      setHoveredSession(session);
+    },
+    [isNavigating, activeRoute, cancelHoverClose]
+  );
+
+  const handleMarkerHoverLeave = React.useCallback(() => {
+    cancelHoverClose();
+    hoverCloseTimerRef.current = setTimeout(() => {
+      setHoveredSession(null);
+    }, 180);
+  }, [cancelHoverClose]);
+
+  React.useEffect(() => {
+    return () => {
+      if (hoverCloseTimerRef.current) {
+        clearTimeout(hoverCloseTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Bersihkan hoveredSession saat selectedSession berubah dari luar (misal klik dari sidebar)
+  React.useEffect(() => {
+    setHoveredSession(null);
+  }, [selectedSession, flyToRegion, isNearbyFilter]);
 
   const [internalVehicleIcon, setInternalVehicleIcon] = React.useState<NavigationVehicleIcon>(
     vehicleIcon || 'car'
@@ -329,6 +438,63 @@ export default function AppMap({
   const mappableSessions = React.useMemo(() => sessions.filter(hasPhysicalLocation), [sessions]);
   const selectedHasLocation = !!selectedSession && hasPhysicalLocation(selectedSession);
 
+  // Hitung pusat & jari-jari bulatan area wilayah/lokasi kajian (GeoJSON Circle)
+  const areaCircleData = React.useMemo(() => {
+    if (activeRoute || isNavigating) return null;
+
+    // 1. Jika filter wilayah (kota/provinsi) sedang aktif
+    if (flyToRegion) {
+      if (mappableSessions.length > 0) {
+        let sumLat = 0;
+        let sumLng = 0;
+        for (const s of mappableSessions) {
+          sumLat += getLat(s);
+          sumLng += getLng(s);
+        }
+        const centerLat = sumLat / mappableSessions.length;
+        const centerLng = sumLng / mappableSessions.length;
+
+        let maxDistKm = 0;
+        for (const s of mappableSessions) {
+          const d = calculateDistance(centerLat, centerLng, getLat(s), getLng(s));
+          if (d > maxDistKm) maxDistKm = d;
+        }
+
+        const maxAllowed = flyToRegion.type === 'province' ? 75 : 28;
+        const computedRadius = Math.min(maxAllowed, Math.max(4.5, maxDistKm * 1.2));
+
+        return {
+          lat: centerLat,
+          lng: centerLng,
+          radiusKm: computedRadius,
+        };
+      }
+
+      // Fallback ke koordinat pusat wilayah jika belum ada titik kajian fisik
+      return {
+        lat: flyToRegion.center[1],
+        lng: flyToRegion.center[0],
+        radiusKm: flyToRegion.type === 'province' ? 35 : 12,
+      };
+    }
+
+    // 2. Jika filter lokasi "Terdekat" sedang aktif dan GPS pengguna tersedia
+    if (isNearbyFilter && userLocation) {
+      return {
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        radiusKm: radiusKm > 0 ? radiusKm : 25,
+      };
+    }
+
+    return null;
+  }, [flyToRegion, isNearbyFilter, userLocation, radiusKm, mappableSessions, activeRoute, isNavigating]);
+
+  const areaCircleGeoJson = React.useMemo(() => {
+    if (!areaCircleData) return null;
+    return createGeoJsonCircle(areaCircleData.lat, areaCircleData.lng, areaCircleData.radiusKm, 64);
+  }, [areaCircleData]);
+
   // Fungsi helper untuk terbang ke kajian dengan offset adaptif
   const flyToSession = React.useCallback((session: StudySession) => {
     if (!hasPhysicalLocation(session) || !mapRef.current) return;
@@ -351,7 +517,7 @@ export default function AppMap({
       pitch: 0,
       bearing: 0,
       duration: 1200,
-      essential: true
+      essential: true,
     });
   }, []);
 
@@ -373,30 +539,43 @@ export default function AppMap({
     }
   }, [isMapLoaded, selectedSession, flyToSession]);
 
-  // Terbang ke wilayah/kota yang dipilih dari filter
+  // Terbang ke area bulatan wilayah/lokasi yang dipilih dari filter (ketika tidak sedang memilih 1 kajian spesifik)
   React.useEffect(() => {
     if (!isMapLoaded || !mapRef.current) return;
 
-    if (flyToRegion) {
-      mapRef.current.flyTo({
-        center: [flyToRegion.center[0], flyToRegion.center[1]],
-        zoom: flyToRegion.zoom,
-        duration: 1600,
-        essential: true
+    if (areaCircleData && !selectedSession) {
+      const bounds = getBoundsFromRadiusKm(
+        areaCircleData.lat,
+        areaCircleData.lng,
+        areaCircleData.radiusKm
+      );
+      const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+      mapRef.current.fitBounds(bounds, {
+        padding: isDesktop
+          ? { top: 48, bottom: 48, left: 48, right: 48 }
+          : { top: 40, bottom: 240, left: 28, right: 28 },
+        pitch: 0,
+        bearing: 0,
+        duration: 1300,
+        essential: true,
       });
-    } else if (prevRegionRef.current && flyToRegion === null && !selectedSession) {
-      // Hanya reset ke Indonesia jika sebelumnya ada wilayah yang dipilih lalu dihapus,
-      // dan saat ini tidak sedang membuka kartu kajian aktif
-      mapRef.current.flyTo({
-        center: [118.0, -2.0],
-        zoom: 4.5,
-        duration: 1400,
-        essential: true
-      });
+    } else if (
+      (prevRegionRef.current && flyToRegion === null) ||
+      (prevNearbyRef.current && !isNearbyFilter)
+    ) {
+      if (!selectedSession && !flyToRegion && !isNearbyFilter) {
+        mapRef.current.flyTo({
+          center: [118.0, -2.0],
+          zoom: 4.5,
+          duration: 1400,
+          essential: true,
+        });
+      }
     }
 
     prevRegionRef.current = flyToRegion;
-  }, [isMapLoaded, flyToRegion, selectedSession]);
+    prevNearbyRef.current = isNearbyFilter;
+  }, [isMapLoaded, areaCircleData, flyToRegion, isNearbyFilter, selectedSession]);
 
   // Auto fitBounds saat rute in-app aktif (hanya saat tidak dalam mode navigasi 3D)
   React.useEffect(() => {
@@ -481,6 +660,10 @@ export default function AppMap({
     };
   }, [activeRoute]);
 
+  // Sesi aktif yang ditampilkan pada Floating Card Popup (Hover memiliki prioritas pratinjau cepat, diikuti Selected)
+  const activePopupSession = hoveredSession || selectedSession;
+  const activePopupHasLocation = !!activePopupSession && hasPhysicalLocation(activePopupSession);
+
   return (
     <div className="w-full h-full relative">
       <Map
@@ -491,6 +674,14 @@ export default function AppMap({
           zoom: 4.5,
         }}
         onLoad={handleMapLoad}
+        onClick={() => {
+          if (!activeRoute && !isNavigating) {
+            setHoveredSession(null);
+            if (selectedSession) {
+              onSelectSession(null);
+            }
+          }
+        }}
         onDragStart={() => {
           if (isNavigating) {
             setIsFollowingUser(false);
@@ -510,6 +701,31 @@ export default function AppMap({
         }
       >
         {!isNavigating && <NavigationControl position="bottom-right" showCompass={false} />}
+
+        {/* LAYER BULATAN AREA WILAYAH / RADIUS LOKASI KAJIAN */}
+        {areaCircleGeoJson && (
+          <Source id="kajian-area-circle" type="geojson" data={areaCircleGeoJson}>
+            <Layer
+              id="kajian-area-circle-fill"
+              type="fill"
+              paint={{
+                'fill-color': '#10b981',
+                'fill-opacity': resolvedTheme === 'dark' ? 0.12 : 0.08,
+              }}
+            />
+            <Layer
+              id="kajian-area-circle-stroke"
+              type="line"
+              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
+              paint={{
+                'line-color': '#10b981',
+                'line-width': 2,
+                'line-opacity': 0.75,
+                'line-dasharray': [3, 2],
+              }}
+            />
+          </Source>
+        )}
 
         {/* LAYER RUTE ALTERNATIF OSRM (JIKA ADA) */}
         {inactiveAlternativeRoutes.map((altRoute, altIdx) => (
@@ -705,35 +921,56 @@ export default function AppMap({
             )}
           </Marker>
         )}
-        
-        {mappableSessions.map(session => (
+
+        {mappableSessions.map((session) => (
           <KajianMapMarker
             key={session.id}
             session={session}
             isSelected={selectedSession?.id === session.id}
+            isHovered={hoveredSession?.id === session.id}
             onSelect={onSelectSession}
             onFlyTo={flyToSession}
+            onHoverEnter={handleMarkerHoverEnter}
+            onHoverLeave={handleMarkerHoverLeave}
           />
         ))}
 
-        {selectedSession && selectedHasLocation && (
+        {activePopupSession && activePopupHasLocation && !activeRoute && !isNavigating && (
           <Popup
             anchor="bottom"
-            longitude={getLng(selectedSession)}
-            latitude={getLat(selectedSession)}
-            onClose={() => onSelectSession(null)}
+            longitude={getLng(activePopupSession)}
+            latitude={getLat(activePopupSession)}
+            onClose={() => {
+              setHoveredSession(null);
+              onSelectSession(null);
+            }}
             closeButton={false}
             closeOnClick={false}
             className="z-50"
             offset={12}
             maxWidth="none"
           >
-            <VenueCard
-              key={selectedSession.id}
-              session={selectedSession}
-              onClose={() => onSelectSession(null)}
-              onStartRoute={onStartRoute}
-            />
+            <div
+              onMouseEnter={cancelHoverClose}
+              onMouseLeave={handleMarkerHoverLeave}
+              onClick={() => {
+                if (activePopupSession && selectedSession?.id !== activePopupSession.id) {
+                  setHoveredSession(null);
+                  onSelectSession(activePopupSession);
+                  flyToSession(activePopupSession);
+                }
+              }}
+            >
+              <VenueCard
+                key={activePopupSession.id}
+                session={activePopupSession}
+                onClose={() => {
+                  setHoveredSession(null);
+                  onSelectSession(null);
+                }}
+                onStartRoute={onStartRoute}
+              />
+            </div>
           </Popup>
         )}
       </Map>

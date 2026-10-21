@@ -457,7 +457,7 @@ export default function HomeClient() {
       setActiveRoute(null);
       setRouteError(null);
     }
-    setSelectedSession(session);
+    setSelectedSession(session ? { ...session } : null);
     if (session) {
       setSnapPoint('224px');
     }
@@ -667,20 +667,30 @@ export default function HomeClient() {
     // Jika rute sedang aktif atau dalam proses navigasi, jangan ubah selectedSession secara otomatis
     if (activeRouteSession) return;
 
+    const regionChanged = prevFiltersRef.current.region !== filters.region;
+    const switchedToNearby =
+      prevFiltersRef.current.time !== filters.time && filters.time === 'terdekat';
+
     const filtersChanged =
       prevFiltersRef.current.time !== filters.time ||
       prevFiltersRef.current.searchQuery !== filters.searchQuery ||
-      prevFiltersRef.current.region !== filters.region ||
+      regionChanged ||
       JSON.stringify(prevFiltersRef.current.audience) !== JSON.stringify(filters.audience) ||
       JSON.stringify(prevFiltersRef.current.facilities) !== JSON.stringify(filters.facilities);
 
     const locationJustArrived = !prevUserLocationRef.current && !!userLocation && filters.time === 'terdekat';
     prevUserLocationRef.current = userLocation;
 
+    const isRegionOrLocationMode = Boolean(filters.region || filters.time === 'terdekat');
+
     if (filtersChanged || locationJustArrived) {
       prevFiltersRef.current = filters;
-      if (sortedSessions.length > 0) {
-        // Setiap kali berpindah filter: SELALU trigger aktif kajian paling atas (urutan pertama)
+      // Saat filter by wilayah/lokasi (region dipilih atau tab Terdekat aktif),
+      // tidak memilih kajian manapun terlebih dahulu agar peta menampilkan area bulatan wilayah/radius
+      if ((regionChanged && filters.region) || switchedToNearby || locationJustArrived || isRegionOrLocationMode) {
+        setSelectedSession(null);
+      } else if (sortedSessions.length > 0) {
+        // Setiap kali berpindah filter lain: trigger aktif kajian paling atas (urutan pertama)
         setSelectedSession({ ...sortedSessions[0] });
       } else {
         setSelectedSession(null);
@@ -690,10 +700,13 @@ export default function HomeClient() {
       // pertahankan sesi yang sedang dilihat jika masih ada dalam daftar
       if (sortedSessions.length > 0) {
         setSelectedSession(prev => {
-          if (prev && sortedSessions.some(s => s.id === prev.id)) {
+          if (!prev) {
+            return isRegionOrLocationMode ? null : sortedSessions[0];
+          }
+          if (sortedSessions.some(s => s.id === prev.id)) {
             return prev;
           }
-          return sortedSessions[0];
+          return isRegionOrLocationMode ? null : sortedSessions[0];
         });
       } else {
         setSelectedSession(null);
@@ -744,6 +757,19 @@ export default function HomeClient() {
                 </span>
               )}
             </a>
+            <Link 
+              href="/masjid"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 w-full text-left`}
+            >
+              <span className="material-symbols-outlined text-[20px] text-emerald-600">mosque</span>
+              {!isSidebarCollapsed && <span>Cari Masjid</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Cari Masjid
+                </span>
+              )}
+            </Link>
+
             
             <Link 
               href="/live"
@@ -1005,6 +1031,8 @@ export default function HomeClient() {
               selectedSession={selectedSession}
               onSelectSession={handleSelectSession}
               flyToRegion={filters.region}
+              isNearbyFilter={filters.time === 'terdekat'}
+              radiusKm={filters.radius || 25}
               activeRoute={activeRoute}
               userLocation={userLocation}
               onStartRoute={handleStartRoute}
@@ -1132,63 +1160,84 @@ export default function HomeClient() {
         <nav className={`md:hidden fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest shadow-[0_-2px_12px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom,0px)] border-t border-surface-container-high/50 transition-transform duration-300 ${
           activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none' : ''
         }`}>
-          <div className="flex items-center justify-around h-16 px-2">
-            <a href="#" className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary font-bold">
-              <span className="material-symbols-outlined text-[22px]" style={{ fontVariationSettings: "'FILL' 1" }}>map</span>
-              <span className="text-[10px] mt-0.5 tracking-tight">Peta</span>
-            </a>
-            <Link 
-              href="/live"
-              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-red-600 dark:text-red-400 hover:text-red-700 transition-colors relative"
+          <div className="grid grid-cols-5 items-end h-16 px-2 pb-2">
+            <a
+              href="#"
+              className="flex flex-col items-center justify-end h-12 gap-1 text-primary font-bold"
             >
-              <div className="relative">
-                <span className="material-symbols-outlined text-[22px]">smart_display</span>
-                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-600 animate-ping" />
+              <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                <span
+                  className="material-symbols-outlined text-[22px] leading-none"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  map
+                </span>
               </div>
-              <span className="text-[10px] mt-0.5 font-bold tracking-tight">Live</span>
-            </Link>
-            <Link 
-              href="/leaderboard"
-              className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
+              <span className="text-[10px] leading-none tracking-tight whitespace-nowrap">
+                Peta
+              </span>
+            </a>
+            <Link
+              href="/masjid"
+              className="flex flex-col items-center justify-end h-12 gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors"
             >
-              <span className="material-symbols-outlined text-[22px] text-amber-500">workspace_premium</span>
-              <span className="text-[10px] mt-0.5 font-medium tracking-tight">Peringkat</span>
+              <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[22px] leading-none">mosque</span>
+              </div>
+              <span className="text-[10px] leading-none font-bold tracking-tight whitespace-nowrap">
+                Masjid
+              </span>
+            </Link>
+            <Link
+              href="/live"
+              className="flex flex-col items-center justify-end h-12 gap-1 text-red-600 dark:text-red-400 hover:text-red-700 transition-colors"
+            >
+              <div className="w-6 h-6 flex items-center justify-center relative shrink-0">
+                <span className="material-symbols-outlined text-[22px] leading-none">
+                  smart_display
+                </span>
+                <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-600 animate-ping" />
+              </div>
+              <span className="text-[10px] leading-none font-bold tracking-tight whitespace-nowrap">
+                Live
+              </span>
+            </Link>
+            <Link
+              href="/leaderboard"
+              className="flex flex-col items-center justify-end h-12 gap-1 text-outline hover:text-on-surface transition-colors"
+            >
+              <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[22px] leading-none text-amber-500">
+                  workspace_premium
+                </span>
+              </div>
+              <span className="text-[10px] leading-none font-medium tracking-tight whitespace-nowrap">
+                Peringkat
+              </span>
             </Link>
             {currentUser ? (
-              <>
-                {currentUserRole === 'admin' || currentUserRole === 'kontributor' ? (
-                  <Link 
-                    href="/kontributor/dashboard" 
-                    className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[22px]">add_circle</span>
-                    <span className="text-[10px] mt-0.5 font-medium tracking-tight">Kirim</span>
-                  </Link>
-                ) : (
-                  <Link 
-                    href="/kontributor/profile" 
-                    className="flex flex-col items-center justify-center min-w-[56px] h-12 text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[22px]">volunteer_activism</span>
-                    <span className="text-[10px] mt-0.5 font-medium tracking-tight">Relawan</span>
-                  </Link>
-                )}
-
-                <Link
-                  href="/kontributor/profile"
-                  className="flex flex-col items-center justify-center min-w-[56px] h-12 text-outline hover:text-on-surface transition-colors"
-                >
+              <Link
+                href="/kontributor/profile"
+                className="flex flex-col items-center justify-end h-12 gap-1 text-outline hover:text-on-surface transition-colors"
+              >
+                <div className="w-6 h-6 flex items-center justify-center shrink-0">
                   <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-6 h-6" />
-                  <span className="text-[10px] mt-0.5 font-medium tracking-tight">Profil</span>
-                </Link>
-              </>
+                </div>
+                <span className="text-[10px] leading-none font-medium tracking-tight whitespace-nowrap">
+                  Profil
+                </span>
+              </Link>
             ) : (
               <Link
                 href="/login"
-                className="flex flex-col items-center justify-center min-w-[56px] h-12 text-primary font-bold hover:opacity-90 transition-opacity"
+                className="flex flex-col items-center justify-end h-12 gap-1 text-primary font-bold hover:opacity-90 transition-opacity"
               >
-                <span className="material-symbols-outlined text-[22px]">login</span>
-                <span className="text-[10px] mt-0.5 tracking-tight font-bold">Masuk</span>
+                <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px] leading-none">login</span>
+                </div>
+                <span className="text-[10px] leading-none tracking-tight font-bold whitespace-nowrap">
+                  Masuk
+                </span>
               </Link>
             )}
           </div>

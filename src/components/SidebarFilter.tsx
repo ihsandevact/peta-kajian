@@ -4,8 +4,7 @@ import type { FilterState } from '@/app/page';
 import { type StudySession } from '@/lib/services/kajian';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
-import RegionPickerModal from './RegionPickerModal';
-import type { SelectedRegion } from '@/utils/regions';
+import RegionPickerModal, { KAJIAN_FACILITY_OPTIONS } from './RegionPickerModal';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
@@ -321,38 +320,12 @@ export default function SidebarFilter({
     </button>
   );
 
-  const toggleAudience = (val: string) => {
-    setFilters(p => {
-      let newAudience = [...p.audience];
-      if (val === 'semua') {
-        newAudience = ['umum', 'ikhwan', 'akhwat'];
-      } else {
-        if (newAudience.includes(val)) {
-          newAudience = newAudience.filter(a => a !== val);
-        } else {
-          newAudience.push(val);
-        }
-      }
-      return { ...p, audience: newAudience };
-    });
-  };
-
-  const getIslamicTimeLabel = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const h = date.getHours();
-    if (h >= 4 && h < 6) return "Ba'da Subuh";
-    if (h >= 8 && h < 11) return "Dhuha";
-    if (h >= 11 && h < 14) return "Ba'da Dzuhur";
-    if (h >= 15 && h < 17) return "Ba'da Ashar";
-    if (h >= 17 && h < 19) return "Ba'da Maghrib";
-    if (h >= 19) return "Ba'da Isya";
-    return "";
-  };
+  const hasActiveModalFilters = Boolean(filters.region || filters.facilities.length > 0);
 
   return (
     <div className="h-full flex flex-col">
       {/* 1. Sticky Search & Filter Header */}
-      <div className="flex p-4 pb-2 bg-surface-container-lowest/95 backdrop-blur-md flex-col gap-3 border-b border-surface-container-high shrink-0">
+      <div className="flex p-4 pb-2 bg-surface-container-lowest/95 backdrop-blur-md flex-col gap-2.5 border-b border-surface-container-high shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <h1 className="font-semibold text-base text-on-surface tracking-tight">Peta Kajian</h1>
@@ -371,69 +344,109 @@ export default function SidebarFilter({
           </div>
         </div>
         
-        {/* Search Input */}
-        <div className="relative w-full">
-          <span className="material-symbols-outlined absolute left-3 top-2.5 text-outline text-[18px]">search</span>
-          <input 
-            type="text" 
-            placeholder="Cari ustadz, kitab, atau masjid..." 
-            value={searchInputValue}
-            onChange={e => setSearchInputValue(e.target.value)}
-            className="w-full bg-surface-container-low text-on-surface placeholder:text-outline text-sm rounded-lg pl-9 pr-8 py-2 focus:bg-surface-container-lowest focus:outline-none focus:ring-1 focus:ring-primary-container transition-all"
-          />
-          {searchInputValue && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearchInputValue('');
-                setFilters(p => ({ ...p, searchQuery: '' }));
-              }}
-              className="absolute right-2.5 top-2.5 w-4 h-4 rounded-full bg-outline/20 hover:bg-outline/30 flex items-center justify-center text-outline hover:text-on-surface transition-colors cursor-pointer"
-              title="Hapus pencarian"
-            >
-              <span className="material-symbols-outlined text-[13px]">close</span>
-            </button>
-          )}
-        </div>
+        {/* Search Input + Unified Filter Button */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-[18px]">
+              search
+            </span>
+            <input 
+              type="text" 
+              placeholder="Cari ustadz, kitab, atau masjid..." 
+              value={searchInputValue}
+              onChange={e => setSearchInputValue(e.target.value)}
+              className="w-full bg-surface-container-low text-on-surface placeholder:text-outline text-xs sm:text-sm rounded-xl pl-9 pr-8 py-2 border border-surface-container-high/80 focus:bg-surface-container-lowest focus:outline-none focus:border-primary transition-all"
+            />
+            {searchInputValue && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInputValue('');
+                  setFilters(p => ({ ...p, searchQuery: '' }));
+                }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-outline/20 hover:bg-outline/30 flex items-center justify-center text-outline hover:text-on-surface transition-colors cursor-pointer"
+                title="Hapus pencarian"
+              >
+                <span className="material-symbols-outlined text-[13px]">close</span>
+              </button>
+            )}
+          </div>
 
-        {/* Region Selector Bar */}
-        <div className="flex items-center justify-between gap-2">
+          {/* Tombol Filter Wilayah & Fasilitas (Modal di Desktop / Bottom Sheet di Mobile) */}
           <button
             type="button"
             onClick={() => setIsRegionModalOpen(true)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border shrink-0 ${
-              filters.region
+            className={`relative h-9 sm:h-[38px] px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold shrink-0 transition-all cursor-pointer ${
+              hasActiveModalFilters
                 ? 'bg-primary text-white border-primary shadow-xs'
-                : 'bg-surface-container-low hover:bg-surface-container border-surface-container-high text-on-surface'
+                : 'bg-surface-container-low hover:bg-surface-container border-surface-container-high/80 text-on-surface'
             }`}
+            title="Filter Wilayah & Fasilitas Kajian"
+            aria-label="Filter Wilayah & Fasilitas Kajian"
           >
-            <span className="material-symbols-outlined text-[16px]">
-              {filters.region ? 'location_on' : 'explore'}
+            <span className="material-symbols-outlined text-[18px]">tune</span>
+            <span className="hidden xs:inline max-w-[96px] truncate">
+              {filters.region ? filters.region.name : 'Filter'}
             </span>
-            <span className="max-w-[130px] sm:max-w-[160px] truncate">
-              {filters.region ? filters.region.name : 'Pilih Wilayah / Kota'}
-            </span>
-            <span className="material-symbols-outlined text-[16px] opacity-75">
-              arrow_drop_down
-            </span>
+            {hasActiveModalFilters && (
+              <span className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
+            )}
           </button>
-
-          {filters.region ? (
-            <button
-              type="button"
-              onClick={() => setFilters((p) => ({ ...p, region: null }))}
-              className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-0.5 shrink-0"
-              title="Reset ke Seluruh Indonesia"
-            >
-              <span className="material-symbols-outlined text-[14px]">close</span>
-              Reset Wilayah
-            </button>
-          ) : (
-            <span className="text-[11px] text-outline truncate">
-              Seluruh Indonesia
-            </span>
-          )}
         </div>
+
+        {/* Active Region / Facility Chips (Hanya muncul saat ada filter aktif agar hemat ruang) */}
+        {hasActiveModalFilters && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {filters.region && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setIsRegionModalOpen(true)}
+                  className="inline-flex items-center gap-1 hover:underline cursor-pointer"
+                  title="Ubah wilayah kajian"
+                >
+                  <span className="material-symbols-outlined text-[14px]">location_on</span>
+                  <span>{filters.region.name}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilters((p) => ({ ...p, region: null }))}
+                  className="ml-0.5 hover:opacity-75 flex items-center cursor-pointer"
+                  title="Reset wilayah ke Seluruh Indonesia"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                </button>
+              </span>
+            )}
+
+            {filters.facilities.map((facId) => {
+              const facMeta = KAJIAN_FACILITY_OPTIONS.find((f) => f.id === facId);
+              if (!facMeta) return null;
+              return (
+                <span
+                  key={facId}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold"
+                >
+                  <span className="material-symbols-outlined text-[14px]">{facMeta.icon}</span>
+                  <span>{facMeta.label}</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFilters((p) => ({
+                        ...p,
+                        facilities: p.facilities.filter((f) => f !== facId),
+                      }))
+                    }
+                    className="ml-0.5 hover:opacity-75 flex items-center cursor-pointer"
+                    title={`Hapus filter ${facMeta.label}`}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">close</span>
+                  </button>
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {/* Scrollable Filters Area */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5 select-none no-scrollbar items-center">
@@ -654,13 +667,29 @@ export default function SidebarFilter({
         )}
       </div>
 
-      {/* Modal Pemilih Wilayah */}
+      {/* Modal Filter & Wilayah Kajian */}
       <RegionPickerModal
         isOpen={isRegionModalOpen}
         onClose={() => setIsRegionModalOpen(false)}
         selectedRegion={filters.region}
         onSelectRegion={(r) => setFilters((p) => ({ ...p, region: r }))}
         sessions={allSessions || sessions}
+        selectedFacilities={filters.facilities}
+        onToggleFacility={(facId) =>
+          setFilters((p) => ({
+            ...p,
+            facilities: p.facilities.includes(facId)
+              ? p.facilities.filter((f) => f !== facId)
+              : [...p.facilities, facId],
+          }))
+        }
+        onResetAll={() =>
+          setFilters((p) => ({
+            ...p,
+            region: null,
+            facilities: [],
+          }))
+        }
       />
     </div>
   );

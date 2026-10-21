@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { type StudySession, hasPhysicalLocation } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
@@ -314,7 +315,15 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
               <div className="flex items-start gap-2 text-on-surface-variant">
                 <span className="material-symbols-outlined text-[15px] text-outline mt-0.5 shrink-0">location_on</span>
                 <div className="flex flex-col leading-tight">
-                  <span className="font-semibold text-on-surface">{session.venues.name}</span>
+                  <Link
+                    href={`/masjid/${session.venues.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="font-semibold text-on-surface hover:text-emerald-600 transition-colors inline-flex items-center gap-1 group/masjid"
+                    title="Lihat Profil & Semua Jadwal di Masjid Ini"
+                  >
+                    <span>{session.venues.name}</span>
+                    <span className="material-symbols-outlined text-[13px] opacity-0 group-hover/masjid:opacity-100 transition-opacity">open_in_new</span>
+                  </Link>
                   {session.venues.address && (
                     <span className="text-[11px] text-outline line-clamp-1 mt-0.5">{session.venues.address}</span>
                   )}
