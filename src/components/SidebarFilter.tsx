@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import type { FilterState } from '@/app/page';
+import type { FilterState } from '@/components/HomeClient';
 import { type StudySession } from '@/lib/services/kajian';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';

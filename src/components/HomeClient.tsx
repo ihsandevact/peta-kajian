@@ -14,6 +14,7 @@ import { useOnlineStatus } from '@/utils/offlineCache';
 import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
+import MobileBottomNav from '@/components/MobileBottomNav';
 import InAppRoutePanel from '@/components/InAppRoutePanel';
 import LiveNavigationHUD from '@/components/LiveNavigationHUD';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
@@ -202,11 +203,12 @@ export default function HomeClient() {
     try {
       const targetNext = sessionStorage.getItem('peta_kajian_auth_next');
       const inProgress = sessionStorage.getItem('peta_kajian_auth_in_progress');
+      const hasOAuthCode = window.location.search.includes('code=');
 
-      // Jika tidak ada targetNext atau tujuannya memang beranda '/', bersihkan flag
-      if (!targetNext || targetNext === '/' || !targetNext.startsWith('/') || targetNext.startsWith('//')) {
-        if (inProgress || targetNext) {
-          sessionStorage.removeItem('peta_kajian_auth_in_progress');
+      // Jika TIDAK sedang dalam proses OAuth (tidak ada flag inProgress & tidak ada ?code= di URL),
+      // jangan pernah lakukan auto-redirect! Bersihkan sisa flag lama jika ada.
+      if (!inProgress && !hasOAuthCode) {
+        if (targetNext) {
           sessionStorage.removeItem('peta_kajian_auth_next');
           const isHttps = window.location.protocol === 'https:';
           document.cookie = `peta_kajian_auth_next=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT${isHttps ? '; Secure' : ''}`;
@@ -214,7 +216,22 @@ export default function HomeClient() {
         return;
       }
 
-      // Jika ada targetNext selain beranda (misal '/live'):
+      // Jika tidak ada targetNext atau tujuannya beranda '/' atau '/peta', bersihkan flag
+      if (
+        !targetNext ||
+        targetNext === '/' ||
+        targetNext === '/peta' ||
+        !targetNext.startsWith('/') ||
+        targetNext.startsWith('//')
+      ) {
+        sessionStorage.removeItem('peta_kajian_auth_in_progress');
+        sessionStorage.removeItem('peta_kajian_auth_next');
+        const isHttps = window.location.protocol === 'https:';
+        document.cookie = `peta_kajian_auth_next=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT${isHttps ? '; Secure' : ''}`;
+        return;
+      }
+
+      // Jika ada targetNext selain beranda/peta (misal '/live' atau '/kontributor/profile'):
       const supabase = createClient();
 
       const proceedRedirect = () => {
@@ -229,7 +246,7 @@ export default function HomeClient() {
       };
 
       // Jika URL membawa ?code=, tunggu sampai proses exchange token PKCE selesai dan sesi tersimpan di cookie
-      if (window.location.search.includes('code=')) {
+      if (hasOAuthCode) {
         let resolved = false;
         const timeout = setTimeout(() => {
           if (!resolved) {
@@ -255,9 +272,16 @@ export default function HomeClient() {
             proceedRedirect();
           }
         });
-      } else {
-        // Jika tidak membawa ?code= (misal sudah di-exchange di server atau sudah tersimpan)
-        proceedRedirect();
+      } else if (inProgress) {
+        // Cek apakah benar ada user session aktif sebelum redirect
+        supabase.auth.getSession().then(({ data: sess }) => {
+          if (sess?.session?.user) {
+            proceedRedirect();
+          } else {
+            sessionStorage.removeItem('peta_kajian_auth_in_progress');
+            sessionStorage.removeItem('peta_kajian_auth_next');
+          }
+        });
       }
     } catch {}
   }, []);
@@ -640,7 +664,22 @@ export default function HomeClient() {
     return decorated.map((d) => d.session);
   }, [filteredSessions, filters.time, userLocation]);
 
-  // Deep-linking: auto-select session from ?session=<id> in URL
+  // Deep-linking: auto-select session from ?session=<id>, ?q=<search>, ?time=<filter> in URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      const time = params.get('time');
+      if (q || time) {
+        setFilters(p => ({
+          ...p,
+          searchQuery: q !== null && q.trim() !== '' ? q : p.searchQuery,
+          time: time !== null && time.trim() !== '' ? time : p.time,
+        }));
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (sessions.length > 0 && typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -1157,91 +1196,10 @@ export default function HomeClient() {
         </main>
 
         {/* MOBILE BOTTOM NAVIGATION (Hanya di HP, otomatis meluncur keluar saat rute aktif) */}
-        <nav className={`md:hidden fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest shadow-[0_-2px_12px_rgba(0,0,0,0.08)] pb-[env(safe-area-inset-bottom,0px)] border-t border-surface-container-high/50 transition-transform duration-300 ${
-          activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none' : ''
-        }`}>
-          <div className="grid grid-cols-5 items-end h-16 px-2 pb-2">
-            <a
-              href="#"
-              className="flex flex-col items-center justify-end h-12 gap-1 text-primary font-bold"
-            >
-              <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <span
-                  className="material-symbols-outlined text-[22px] leading-none"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  map
-                </span>
-              </div>
-              <span className="text-[10px] leading-none tracking-tight whitespace-nowrap">
-                Peta
-              </span>
-            </a>
-            <Link
-              href="/masjid"
-              className="flex flex-col items-center justify-end h-12 gap-1 text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors"
-            >
-              <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[22px] leading-none">mosque</span>
-              </div>
-              <span className="text-[10px] leading-none font-bold tracking-tight whitespace-nowrap">
-                Masjid
-              </span>
-            </Link>
-            <Link
-              href="/live"
-              className="flex flex-col items-center justify-end h-12 gap-1 text-red-600 dark:text-red-400 hover:text-red-700 transition-colors"
-            >
-              <div className="w-6 h-6 flex items-center justify-center relative shrink-0">
-                <span className="material-symbols-outlined text-[22px] leading-none">
-                  smart_display
-                </span>
-                <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-red-600 animate-ping" />
-              </div>
-              <span className="text-[10px] leading-none font-bold tracking-tight whitespace-nowrap">
-                Live
-              </span>
-            </Link>
-            <Link
-              href="/leaderboard"
-              className="flex flex-col items-center justify-end h-12 gap-1 text-outline hover:text-on-surface transition-colors"
-            >
-              <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-[22px] leading-none text-amber-500">
-                  workspace_premium
-                </span>
-              </div>
-              <span className="text-[10px] leading-none font-medium tracking-tight whitespace-nowrap">
-                Peringkat
-              </span>
-            </Link>
-            {currentUser ? (
-              <Link
-                href="/kontributor/profile"
-                className="flex flex-col items-center justify-end h-12 gap-1 text-outline hover:text-on-surface transition-colors"
-              >
-                <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                  <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-6 h-6" />
-                </div>
-                <span className="text-[10px] leading-none font-medium tracking-tight whitespace-nowrap">
-                  Profil
-                </span>
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="flex flex-col items-center justify-end h-12 gap-1 text-primary font-bold hover:opacity-90 transition-opacity"
-              >
-                <div className="w-6 h-6 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[22px] leading-none">login</span>
-                </div>
-                <span className="text-[10px] leading-none tracking-tight font-bold whitespace-nowrap">
-                  Masuk
-                </span>
-              </Link>
-            )}
-          </div>
-        </nav>
+        <MobileBottomNav
+          className={activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none' : ''}
+          currentUser={currentUser}
+        />
       </div>
 
       {/* Modal Permohonan Menjadi Kontributor */}

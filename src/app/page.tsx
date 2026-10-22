@@ -1,7 +1,8 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
-import { fetchSessionById } from '@/lib/services/kajian';
-import HomeClient, { type FilterState } from '@/components/HomeClient';
+import HomeDashboardClient from '@/components/HomeDashboardClient';
+import type { FilterState } from '@/components/HomeClient';
 
 export type { FilterState };
 
@@ -9,88 +10,48 @@ interface PageProps {
   searchParams: Promise<{ session?: string }>;
 }
 
-export async function generateMetadata({ searchParams }: PageProps): Promise<Metadata> {
+export const metadata: Metadata = {
+  title: 'Peta Kajian Indonesia — Platform Terpadu Jadwal Kajian & Direktori Masjid',
+  description:
+    'Temukan jadwal kajian sunnah hari ini, siaran live streaming majelis ilmu, jadwal waktu sholat standar Kemenag RI, dan navigasi 13.000+ masjid di seluruh Indonesia.',
+  openGraph: {
+    title: 'Peta Kajian Indonesia — Platform Terpadu Jadwal Kajian & Direktori Masjid',
+    description:
+      'Temukan jadwal kajian sunnah hari ini, siaran live streaming majelis ilmu, jadwal waktu sholat standar Kemenag RI, dan navigasi 13.000+ masjid di seluruh Indonesia.',
+    images: [
+      {
+        url: '/logo.png?v=3',
+        width: 512,
+        height: 512,
+        alt: 'Peta Kajian Indonesia',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Peta Kajian Indonesia — Platform Terpadu Jadwal Kajian & Direktori Masjid',
+    description:
+      'Temukan jadwal kajian sunnah hari ini, siaran live streaming majelis ilmu, jadwal waktu sholat standar Kemenag RI, dan navigasi 13.000+ masjid di seluruh Indonesia.',
+    images: ['/logo.png?v=3'],
+  },
+};
+
+export default async function Page({ searchParams }: PageProps) {
   const params = await searchParams;
-  const sessionId = params?.session;
-
-  if (sessionId) {
-    const session = await fetchSessionById(sessionId);
-    if (session) {
-      const title = `${session.title} - ${session.speaker_name}`;
-      const venueInfo = session.venues?.name
-        ? ` di ${session.venues.name}${session.venues.address ? `, ${session.venues.address}` : ''}`
-        : session.is_online
-        ? ' (Disiarkan Online)'
-        : '';
-      const description = `Kajian: ${session.title} bersama ${session.speaker_name}${venueInfo}. Temukan jadwal dan lokasi di Peta Kajian Indonesia.`;
-
-      const hasPoster = Boolean(
-        session.poster_url &&
-        session.poster_url.trim() !== '' &&
-        session.poster_url.toLowerCase() !== 'null'
-      );
-
-      const imageUrl = hasPoster ? session.poster_url! : '/logo.png?v=3';
-
-      return {
-        title: `${title} | Peta Kajian Indonesia`,
-        description,
-        openGraph: {
-          title,
-          description,
-          type: 'article',
-          images: [
-            {
-              url: imageUrl,
-              alt: session.title,
-            },
-          ],
-        },
-        twitter: {
-          card: 'summary_large_image',
-          title,
-          description,
-          images: [imageUrl],
-        },
-      };
-    }
+  if (params?.session) {
+    redirect(`/peta?session=${encodeURIComponent(params.session)}`);
   }
 
-  return {
-    title: 'Peta Kajian Indonesia',
-    description: 'Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.',
-    openGraph: {
-      title: 'Peta Kajian Indonesia',
-      description: 'Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.',
-      images: [
-        {
-          url: '/logo.png?v=3',
-          width: 512,
-          height: 512,
-          alt: 'Peta Kajian Indonesia',
-        },
-      ],
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title: 'Peta Kajian Indonesia',
-      description: 'Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.',
-      images: ['/logo.png?v=3'],
-    },
-  };
-}
-
-export default function Page() {
   return (
     <Suspense
       fallback={
-        <div className="w-full h-screen bg-surface flex flex-col items-center justify-center font-geist gap-3">
-          <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-on-surface-variant font-medium">Memuat Peta Kajian...</p>
+        <div className="w-full min-h-screen bg-background flex flex-col items-center justify-center font-geist gap-3">
+          <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-on-surface-variant font-medium">Memuat Beranda...</p>
         </div>
       }
     >
-      <HomeClient />
+      <HomeDashboardClient />
     </Suspense>
   );
 }

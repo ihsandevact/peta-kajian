@@ -314,7 +314,7 @@ export default function MosqueProfileModal({
                         </div>
 
                         <Link
-                          href="/"
+                          href={`/peta?session=${session.id}`}
                           className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline"
                         >
                           <span>Lihat di Peta Kajian</span>
