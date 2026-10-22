@@ -16,6 +16,7 @@ import { getPrayerScheduleAndNext } from '@/utils/prayerTimes';
 import { createClient } from '@/utils/supabase/client';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import MosqueCardItem from './MosqueCardItem';
+import MosqueCardSkeleton from './MosqueCardSkeleton';
 import MosqueProfileModal from './MosqueProfileModal';
 import MosqueRegionPickerModal, {
   doesMosqueMatchRegion,
@@ -909,18 +910,26 @@ export default function MosqueClient() {
           >
             <div className="flex items-center justify-between text-xs text-on-surface-variant font-medium px-1">
               <span>{userLocation ? 'Masjid Terdekat dari Anda' : 'Daftar Masjid Terdaftar'}</span>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-[11px] font-semibold text-on-surface">
-                <strong className="font-extrabold text-emerald-600 dark:text-emerald-400">
-                  {filteredMosques.length.toLocaleString('id-ID')}
-                </strong>
-                <span>ditemukan</span>
-              </span>
+              {loading ? (
+                <span
+                  aria-hidden="true"
+                  className="inline-block w-24 h-5 rounded-full bg-surface-container-high animate-pulse"
+                />
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-surface-container text-[11px] font-semibold text-on-surface">
+                  <strong className="font-extrabold text-emerald-600 dark:text-emerald-400">
+                    {filteredMosques.length.toLocaleString('id-ID')}
+                  </strong>
+                  <span>ditemukan</span>
+                </span>
+              )}
             </div>
 
             {loading ? (
-              <div className="py-12 flex flex-col items-center justify-center text-on-surface-variant gap-2">
-                <span className="w-6 h-6 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs">Memuat data masjid...</span>
+              <div className="space-y-2.5" aria-busy="true" aria-label="Memuat daftar masjid">
+                {Array.from({ length: 6 }).map((_, idx) => (
+                  <MosqueCardSkeleton key={idx} />
+                ))}
               </div>
             ) : filteredMosques.length === 0 ? (
               <div className="py-12 px-4 text-center text-on-surface-variant space-y-2">
@@ -1015,9 +1024,16 @@ export default function MosqueClient() {
                         ? `Radius ${radiusKm} km`
                         : 'Filter Wilayah'}
                     </span>
-                    <span className="px-1.5 py-0.2 rounded-full bg-black/15 dark:bg-white/15 text-[10px] font-extrabold">
-                      {filteredMosques.length.toLocaleString('id-ID')}
-                    </span>
+                    {loading ? (
+                      <span
+                        aria-hidden="true"
+                        className="w-7 h-3.5 rounded-full bg-current/20 animate-pulse"
+                      />
+                    ) : (
+                      <span className="px-1.5 py-0.2 rounded-full bg-black/15 dark:bg-white/15 text-[10px] font-extrabold">
+                        {filteredMosques.length.toLocaleString('id-ID')}
+                      </span>
+                    )}
                   </button>
                 </div>
 
@@ -1050,6 +1066,16 @@ export default function MosqueClient() {
                     • {prayerSchedule.nextPrayer.countdownText}
                   </span>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Floating Indicator saat Memuat Titik Masjid di Peta */}
+          {loading && !isNavigating && (
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-surface/95 border border-outline-variant/60 shadow-lg backdrop-blur-md text-xs font-bold text-on-surface">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                <span className="animate-pulse">Memuat titik masjid di peta...</span>
               </div>
             </div>
           )}

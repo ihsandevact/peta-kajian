@@ -14,6 +14,20 @@ interface ThemeContextType {
 
 const THEME_STORAGE_KEY = 'peta_kajian_theme';
 
+if (typeof window !== 'undefined') {
+  try {
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    const isDark =
+      stored === 'dark' ||
+      (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (isDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  } catch {}
+}
+
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
