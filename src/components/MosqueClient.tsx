@@ -22,6 +22,8 @@ import MosqueRegionPickerModal, {
   doesMosqueMatchRegion,
   type MosqueRegionSelection,
 } from './MosqueRegionPickerModal';
+import { ALL_CITIES, INDONESIA_PROVINCES } from '@/utils/regions';
+import type { MapFocusArea } from './MosqueMap';
 import ThemeToggle from './ThemeToggle';
 import type { StudySession } from '@/lib/services/kajian';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -53,9 +55,13 @@ const QUICK_CITIES = [
   'Medan',
 ];
 
+// Fallback koordinat default (Jabodetabek / Jakarta Pusat) jika izin lokasi ditolak/gagal
+const DEFAULT_FALLBACK_LOCATION = { lat: -6.2088, lng: 106.8456 };
+
 export default function MosqueClient() {
   const [selectedMosque, setSelectedMosque] = useState<MosqueVenue | null>(null);
   const [profileMosque, setProfileMosque] = useState<MosqueVenue | null>(null);
+  // Lokasi diisi saat mount (localStorage dulu, lalu GPS) agar tidak terjadi hydration mismatch
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [userAccuracy, setUserAccuracy] = useState<number | null>(null);
   const [userHeading, setUserHeading] = useState<number | null>(null);
@@ -159,25 +165,69 @@ export default function MosqueClient() {
     return () => mql.removeEventListener('change', handler);
   }, []);
 
-  // Deteksi lokasi pengguna saat mount
+  // Deteksi lokasi pengguna saat mount (dengan cascading fallback untuk Mac Chrome)
   useEffect(() => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setUserLocation({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-          });
-          if (typeof pos.coords.accuracy === 'number') {
-            setUserAccuracy(pos.coords.accuracy);
-          }
-        },
-        (err) => {
-          console.warn('Geolocation permission not granted:', err);
-        },
-        { enableHighAccuracy: true, timeout: 10000 }
-      );
+    let isCancelled = false;
+
+    // 1. Cek ulang localStorage jika state belum terisi
+    try {
+      const stored = localStorage.getItem('user_last_location');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+          setUserLocation({ lat: parsed.lat, lng: parsed.lng });
+        }
+      }
+    } catch {}
+
+    // 2. Minta GPS Geolocation dengan penanganan bertahap (HighAccuracy -> LowAccuracy -> Fallback)
+    if (typeof navigator !== 'undefined' && 'geolocation' in navigator) {
+      const handleSuccess = (pos: GeolocationPosition) => {
+        if (isCancelled) return;
+        const coords = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        };
+        setUserLocation(coords);
+        if (typeof pos.coords.accuracy === 'number') {
+          setUserAccuracy(pos.coords.accuracy);
+        }
+        try {
+          localStorage.setItem(
+            'user_last_location',
+            JSON.stringify({ ...coords, cityName: 'Lokasi Saat Ini' })
+          );
+        } catch {}
+      };
+
+      const handleFallback = () => {
+        if (isCancelled) return;
+        // Jika HighAccuracy gagal/timeout (sering di Mac Chrome tanpa izin CoreLocation atau Wi-Fi scan),
+        // coba LowAccuracy (network/cache) dengan toleransi waktu lebih fleksibel
+        navigator.geolocation.getCurrentPosition(
+          handleSuccess,
+          (err) => {
+            console.warn('Geolocation fallback failed:', err);
+            // Jika kedua percobaan gagal & userLocation masih kosong, gunakan default agar lingkaran radius tetap tampil
+            setUserLocation((prev) => prev || DEFAULT_FALLBACK_LOCATION);
+          },
+          { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 }
+        );
+      };
+
+      // Percobaan 1: HighAccuracy dengan timeout wajar 5 detik
+      navigator.geolocation.getCurrentPosition(handleSuccess, handleFallback, {
+        enableHighAccuracy: true,
+        timeout: 5000,
+      });
+    } else {
+      // Browser tidak mendukung geolokasi: gunakan default agar tidak null
+      setUserLocation((prev) => prev || DEFAULT_FALLBACK_LOCATION);
     }
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // 1. Fetch & cache daftar masjid menggunakan TanStack Query (data testing hanya disertakan jika isAdmin === true)
@@ -275,6 +325,107 @@ export default function MosqueClient() {
   const hasActiveFilterModal = Boolean(
     selectedRegion || onlyWithActiveSessions || (userLocation && isRadiusEnabled)
   );
+
+  // Hitung pusat & jari-jari fokus lingkaran area (GeoJSON Circle) untuk Radius, Filter Wilayah, dan Quick City Chip
+  const focusArea = React.useMemo<MapFocusArea | null>(() => {
+    // 1. Jika filter wilayah (provinsi / kota dari modal) aktif
+    if (selectedRegion) {
+      const pts = filteredMosques.filter(
+        (m) => typeof m.lat === 'number' && typeof m.lng === 'number'
+      );
+      let centerLat: number;
+      let centerLng: number;
+      let maxDistKm = 0;
+
+      if (pts.length > 0) {
+        centerLat = pts.reduce((s, m) => s + m.lat!, 0) / pts.length;
+        centerLng = pts.reduce((s, m) => s + m.lng!, 0) / pts.length;
+        for (const m of pts) {
+          const d = calculateDistance(centerLat, centerLng, m.lat!, m.lng!);
+          if (d > maxDistKm) maxDistKm = d;
+        }
+      } else {
+        const foundCity = ALL_CITIES.find((c) => c.id === selectedRegion.id);
+        const foundProv = INDONESIA_PROVINCES.find((p) => p.id === selectedRegion.id);
+        const center =
+          foundCity?.center ||
+          foundProv?.center || [DEFAULT_FALLBACK_LOCATION.lng, DEFAULT_FALLBACK_LOCATION.lat];
+        centerLng = center[0];
+        centerLat = center[1];
+        maxDistKm = selectedRegion.type === 'province' ? 60 : 15;
+      }
+
+      const maxAllowed = selectedRegion.type === 'province' ? 100 : 35;
+      const computedRadius = Math.min(maxAllowed, Math.max(5, maxDistKm * 1.15));
+
+      return {
+        lat: centerLat,
+        lng: centerLng,
+        radiusKm: computedRadius,
+        key: `region:${selectedRegion.id}`,
+      };
+    }
+
+    // 2. Jika filter quick city chip aktif (misal Jakarta, Bandung, Surabaya)
+    if (selectedCity && selectedCity.toLowerCase() !== 'semua') {
+      const pts = filteredMosques.filter(
+        (m) => typeof m.lat === 'number' && typeof m.lng === 'number'
+      );
+      let centerLat: number;
+      let centerLng: number;
+      let maxDistKm = 0;
+
+      if (pts.length > 0) {
+        centerLat = pts.reduce((s, m) => s + m.lat!, 0) / pts.length;
+        centerLng = pts.reduce((s, m) => s + m.lng!, 0) / pts.length;
+        for (const m of pts) {
+          const d = calculateDistance(centerLat, centerLng, m.lat!, m.lng!);
+          if (d > maxDistKm) maxDistKm = d;
+        }
+      } else {
+        const foundCity = ALL_CITIES.find(
+          (c) => c.name.toLowerCase().includes(selectedCity.toLowerCase())
+        );
+        const foundProv = INDONESIA_PROVINCES.find(
+          (p) => p.name.toLowerCase().includes(selectedCity.toLowerCase())
+        );
+        const center =
+          foundCity?.center ||
+          foundProv?.center || [DEFAULT_FALLBACK_LOCATION.lng, DEFAULT_FALLBACK_LOCATION.lat];
+        centerLng = center[0];
+        centerLat = center[1];
+        maxDistKm = 15;
+      }
+
+      const computedRadius = Math.min(35, Math.max(5, maxDistKm * 1.15));
+
+      return {
+        lat: centerLat,
+        lng: centerLng,
+        radiusKm: computedRadius,
+        key: `city:${selectedCity.toLowerCase()}`,
+      };
+    }
+
+    // 3. Jika filter radius GPS pengguna aktif
+    if (isRadiusEnabled && userLocation) {
+      return {
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        radiusKm: debouncedRadiusKm,
+        key: `radius:${userLocation.lat.toFixed(4)},${userLocation.lng.toFixed(4)}_${debouncedRadiusKm}`,
+      };
+    }
+
+    return null;
+  }, [
+    selectedRegion,
+    selectedCity,
+    filteredMosques,
+    isRadiusEnabled,
+    userLocation,
+    debouncedRadiusKm,
+  ]);
 
   const visibleMosques = React.useMemo(
     () => filteredMosques.slice(0, visibleCount),
@@ -1086,6 +1237,7 @@ export default function MosqueClient() {
             onSelectMosque={handleSelectMosque}
             userLocation={userLocation}
             radiusKm={isRadiusEnabled && userLocation ? debouncedRadiusKm : null}
+            focusArea={focusArea}
             activeRoute={activeRoute}
             isNavigating={isNavigating}
             userHeading={userHeading}
@@ -1154,8 +1306,18 @@ export default function MosqueClient() {
         userLocation={userLocation}
         radiusKm={radiusKm}
         isRadiusEnabled={isRadiusEnabled}
-        onRadiusChange={setRadiusKm}
-        onToggleRadiusEnabled={setIsRadiusEnabled}
+        onRadiusChange={(km) => {
+          setRadiusKm(km);
+          setSelectedRegion(null);
+          setSelectedCity('Semua');
+        }}
+        onToggleRadiusEnabled={(val) => {
+          setIsRadiusEnabled(val);
+          if (val) {
+            setSelectedRegion(null);
+            setSelectedCity('Semua');
+          }
+        }}
       />
 
       {/* MODAL PROFIL & JADWAL MASJID (DESKTOP MODAL / MOBILE VAUL BOTTOM SHEET) */}

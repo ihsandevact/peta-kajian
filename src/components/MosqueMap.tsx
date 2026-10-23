@@ -124,12 +124,20 @@ const MosqueMapMarker = React.memo(
     prev.mosque.name === next.mosque.name
 );
 
+export interface MapFocusArea {
+  lat: number;
+  lng: number;
+  radiusKm: number;
+  key: string;
+}
+
 interface MosqueMapProps {
   mosques: MosqueVenue[];
   selectedMosque: MosqueVenue | null;
   onSelectMosque: (mosque: MosqueVenue | null) => void;
   userLocation: { lat: number; lng: number } | null;
   radiusKm?: number | null;
+  focusArea?: MapFocusArea | null;
   activeRoute: RouteResult | null;
   isNavigating?: boolean;
   userHeading?: number | null;
@@ -149,6 +157,7 @@ export default function MosqueMap({
   onSelectMosque,
   userLocation,
   radiusKm = null,
+  focusArea = null,
   activeRoute,
   isNavigating = false,
   userHeading = null,
@@ -167,7 +176,8 @@ export default function MosqueMap({
   const [isFollowingUser, setIsFollowingUser] = React.useState(true);
   const [cameraOrientation, setCameraOrientation] = React.useState<'heads-up' | 'north-up'>('heads-up');
   const [selectedParkingPopup, setSelectedParkingPopup] = React.useState(false);
-  const hasCenteredOnUserRef = React.useRef(false);
+  const lastCenteredKeyRef = React.useRef<string | null>(null);
+  const prevFocusAreaRef = React.useRef<MapFocusArea | null>(null);
   const [mapCursor, setMapCursor] = React.useState<string>('grab');
   const [viewport, setViewport] = React.useState<{
     zoom: number;
@@ -359,14 +369,20 @@ export default function MosqueMap({
     }
   }, [userLocation, userHeading, cameraOrientation]);
 
-  // Fokuskan kamera peta ke area lokasi pengguna dengan cakupan radius default (30 km)
+  // Fokuskan kamera peta ke area lokasi/wilayah terpilih dengan padding adaptif
   const fitToUserRadius = React.useCallback(
     (loc: { lat: number; lng: number }, radiusKm = DEFAULT_USER_RADIUS_KM, duration = 1000) => {
       if (!mapRef.current) return;
-      mapRef.current.resize();
+      const map = mapRef.current.getMap();
+      if (!map) return;
+      map.resize();
+
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
       const bounds = getBoundsFromRadiusKm(loc.lat, loc.lng, radiusKm);
-      mapRef.current.fitBounds(bounds, {
-        padding: 24,
+      map.fitBounds(bounds, {
+        padding: isMobile
+          ? { top: 90, bottom: 50, left: 25, right: 25 }
+          : { top: 50, bottom: 50, left: 50, right: 50 },
         pitch: 0,
         bearing: 0,
         duration,
@@ -376,30 +392,73 @@ export default function MosqueMap({
     []
   );
 
-  // Saat pertama kali peta siap & lokasi pengguna terdeteksi, atau saat slider radius diubah, sesuaikan zoom ke lingkaran radius
+  // Saat peta siap atau area fokus (radius / wilayah / quick city) berubah, pusatkan kamera ke area fokus
   React.useEffect(() => {
-    if (!isMapLoaded || !userLocation || selectedMosque || activeRoute || isNavigating) return;
-    const effectiveRadius =
-      typeof radiusKm === 'number' && radiusKm > 0 ? radiusKm : DEFAULT_USER_RADIUS_KM;
-
-    if (!hasCenteredOnUserRef.current) {
-      hasCenteredOnUserRef.current = true;
-      fitToUserRadius(userLocation, effectiveRadius, 900);
-    } else if (typeof radiusKm === 'number' && radiusKm > 0) {
-      fitToUserRadius(userLocation, radiusKm, 550);
+    if (!isMapLoaded || selectedMosque || activeRoute || isNavigating) {
+      if (!focusArea) {
+        lastCenteredKeyRef.current = null;
+      }
+      return;
     }
-  }, [isMapLoaded, userLocation, radiusKm, selectedMosque, activeRoute, isNavigating, fitToUserRadius]);
 
-  // Saat di mobile pengguna beralih dari daftar ke peta tanpa masjid terpilih, pastikan peta merender area radius pengguna
+    const target = focusArea
+      ? { lat: focusArea.lat, lng: focusArea.lng, radiusKm: focusArea.radiusKm, key: focusArea.key }
+      : userLocation && typeof radiusKm === 'number' && radiusKm > 0
+      ? {
+          lat: userLocation.lat,
+          lng: userLocation.lng,
+          radiusKm,
+          key: `radius:${userLocation.lat.toFixed(4)},${userLocation.lng.toFixed(4)}_${radiusKm}`,
+        }
+      : null;
+
+    if (!target) {
+      // Jika filter wilayah/radius sebelumnya aktif dan kini di-reset, kembali ke zoom pandang umum Indonesia
+      if (prevFocusAreaRef.current && mapRef.current) {
+        mapRef.current.flyTo({
+          center: [118.0, -2.0],
+          zoom: 4.5,
+          duration: 1200,
+          essential: true,
+        });
+      }
+      lastCenteredKeyRef.current = null;
+      prevFocusAreaRef.current = null;
+      return;
+    }
+
+    prevFocusAreaRef.current = focusArea ?? null;
+
+    if (lastCenteredKeyRef.current === target.key) return;
+    lastCenteredKeyRef.current = target.key;
+
+    // Pastikan layout canvas WebGL telah selesai reflow di DOM
+    const timer = setTimeout(() => {
+      fitToUserRadius({ lat: target.lat, lng: target.lng }, target.radiusKm, 900);
+    }, 60);
+
+    return () => clearTimeout(timer);
+  }, [isMapLoaded, focusArea, userLocation, radiusKm, selectedMosque, activeRoute, isNavigating, fitToUserRadius]);
+
+  // Saat di mobile pengguna beralih dari daftar ke peta tanpa masjid terpilih, pastikan peta merender area fokus
   React.useEffect(() => {
     if (!isMapLoaded || mobileView !== 'map' || selectedMosque || activeRoute || isNavigating) return;
-    mapRef.current?.resize();
-    if (userLocation) {
-      const effectiveRadius =
-        typeof radiusKm === 'number' && radiusKm > 0 ? radiusKm : DEFAULT_USER_RADIUS_KM;
-      fitToUserRadius(userLocation, effectiveRadius, 0);
+    const target = focusArea
+      ? { lat: focusArea.lat, lng: focusArea.lng, radiusKm: focusArea.radiusKm }
+      : userLocation && typeof radiusKm === 'number' && radiusKm > 0
+      ? { lat: userLocation.lat, lng: userLocation.lng, radiusKm }
+      : userLocation
+      ? { lat: userLocation.lat, lng: userLocation.lng, radiusKm: DEFAULT_USER_RADIUS_KM }
+      : null;
+
+    if (target) {
+      mapRef.current?.resize();
+      const timer = setTimeout(() => {
+        fitToUserRadius({ lat: target.lat, lng: target.lng }, target.radiusKm, 0);
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [isMapLoaded, mobileView, userLocation, radiusKm, selectedMosque, activeRoute, isNavigating, fitToUserRadius]);
+  }, [isMapLoaded, mobileView, focusArea, userLocation, radiusKm, selectedMosque, activeRoute, isNavigating, fitToUserRadius]);
 
   // Terbang ke masjid terpilih dengan vertical offset adaptif agar floating card + pin tampil tepat di tengah layar
   const flyToMosque = React.useCallback((mosque: MosqueVenue) => {
@@ -522,17 +581,22 @@ export default function MosqueMap({
   }, [activeRoute]);
 
   const radiusCircleGeoJson = React.useMemo(() => {
-    if (
-      !userLocation ||
-      typeof radiusKm !== 'number' ||
-      radiusKm <= 0 ||
-      activeRoute ||
-      isNavigating
-    ) {
-      return null;
+    if (activeRoute || isNavigating) return null;
+
+    if (focusArea && typeof focusArea.radiusKm === 'number' && focusArea.radiusKm > 0) {
+      return createGeoJsonCircle(focusArea.lat, focusArea.lng, focusArea.radiusKm, 64);
     }
-    return createGeoJsonCircle(userLocation.lat, userLocation.lng, radiusKm, 64);
-  }, [userLocation, radiusKm, activeRoute, isNavigating]);
+
+    if (
+      userLocation &&
+      typeof radiusKm === 'number' &&
+      radiusKm > 0
+    ) {
+      return createGeoJsonCircle(userLocation.lat, userLocation.lng, radiusKm, 64);
+    }
+
+    return null;
+  }, [focusArea, userLocation, radiusKm, activeRoute, isNavigating]);
 
   // GeoJSON FeatureCollection untuk GPU Supercluster (mendukung 13.000+ masjid di zoom jauh)
   const mosquesGeoJson = React.useMemo(() => {
