@@ -17,7 +17,6 @@ import { useLivePlayer } from '@/context/LivePlayerContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import MobileNavDrawer from '@/components/MobileNavDrawer';
 import MoreMenuBottomSheet from '@/components/MoreMenuBottomSheet';
-import MobileBottomNav from '@/components/MobileBottomNav';
 import MosqueProfileModal from '@/components/MosqueProfileModal';
 import RequestContributorModal from '@/components/RequestContributorModal';
 import { type StudySession } from '@/lib/services/kajian';
@@ -350,11 +349,23 @@ export default function HomeDashboardClient() {
 
       {/* 2. HERO BENTO SECTION: Waktu Sholat Kemenag RI & Pencarian Cepat */}
       <section className="relative overflow-hidden bg-gradient-to-b from-emerald-600/10 via-emerald-600/5 to-transparent pt-4 sm:pt-6 pb-6 sm:pb-8 border-b border-outline-variant/30">
+        {/* Quick Switch Dark Mode Khusus Mobile (Pojok Kanan Atas, Ukuran Ringkas Hijau) */}
+        <div className="md:hidden absolute top-3.5 right-3.5 z-20">
+          <ThemeToggle
+            variant="icon"
+            size="sm"
+            className="bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs rounded-lg"
+          />
+        </div>
+
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
           {/* Baris Sapaan & Tanggal */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3 pr-9 md:pr-0">
             <div>
-              <p className="text-[11px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+              <p
+                suppressHydrationWarning
+                className="text-[11px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider"
+              >
                 {todayFormatted}
               </p>
               <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-on-surface tracking-tight mt-0.5">
@@ -367,7 +378,7 @@ export default function HomeDashboardClient() {
               </p>
             </div>
 
-            {/* Tombol Deteksi Lokasi GPS & Quick Dark Mode Toggle di Mobile */}
+            {/* Tombol Deteksi Lokasi GPS */}
             <div className="flex items-center gap-2 self-start md:self-auto">
               <button
                 type="button"
@@ -385,14 +396,6 @@ export default function HomeDashboardClient() {
                 </span>
                 <span className="truncate max-w-[150px] sm:max-w-[160px]">{locationName}</span>
               </button>
-
-              {/* Quick Switch Dark Mode (Khusus Mobile di Beranda) */}
-              <div className="md:hidden">
-                <ThemeToggle
-                  variant="icon"
-                  className="bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs rounded-xl"
-                />
-              </div>
             </div>
           </div>
 
@@ -421,11 +424,17 @@ export default function HomeDashboardClient() {
               {/* Countdown Target Sholat Berikutnya */}
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl sm:rounded-2xl bg-emerald-600 text-white shadow-xs shrink-0 text-right">
                 <div className="flex flex-col sm:flex-row items-end sm:items-center gap-0 sm:gap-1.5">
-                  <span className="text-[10px] sm:text-xs font-extrabold whitespace-nowrap leading-tight">
+                  <span
+                    suppressHydrationWarning
+                    className="text-[10px] sm:text-xs font-extrabold whitespace-nowrap leading-tight"
+                  >
                     {prayerSchedule.nextPrayer.name} {prayerSchedule.nextPrayer.time}
                   </span>
                   <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                  <span className="text-[9px] sm:text-xs font-semibold sm:font-bold text-emerald-100 sm:text-white font-mono whitespace-nowrap leading-tight">
+                  <span
+                    suppressHydrationWarning
+                    className="text-[9px] sm:text-xs font-semibold sm:font-bold text-emerald-100 sm:text-white font-mono whitespace-nowrap leading-tight"
+                  >
                     {prayerSchedule.nextPrayer.countdownText}
                   </span>
                 </div>
@@ -1034,12 +1043,6 @@ export default function HomeDashboardClient() {
           </div>
         </div>
       </footer>
-
-      {/* 8. MOBILE BOTTOM NAVIGATION (HANYA DI HP) */}
-      <MobileBottomNav
-        currentUser={currentUser}
-        hasActiveLiveStreams={activeLiveStreams.length > 0}
-      />
 
       {/* Vaul Bottom Sheet Menu Lainnya */}
       <MoreMenuBottomSheet

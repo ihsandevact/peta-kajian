@@ -9,7 +9,7 @@ import dynamic from 'next/dynamic';
 import { deleteKajian } from '@/app/actions/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { checkIsAdmin, getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
-import MobileNavDrawer from '@/components/MobileNavDrawer';
+import ProfileMenuBottomSheet from '@/components/profile/ProfileMenuBottomSheet';
 import { useAttendance } from '@/utils/attendance';
 import { useBookmarks } from '@/utils/bookmarks';
 import RequestContributorModal from '@/components/RequestContributorModal';
@@ -400,12 +400,12 @@ export default function ContributorProfilePage() {
       <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
         <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
           <Link
-            href="/leaderboard"
+            href="/"
             className="inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            <span className="hidden sm:inline">Ke Leaderboard</span>
-            <span className="sm:hidden text-[11px]">Peringkat</span>
+            <span className="hidden sm:inline">Kembali ke Beranda</span>
+            <span className="sm:hidden text-[11px]">Beranda</span>
           </Link>
 
           {/* Desktop Actions */}
@@ -455,25 +455,49 @@ export default function ContributorProfilePage() {
           <button
             type="button"
             onClick={() => setIsDrawerOpen(true)}
-            className="sm:hidden w-8 h-8 rounded-lg bg-surface-container border border-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95"
+            className="sm:hidden w-9 h-9 rounded-xl bg-surface-container/80 hover:bg-surface-container-high border border-outline-variant/50 flex items-center justify-center text-on-surface shadow-2xs active:scale-95 transition-all cursor-pointer"
             aria-label="Buka Menu Navigasi"
           >
-            <span className="material-symbols-outlined text-[20px]">menu</span>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-on-surface"
+            >
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="14" y2="12" />
+              <line x1="4" y1="18" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
       </header>
 
       {/* Slide-over Mobile Sidebar Drawer */}
-      <MobileNavDrawer
+      <ProfileMenuBottomSheet
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         currentUser={{
+          id: user?.id,
           name: user?.user_metadata?.full_name,
           email: user?.email,
           avatarUrl: avatarUrl,
           role: roleInfo?.role,
+          requestStatus: roleInfo?.requestStatus,
         }}
         isAdmin={isAdmin}
+        onOpenRequestContributor={() => {
+          setIsDrawerOpen(false);
+          setIsRequestModalOpen(true);
+        }}
+        onOpenProposeTelegram={() => {
+          setIsDrawerOpen(false);
+          setIsProposeTelegramOpen(true);
+        }}
       />
 
       {/* Main Content */}

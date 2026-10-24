@@ -14,7 +14,7 @@ import { useOnlineStatus } from '@/utils/offlineCache';
 import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
-import MobileBottomNav from '@/components/MobileBottomNav';
+import { useBottomNav } from '@/context/BottomNavContext';
 import InAppRoutePanel from '@/components/InAppRoutePanel';
 import LiveNavigationHUD from '@/components/LiveNavigationHUD';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
@@ -105,6 +105,11 @@ export default function HomeClient() {
   }, []);
 
   const [activeRouteSession, setActiveRouteSession] = useState<StudySession | null>(null);
+  const { setIsHidden: setIsBottomNavHidden } = useBottomNav();
+  useEffect(() => {
+    setIsBottomNavHidden(Boolean(activeRouteSession));
+    return () => setIsBottomNavHidden(false);
+  }, [activeRouteSession, setIsBottomNavHidden]);
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
   const [routeMode, setRouteMode] = useState<'driving' | 'walking'>('driving');
   const [isRouteLoading, setIsRouteLoading] = useState<boolean>(false);
@@ -1194,12 +1199,6 @@ export default function HomeClient() {
           )}
           
         </main>
-
-        {/* MOBILE BOTTOM NAVIGATION (Hanya di HP, otomatis meluncur keluar saat rute aktif) */}
-        <MobileBottomNav
-          className={activeRouteSession ? 'translate-y-full opacity-0 pointer-events-none' : ''}
-          currentUser={currentUser}
-        />
       </div>
 
       {/* Modal Permohonan Menjadi Kontributor */}

@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { BottomNavProvider } from "@/context/BottomNavContext";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { LivePlayerProvider } from "@/context/LivePlayerContext";
 import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePlayer";
@@ -64,11 +66,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <ThemeProvider>
             <PWASplashScreen />
             <LivePlayerProvider>
-              {children}
-              <PersistentFloatingLivePlayer />
-              <FloatingStudyNotes />
-              <LoginNudgePrompt />
-              <PWAInstallPrompt />
+              <BottomNavProvider>
+                {children}
+                <MobileBottomNav />
+                <PersistentFloatingLivePlayer />
+                <FloatingStudyNotes />
+                <LoginNudgePrompt />
+                <PWAInstallPrompt />
+              </BottomNavProvider>
             </LivePlayerProvider>
           </ThemeProvider>
         </QueryProvider>

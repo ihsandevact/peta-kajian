@@ -8,7 +8,6 @@ import RegionPickerModal, { KAJIAN_FACILITY_OPTIONS } from './RegionPickerModal'
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
-import ThemeToggle from './ThemeToggle';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
 interface SidebarFilterProps {
@@ -340,7 +339,6 @@ export default function SidebarFilter({
               <span className="material-symbols-outlined text-[13px]">help</span>
               <span>FAQ</span>
             </Link>
-            <ThemeToggle variant="icon" />
           </div>
         </div>
         

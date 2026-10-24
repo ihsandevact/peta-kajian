@@ -10,11 +10,9 @@ import {
   formatUpcomingTime,
   formatEndedTime,
 } from '@/lib/services/youtubeTracker';
-import MobileNavDrawer from '@/components/MobileNavDrawer';
 import { checkIsAdmin } from '@/lib/services/admin';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { FEATURE_FLAGS } from '@/config/features';
-import ThemeToggle from '@/components/ThemeToggle';
 import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
 import EndedStreamSkeleton from '@/components/live/EndedStreamSkeleton';
 import StudyLoginModal from '@/components/StudyLoginModal';
@@ -108,7 +106,6 @@ export default function LiveStreamingPage() {
     return () => window.removeEventListener('message', handleYtMessage);
   }, [selectedVideo, sendModalPlay, sendModalUnmute]);
 
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [pendingStudyLogin, setPendingStudyLogin] = useState<PendingStudySession | null>(null);
@@ -425,9 +422,9 @@ export default function LiveStreamingPage() {
   }, [channels, debouncedSearchQuery]);
 
   return (
-    <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col">
-      {/* TOP HEADER */}
-      <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
+    <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col pb-28 sm:pb-8">
+      {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
+      <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
           
           {/* Sisi Kiri: Tombol Back ke Peta & Logo */}
@@ -450,23 +447,6 @@ export default function LiveStreamingPage() {
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
                   <h1 className="font-bold text-xs sm:text-base leading-tight truncate">Live Kajian</h1>
-                  {/* Badge Live Ringkas di Layar Mobile */}
-                  {liveChannels.length > 0 ? (
-                    <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] font-bold shrink-0">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                      {liveChannels.length} Live
-                    </span>
-                  ) : upcomingStreams.length > 0 ? (
-                    <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-600 text-white text-[9px] font-bold shrink-0">
-                      <span className="material-symbols-outlined text-[11px]">schedule</span>
-                      {upcomingStreams.length} Terjadwal
-                    </span>
-                  ) : endedStreams.length > 0 ? (
-                    <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[9px] font-bold shrink-0">
-                      <span className="material-symbols-outlined text-[11px]">history</span>
-                      {endedStreams.length} Rekaman
-                    </span>
-                  ) : null}
                 </div>
                 <p className="text-[10px] sm:text-[11px] text-outline truncate hidden xs:block">
                   Siaran Langsung Kajian Islam
@@ -500,9 +480,6 @@ export default function LiveStreamingPage() {
               </div>
             )}
 
-            {/* Tombol Pengalih Tema */}
-            <ThemeToggle variant="icon" />
-
             {/* Tombol Refresh */}
             <button
               onClick={() => refetch()}
@@ -514,15 +491,6 @@ export default function LiveStreamingPage() {
                 refresh
               </span>
             </button>
-
-            {/* Menu Drawer Mobile */}
-            <button
-              onClick={() => setIsDrawerOpen(true)}
-              className="md:hidden w-8 h-8 rounded-xl text-on-surface-variant hover:bg-surface-container flex items-center justify-center transition-colors shrink-0"
-              title="Menu Navigasi"
-            >
-              <span className="material-symbols-outlined text-[20px]">menu</span>
-            </button>
           </div>
         </div>
       </header>
@@ -531,9 +499,26 @@ export default function LiveStreamingPage() {
       <section className="bg-gradient-to-b from-surface-container-low to-surface py-5 sm:py-8 px-3.5 sm:px-6 border-b border-surface-container-high/40">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
           <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-[11px] sm:text-xs font-semibold mb-2 sm:mb-3 border border-red-200 dark:border-red-900/50">
-              <span className="material-symbols-outlined text-[15px] sm:text-[16px] text-red-600">live_tv</span>
-              <span>Pusat Siaran Live & Jadwal Tayang</span>
+            <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-[11px] sm:text-xs font-semibold border border-red-200 dark:border-red-900/50">
+                <span className="material-symbols-outlined text-[15px] sm:text-[16px] text-red-600">live_tv</span>
+                <span>Pusat Siaran Live & Jadwal Tayang</span>
+              </div>
+
+              {/* Quick Actions Khusus Mobile (Refresh Data) */}
+              <div className="md:hidden flex items-center gap-1.5">
+                <button
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  className="w-8 h-8 rounded-xl bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center text-on-surface-variant transition-colors active:scale-95"
+                  title="Perbarui Data Siaran"
+                  aria-label="Perbarui Data Siaran"
+                >
+                  <span className={`material-symbols-outlined text-[18px] ${isFetching ? 'animate-spin' : ''}`}>
+                    refresh
+                  </span>
+                </button>
+              </div>
             </div>
             <h2 className="text-xl sm:text-3xl font-extrabold text-on-surface tracking-tight">
               Kajian Islam Live Langsung dari Rumah
@@ -1618,7 +1603,7 @@ export default function LiveStreamingPage() {
       </main>
 
       {/* FOOTER */}
-      <footer className="border-t border-surface-container-high/60 bg-surface-container-lowest py-6 text-center text-xs text-outline mt-auto">
+      <footer className="hidden md:block border-t border-surface-container-high/60 bg-surface-container-lowest py-6 text-center text-xs text-outline mt-auto">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© {new Date().getFullYear()} Peta Kajian — Pelacak Kajian & Siaran Langsung Kajian Islam</p>
           <div className="flex items-center gap-4">
@@ -1787,23 +1772,6 @@ export default function LiveStreamingPage() {
         isOpen={!!pendingStudyLogin}
         onClose={() => setPendingStudyLogin(null)}
         pendingSession={pendingStudyLogin}
-      />
-
-      {/* MOBILE NAV DRAWER */}
-      <MobileNavDrawer
-        isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
-        currentUser={
-          currentUser
-            ? {
-                name: currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || null,
-                email: currentUser.email || null,
-                avatarUrl: currentUser.user_metadata?.avatar_url || null,
-                role: isAdmin ? 'admin' : undefined,
-              }
-            : null
-        }
-        isAdmin={isAdmin}
       />
     </div>
   );

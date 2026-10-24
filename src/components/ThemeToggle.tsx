@@ -5,11 +5,13 @@ import { useTheme, type Theme } from '@/context/ThemeContext';
 
 interface ThemeToggleProps {
   variant?: 'icon' | 'segmented';
+  size?: 'sm' | 'md';
   className?: string;
 }
 
 export default function ThemeToggle({
   variant = 'icon',
+  size = 'md',
   className = '',
 }: ThemeToggleProps) {
   const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme();
@@ -18,6 +20,9 @@ export default function ThemeToggle({
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  const buttonSizeClasses = size === 'sm' ? 'w-7 h-7 rounded-lg' : 'w-8 h-8 rounded-xl';
+  const iconSizeClasses = size === 'sm' ? 'text-[15px]' : 'text-[18px] sm:text-[19px]';
 
   if (!mounted) {
     if (variant === 'segmented') {
@@ -33,10 +38,10 @@ export default function ThemeToggle({
       <button
         type="button"
         disabled
-        className={`w-8 h-8 rounded-xl flex items-center justify-center text-outline opacity-50 ${className}`}
+        className={`${buttonSizeClasses} flex items-center justify-center text-outline opacity-50 ${className}`}
         aria-label="Memuat tema..."
       >
-        <span className="material-symbols-outlined text-[18px]">routine</span>
+        <span className={`material-symbols-outlined ${iconSizeClasses}`}>routine</span>
       </button>
     );
   }
@@ -84,15 +89,15 @@ export default function ThemeToggle({
     <button
       type="button"
       onClick={toggleTheme}
-      className={`relative w-8 h-8 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container border border-transparent hover:border-surface-container-high/60 transition-all cursor-pointer active:scale-95 group ${className}`}
+      className={`relative ${buttonSizeClasses} flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container border border-transparent hover:border-surface-container-high/60 transition-all cursor-pointer active:scale-95 group ${className}`}
       title={isDark ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
       aria-label={isDark ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
     >
       <span
-        className={`material-symbols-outlined text-[19px] transition-transform duration-300 ${
+        className={`material-symbols-outlined ${iconSizeClasses} transition-transform duration-300 ${
           isDark
             ? 'text-amber-400 group-hover:rotate-45'
-            : 'text-indigo-600 dark:text-indigo-400 group-hover:-rotate-12'
+            : 'text-emerald-600 dark:text-emerald-400 group-hover:-rotate-12'
         }`}
       >
         {isDark ? 'light_mode' : 'dark_mode'}

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import type { MosqueVenue } from '@/lib/services/venues';
 import type { StudySession } from '@/lib/services/kajian';
-import ThemeToggle from '@/components/ThemeToggle';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
@@ -88,7 +87,6 @@ export default function MosqueDetailClient({ venue, sessions }: MosqueDetailClie
           >
             Peta Beranda
           </Link>
-          <ThemeToggle />
         </div>
       </header>
 

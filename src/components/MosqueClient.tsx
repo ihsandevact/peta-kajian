@@ -14,6 +14,7 @@ import { fetchRoute, type RouteResult } from '@/lib/services/routing';
 import { calculateDistance } from '@/utils/distance';
 import { getPrayerScheduleAndNext } from '@/utils/prayerTimes';
 import { createClient } from '@/utils/supabase/client';
+import type { User } from '@supabase/supabase-js';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import MosqueCardItem from './MosqueCardItem';
 import MosqueCardSkeleton from './MosqueCardSkeleton';
@@ -24,7 +25,7 @@ import MosqueRegionPickerModal, {
 } from './MosqueRegionPickerModal';
 import { ALL_CITIES, INDONESIA_PROVINCES } from '@/utils/regions';
 import type { MapFocusArea } from './MosqueMap';
-import ThemeToggle from './ThemeToggle';
+import { useBottomNav } from '@/context/BottomNavContext';
 import type { StudySession } from '@/lib/services/kajian';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import {
@@ -68,6 +69,7 @@ export default function MosqueClient() {
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
   const [vehicleIcon, setVehicleIcon] = useState<NavigationVehicleIcon>('car');
   const [savedParkingSpot, setSavedParkingSpot] = useState<SavedParkingSpot | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
 
   // Periksa status login dan apakah pengguna adalah Admin (untuk menentukan visibilitas data testing)
@@ -75,6 +77,7 @@ export default function MosqueClient() {
     const supabase = createClient();
 
     async function checkAdmin(u: any) {
+      setCurrentUser(u || null);
       if (!u) {
         setIsAdmin(false);
         return;
@@ -94,6 +97,8 @@ export default function MosqueClient() {
         supabase.auth.getSession().then(({ data: sess }) => {
           if (sess?.session?.user) {
             checkAdmin(sess.session.user);
+          } else {
+            setCurrentUser(null);
           }
         });
       }
@@ -138,6 +143,11 @@ export default function MosqueClient() {
   const [routeError, setRouteError] = useState<string | null>(null);
   const [routeMode, setRouteMode] = useState<'driving' | 'walking'>('driving');
   const [isNavigating, setIsNavigating] = useState(false);
+  const { setIsHidden: setIsBottomNavHidden } = useBottomNav();
+  useEffect(() => {
+    setIsBottomNavHidden(Boolean(isNavigating || activeRouteMosque));
+    return () => setIsBottomNavHidden(false);
+  }, [isNavigating, activeRouteMosque, setIsBottomNavHidden]);
   const [isAudioMuted, setIsAudioMuted] = useState(false);
   const watchIdRef = useRef<number | null>(null);
   const wakeLockRef = useRef<any>(null);
@@ -825,38 +835,15 @@ export default function MosqueClient() {
         >
           {/* SIDEBAR HEADER + SEARCH & FILTERS */}
           <div className="p-3 sm:p-4 border-b border-outline-variant/40 space-y-3 bg-surface shrink-0">
-            {/* Baris 1: Header Sebatas Lebar Sidebar */}
-            <div className="flex items-center justify-between gap-2">
+            {/* Baris 1 Desktop: Header Direktori Masjid & Darkmode (Hanya Tampil di Desktop, Di-takeout di Mobile View) */}
+            <div className="hidden sm:flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <Link
-                  href="/"
-                  className="w-8 h-8 rounded-xl flex items-center justify-center hover:bg-surface-container text-on-surface transition-colors shrink-0"
-                  title="Kembali ke Beranda"
-                  aria-label="Kembali ke Beranda"
-                >
-                  <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-                </Link>
-
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                    <span className="material-symbols-outlined text-[16px]">mosque</span>
-                  </div>
-                  <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-on-surface">
-                    Direktori Masjid
-                  </h1>
+                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                  <span className="material-symbols-outlined text-[16px]">mosque</span>
                 </div>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setMobileView('map')}
-                  className="sm:hidden inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40"
-                >
-                  <span className="material-symbols-outlined text-[14px]">map</span>
-                  <span>Peta</span>
-                </button>
-                <ThemeToggle variant="icon" />
+                <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-on-surface">
+                  Direktori Masjid
+                </h1>
               </div>
             </div>
 
@@ -874,15 +861,21 @@ export default function MosqueClient() {
                   </span>
                   <span className="text-[11px] font-bold text-on-surface truncate">
                     Menuju{' '}
-                    <span className="text-emerald-700 dark:text-emerald-300 font-extrabold">
+                    <span
+                      suppressHydrationWarning
+                      className="text-emerald-700 dark:text-emerald-300 font-extrabold"
+                    >
                       {prayerSchedule.nextPrayer.name} {prayerSchedule.nextPrayer.time}
                     </span>{' '}
-                    {prayerSchedule.timezoneLabel}
+                    <span suppressHydrationWarning>{prayerSchedule.timezoneLabel}</span>
                   </span>
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold shadow-2xs">
+                  <span
+                    suppressHydrationWarning
+                    className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold shadow-2xs"
+                  >
                     {prayerSchedule.nextPrayer.countdownText}
                   </span>
                   <span
@@ -1057,7 +1050,7 @@ export default function MosqueClient() {
           {/* LIST MASJID */}
           <div
             ref={listContainerRef}
-            className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5"
+            className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2.5 pb-28 sm:pb-4"
           >
             <div className="flex items-center justify-between text-xs text-on-surface-variant font-medium px-1">
               <span>{userLocation ? 'Masjid Terdekat dari Anda' : 'Daftar Masjid Terdaftar'}</span>
@@ -1135,10 +1128,24 @@ export default function MosqueClient() {
               </>
             )}
           </div>
-          <div className="px-3 py-1.5 border-t border-outline-variant/30 text-[10px] text-on-surface-variant/70 text-center shrink-0">
+          <div className="px-3 py-1.5 border-t border-outline-variant/30 text-[10px] text-on-surface-variant/70 text-center shrink-0 hidden md:block">
             Sebagian data lokasi &copy; Overture Maps Foundation, OpenStreetMap contributors
           </div>
         </aside>
+
+        {/* Tombol Melayang Buka Peta (Khusus Mobile saat tampilan Daftar) */}
+        {mobileView === 'list' && !isNavigating && !activeRouteMosque && (
+          <button
+            type="button"
+            onClick={() => setMobileView('map')}
+            className="sm:hidden fixed z-40 bottom-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer border border-emerald-500/40"
+            title="Buka Tampilan Peta"
+            aria-label="Buka Tampilan Peta"
+          >
+            <span className="material-symbols-outlined text-[17px]">map</span>
+            <span>Lihat Peta</span>
+          </button>
+        )}
 
         {/* MAP DISPLAY (PETA KANAN / MOBILE FULL) */}
         <main className="flex-1 h-full relative block z-10 overflow-hidden">
@@ -1147,15 +1154,6 @@ export default function MosqueClient() {
             <div className="sm:hidden absolute top-3 left-3 right-3 z-20 flex flex-col gap-1.5 pointer-events-none">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 pointer-events-auto">
-                  <Link
-                    href="/"
-                    className="w-9 h-9 rounded-xl bg-surface/95 border border-outline-variant/60 shadow-md backdrop-blur-md flex items-center justify-center text-on-surface"
-                    title="Kembali ke Beranda"
-                    aria-label="Kembali ke Beranda"
-                  >
-                    <span className="material-symbols-outlined text-[20px]">arrow_back</span>
-                  </Link>
-
                   <button
                     type="button"
                     onClick={() => setIsFilterOpen(true)}
@@ -1166,7 +1164,7 @@ export default function MosqueClient() {
                     }`}
                   >
                     <span className="material-symbols-outlined text-[16px]">tune</span>
-                    <span className="truncate max-w-[130px]">
+                    <span className="truncate max-w-[150px]">
                       {selectedRegion
                         ? selectedRegion.name
                         : selectedCity !== 'Semua'
@@ -1192,14 +1190,11 @@ export default function MosqueClient() {
                   <button
                     type="button"
                     onClick={() => setMobileView('list')}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-surface/95 text-on-surface border border-outline-variant/60 shadow-md backdrop-blur-md"
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-surface/95 text-on-surface border border-outline-variant/60 shadow-md backdrop-blur-md cursor-pointer active:scale-95 transition-transform"
                   >
                     <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
                     <span>Daftar</span>
                   </button>
-                  <div className="bg-surface/95 border border-outline-variant/60 rounded-xl shadow-md backdrop-blur-md p-0.5">
-                    <ThemeToggle variant="icon" />
-                  </div>
                 </div>
               </div>
 
@@ -1209,11 +1204,11 @@ export default function MosqueClient() {
                   <span className="material-symbols-outlined text-[14px] text-emerald-600 dark:text-emerald-400">
                     schedule
                   </span>
-                  <span>
+                  <span suppressHydrationWarning>
                     {prayerSchedule.nextPrayer.name} {prayerSchedule.nextPrayer.time}{' '}
                     {prayerSchedule.timezoneLabel}
                   </span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">
+                  <span suppressHydrationWarning className="text-emerald-600 dark:text-emerald-400 font-extrabold">
                     • {prayerSchedule.nextPrayer.countdownText}
                   </span>
                 </div>
@@ -1223,7 +1218,7 @@ export default function MosqueClient() {
 
           {/* Floating Indicator saat Memuat Titik Masjid di Peta */}
           {loading && !isNavigating && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="absolute bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
               <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-surface/95 border border-outline-variant/60 shadow-lg backdrop-blur-md text-xs font-bold text-on-surface">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                 <span className="animate-pulse">Memuat titik masjid di peta...</span>
