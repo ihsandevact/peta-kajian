@@ -9,12 +9,13 @@ import dynamic from 'next/dynamic';
 import { deleteKajian } from '@/app/actions/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { checkIsAdmin, getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
-import ProfileMenuBottomSheet from '@/components/profile/ProfileMenuBottomSheet';
 import DynamicBackButton from '@/components/navigation/DynamicBackButton';
 import { useAttendance } from '@/utils/attendance';
 import { useBookmarks } from '@/utils/bookmarks';
-import RequestContributorModal from '@/components/RequestContributorModal';
-import ProposeTelegramModal from '@/components/ProposeTelegramModal';
+
+const ProfileMenuBottomSheet = dynamic(() => import('@/components/profile/ProfileMenuBottomSheet'), { ssr: false });
+const RequestContributorModal = dynamic(() => import('@/components/RequestContributorModal'), { ssr: false });
+const ProposeTelegramModal = dynamic(() => import('@/components/ProposeTelegramModal'), { ssr: false });
 import { fetchUserTelegramChannels, type TelegramChannel } from '@/lib/services/telegram';
 import {
   fetchUserStudyNotes,

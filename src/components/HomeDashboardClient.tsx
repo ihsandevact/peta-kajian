@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/utils/supabase/client';
@@ -15,11 +16,14 @@ import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import ThemeToggle from '@/components/ThemeToggle';
-import MobileNavDrawer from '@/components/MobileNavDrawer';
-import MoreMenuBottomSheet from '@/components/MoreMenuBottomSheet';
-import MosqueProfileModal from '@/components/MosqueProfileModal';
-import RequestContributorModal from '@/components/RequestContributorModal';
 import { type StudySession } from '@/lib/services/kajian';
+import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
+
+// Dynamic lazy imports for heavy interactive overlays
+const MoreMenuBottomSheet = dynamic(() => import('@/components/MoreMenuBottomSheet'), { ssr: false });
+const MobileNavDrawer = dynamic(() => import('@/components/MobileNavDrawer'), { ssr: false });
+const MosqueProfileModal = dynamic(() => import('@/components/MosqueProfileModal'), { ssr: false });
+const RequestContributorModal = dynamic(() => import('@/components/RequestContributorModal'), { ssr: false });
 
 export default function HomeDashboardClient() {
   const router = useRouter();
@@ -30,25 +34,59 @@ export default function HomeDashboardClient() {
   // Autentikasi Supabase
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [roleInfo, setRoleInfo] = useState<UserRoleInfo | null>(null);
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setCurrentUser(user);
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (user) {
-        supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user.id)
-          .maybeSingle()
-          .then(({ data }) => {
-            setIsAdmin(data?.role === 'admin');
+        try {
+          const info = await getUserRoleAndStatus(user);
+          setRoleInfo(info);
+          setIsAdmin(info.role === 'admin');
+          setCurrentUser({
+            ...user,
+            role: info.role,
+            requestStatus: info.requestStatus,
           });
+        } catch {
+          setCurrentUser(user);
+        }
+      } else {
+        setCurrentUser(null);
+        setIsAdmin(false);
+        setRoleInfo(null);
       }
     });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const user = session?.user || null;
+      if (user) {
+        try {
+          const info = await getUserRoleAndStatus(user);
+          setRoleInfo(info);
+          setIsAdmin(info.role === 'admin');
+          setCurrentUser({
+            ...user,
+            role: info.role,
+            requestStatus: info.requestStatus,
+          });
+        } catch {
+          setCurrentUser(user);
+        }
+      } else {
+        setCurrentUser(null);
+        setIsAdmin(false);
+        setRoleInfo(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Lokasi Pengguna
@@ -1050,6 +1088,7 @@ export default function HomeDashboardClient() {
         onClose={() => setIsMoreMenuOpen(false)}
         currentUser={currentUser}
         isAdmin={isAdmin}
+        userRole={roleInfo?.role}
         onOpenRequestContributor={() => setIsRequestModalOpen(true)}
       />
 
@@ -1074,7 +1113,21 @@ export default function HomeDashboardClient() {
       <RequestContributorModal
         isOpen={isRequestModalOpen}
         onClose={() => setIsRequestModalOpen(false)}
-        onSuccess={() => setIsRequestModalOpen(false)}
+        onSuccess={async () => {
+          setIsRequestModalOpen(false);
+          if (currentUser) {
+            try {
+              const info = await getUserRoleAndStatus(currentUser);
+              setRoleInfo(info);
+              setIsAdmin(info.role === 'admin');
+              setCurrentUser((prev: any) => ({
+                ...prev,
+                role: info.role,
+                requestStatus: info.requestStatus,
+              }));
+            } catch {}
+          }
+        }}
         userEmail={currentUser?.email}
       />
     </div>

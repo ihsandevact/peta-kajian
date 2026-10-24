@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { fetchContributorLeaderboard, type ContributorEntry, type LeaderboardGroup } from '@/lib/services/kajian';
 import { checkIsAdmin, getUserRoleAndStatus, type AppUserRole } from '@/lib/services/admin';
-import AppMenuBottomSheet from '@/components/navigation/AppMenuBottomSheet';
+import dynamic from 'next/dynamic';
 import DynamicBackButton from '@/components/navigation/DynamicBackButton';
+
+const AppMenuBottomSheet = dynamic(() => import('@/components/navigation/AppMenuBottomSheet'), { ssr: false });
 
 export default function LeaderboardPage() {
   const [data, setData] = useState<LeaderboardGroup>({ volunteers: [], channels: [] });

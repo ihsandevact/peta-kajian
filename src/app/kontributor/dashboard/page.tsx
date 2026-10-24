@@ -6,15 +6,17 @@ import Link from 'next/link'
 import { useEffect, useState, useRef } from 'react'
 import { submitKajian } from '@/app/actions/kajian'
 import { extractKajianFromPoster } from '@/app/actions/ai-poster'
-import VenueLocationPicker from '@/components/VenueLocationPicker'
+import dynamic from 'next/dynamic'
 import { searchPlaces } from '@/lib/services/geocoding'
 
 import RecurringRuleSelector from '@/components/RecurringRuleSelector'
 import { RecurringRule } from '@/utils/recurring'
 import { checkIsAdmin, getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin'
-import AppMenuBottomSheet from '@/components/navigation/AppMenuBottomSheet'
 import DynamicBackButton from '@/components/navigation/DynamicBackButton'
-import RequestContributorModal from '@/components/RequestContributorModal'
+
+const VenueLocationPicker = dynamic(() => import('@/components/VenueLocationPicker'), { ssr: false })
+const AppMenuBottomSheet = dynamic(() => import('@/components/navigation/AppMenuBottomSheet'), { ssr: false })
+const RequestContributorModal = dynamic(() => import('@/components/RequestContributorModal'), { ssr: false })
 
 export default function DashboardPage() {
   const router = useRouter()

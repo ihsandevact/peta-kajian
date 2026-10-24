@@ -12,6 +12,7 @@ interface MoreMenuBottomSheetProps {
   onClose: () => void;
   currentUser?: any;
   isAdmin?: boolean;
+  userRole?: string;
   onOpenRequestContributor?: () => void;
 }
 
@@ -20,13 +21,15 @@ export default function MoreMenuBottomSheet({
   onClose,
   currentUser,
   isAdmin = false,
+  userRole,
   onOpenRequestContributor,
 }: MoreMenuBottomSheetProps) {
   const pathname = usePathname();
   const [avatarError, setAvatarError] = useState(false);
   const { canInstall, isInstalled, promptInstall } = usePWAInstall();
 
-  const isContributorOrAdmin = isAdmin || currentUser?.role === 'kontributor';
+  const role = userRole || currentUser?.role;
+  const isContributorOrAdmin = isAdmin || role === 'kontributor' || role === 'admin';
   const userAvatar = currentUser?.avatarUrl || currentUser?.user_metadata?.avatar_url;
   const displayName =
     currentUser?.name ||
@@ -111,7 +114,7 @@ export default function MoreMenuBottomSheet({
                         <span className="material-symbols-outlined text-[11px]">shield_person</span>
                         Admin
                       </span>
-                    ) : currentUser?.role === 'kontributor' ? (
+                    ) : role === 'kontributor' ? (
                       <span className="inline-flex items-center gap-0.5 text-[9px] font-extrabold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.2 rounded-full uppercase tracking-wider">
                         <span className="material-symbols-outlined text-[11px]">verified</span>
                         Relawan
@@ -253,6 +256,20 @@ export default function MoreMenuBottomSheet({
                     chevron_right
                   </span>
                 </Link>
+              ) : currentUser?.requestStatus === 'pending' ? (
+                <div className="flex items-center gap-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[18px]">hourglass_top</span>
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200 truncate">
+                      Permohonan Relawan Dalam Proses
+                    </h4>
+                    <p className="text-[10px] text-amber-800/80 dark:text-amber-300/80 truncate">
+                      Sedang ditinjau oleh tim administrator
+                    </p>
+                  </div>
+                </div>
               ) : (
                 <button
                   type="button"

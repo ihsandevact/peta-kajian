@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { createClient } from '@/utils/supabase/client';
 import {
   type YoutubeChannel,
@@ -15,9 +16,12 @@ import { useLivePlayer } from '@/context/LivePlayerContext';
 import { FEATURE_FLAGS } from '@/config/features';
 import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
 import EndedStreamSkeleton from '@/components/live/EndedStreamSkeleton';
-import StudyLoginModal from '@/components/StudyLoginModal';
 import { type PendingStudySession } from '@/utils/studyNotes';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+
+const StudyLoginModal = dynamic(() => import('@/components/StudyLoginModal'), {
+  ssr: false,
+});
 
 export default function LiveStreamingPage() {
   const { playStream, openStudyMode } = useLivePlayer();

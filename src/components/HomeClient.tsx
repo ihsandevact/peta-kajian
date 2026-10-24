@@ -15,8 +15,6 @@ import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
 import { useBottomNav } from '@/context/BottomNavContext';
-import InAppRoutePanel from '@/components/InAppRoutePanel';
-import LiveNavigationHUD from '@/components/LiveNavigationHUD';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
 import { Drawer } from 'vaul';
 import {
@@ -24,6 +22,14 @@ import {
   getStoredVehicleIcon,
 } from '@/utils/navigationVehicle';
 import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
+
+const InAppRoutePanel = dynamic(() => import('@/components/InAppRoutePanel'), {
+  ssr: false,
+});
+
+const LiveNavigationHUD = dynamic(() => import('@/components/LiveNavigationHUD'), {
+  ssr: false,
+});
 
 const RequestContributorModal = dynamic(() => import('@/components/RequestContributorModal'), {
   ssr: false,

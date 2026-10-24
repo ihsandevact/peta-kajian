@@ -18,8 +18,7 @@ import type { User } from '@supabase/supabase-js';
 import { getUserRoleAndStatus } from '@/lib/services/admin';
 import MosqueCardItem from './MosqueCardItem';
 import MosqueCardSkeleton from './MosqueCardSkeleton';
-import MosqueProfileModal from './MosqueProfileModal';
-import MosqueRegionPickerModal, {
+import {
   doesMosqueMatchRegion,
   type MosqueRegionSelection,
 } from './MosqueRegionPickerModal';
@@ -35,6 +34,8 @@ import {
 import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
 
 const MosqueMap = dynamic(() => import('./MosqueMap'), { ssr: false });
+const MosqueProfileModal = dynamic(() => import('./MosqueProfileModal'), { ssr: false });
+const MosqueRegionPickerModal = dynamic(() => import('./MosqueRegionPickerModal'), { ssr: false });
 const InAppRoutePanel = dynamic(() => import('./InAppRoutePanel'), { ssr: false });
 const LiveNavigationHUD = dynamic(() => import('./LiveNavigationHUD'), { ssr: false });
 
