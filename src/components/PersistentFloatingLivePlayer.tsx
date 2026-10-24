@@ -517,6 +517,48 @@ export default function PersistentFloatingLivePlayer() {
     };
   }, [updateStoredPlaybackTime]);
 
+  // Penanganan background playback & instant auto-resume saat berpindah tab atau jendela (terutama di mobile)
+  useEffect(() => {
+    if (isPipRoute || !isOpen || !activeStream || isPipActive) return;
+
+    const handleVisibilityResume = () => {
+      if (document.visibilityState === 'visible' || !document.hidden) {
+        try {
+          iframeRef.current?.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+            '*'
+          );
+        } catch {}
+      } else {
+        // Coba pertahankan pemutaran saat tab disembunyikan
+        try {
+          iframeRef.current?.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+            '*'
+          );
+        } catch {}
+      }
+    };
+
+    const handleFocusResume = () => {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+          '*'
+        );
+      } catch {}
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityResume);
+    window.addEventListener('focus', handleFocusResume);
+    window.addEventListener('blur', handleVisibilityResume);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityResume);
+      window.removeEventListener('focus', handleFocusResume);
+      window.removeEventListener('blur', handleVisibilityResume);
+    };
+  }, [isPipRoute, isOpen, activeStream, isPipActive]);
+
   // Handler Kembalikan Video dari Jendela PiP ke Mini Player Tab Ini
   const handleRestoreFromPip = useCallback(() => {
     try {

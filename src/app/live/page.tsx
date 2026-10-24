@@ -56,9 +56,21 @@ export default function LiveStreamingPage() {
   const [mobileViewMode, setMobileViewMode] = useState<'swipe' | 'list'>('swipe');
   const [swipeInitialIndex, setSwipeInitialIndex] = useState(0);
 
-  // Sinkronkan tema Dark Glassmorphism pada Mobile Bottom Nav saat mode swipe aktif
+  // Deteksi reaktif layar mobile (< 640px) agar MobileSwipeLiveViewer tidak di-mount di desktop
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(false);
+
   useEffect(() => {
-    if (mobileViewMode === 'swipe') {
+    const checkMobile = () => {
+      setIsMobileScreen(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Sinkronkan tema Dark Glassmorphism pada Mobile Bottom Nav saat mode swipe aktif di mobile
+  useEffect(() => {
+    if (isMobileScreen && mobileViewMode === 'swipe') {
       setIsDarkTheme(true);
     } else {
       setIsDarkTheme(false);
@@ -66,7 +78,7 @@ export default function LiveStreamingPage() {
     return () => {
       setIsDarkTheme(false);
     };
-  }, [mobileViewMode, setIsDarkTheme]);
+  }, [isMobileScreen, mobileViewMode, setIsDarkTheme]);
 
   const modalIframeRef = useRef<HTMLIFrameElement>(null);
   const [isModalMuted, setIsModalMuted] = useState(true);
@@ -540,8 +552,8 @@ export default function LiveStreamingPage() {
 
   return (
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col pb-28 sm:pb-8">
-      {/* TAMPILAN SWIPE FEED UTAMA KHUSUS MOBILE */}
-      {mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 && (
+      {/* TAMPILAN SWIPE FEED UTAMA KHUSUS MOBILE (HANYA MOUNT DI LAYAR MOBILE < 640px) */}
+      {isMobileScreen && mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 && (
         <div className="sm:hidden">
           <MobileSwipeLiveViewer
             items={unifiedSwipeItems}
@@ -562,7 +574,7 @@ export default function LiveStreamingPage() {
       )}
 
       {/* TAMPILAN KATALOG / GRID (DESKTOP SELALU AKTIF, MOBILE HANYA SAAT MODE LIST ATAU SAAT BELUM ADA DATA) */}
-      <div className={mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 ? 'hidden sm:flex flex-col flex-1' : 'flex flex-col flex-1'}>
+      <div className={isMobileScreen && mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 ? 'hidden sm:flex flex-col flex-1' : 'flex flex-col flex-1'}>
         {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
         <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">

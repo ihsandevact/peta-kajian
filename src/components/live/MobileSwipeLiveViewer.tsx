@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 export interface SwipeFeedItem {
   id: string;
@@ -27,6 +27,15 @@ export interface MobileSwipeLiveViewerProps {
   }) => void;
 }
 
+// Helper deteksi perangkat iOS (iPhone / iPad / iPod)
+const checkIsIOS = () => {
+  if (typeof window === 'undefined') return false;
+  const ua = window.navigator.userAgent;
+  const isIosDevice = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isIosDevice || isIPadOS;
+};
+
 export default function MobileSwipeLiveViewer({
   items,
   initialIndex,
@@ -36,10 +45,38 @@ export default function MobileSwipeLiveViewer({
   onPlayMiniPlayer,
 }: MobileSwipeLiveViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [isMuted, setIsMuted] = useState(false);
+  // Deteksi khusus iOS (Apple WebKit memblokir unmuted autoplay)
+  const isIOS = useMemo(() => checkIsIOS(), []);
+
+  // Di iOS default = true (muted agar autoplay berjalan instan tanpa diblokir Safari).
+  // Di Android & lainnya default = false (langsung bersuara seketika).
+  const [isMuted, setIsMuted] = useState(() => checkIsIOS());
   const [isPaused, setIsPaused] = useState(false);
   const [isTitleExpanded, setIsTitleExpanded] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // State untuk melacak apakah pengguna sudah pernah melakukan swipe ke atas dalam sesi kunjungan saat ini
+  const [hasSwipedUp, setHasSwipedUp] = useState<boolean>(false);
+
+  // Bersihkan residu key lama dari localStorage jika ada
+  useEffect(() => {
+    try {
+      localStorage.removeItem('peta_kajian_has_swiped_up');
+    } catch {}
+  }, []);
+
+  // Jika initialIndex > 0 (pengguna membuka video urutan ke-2 atau seterusnya),
+  // tandai langsung bahwa penanda tidak perlu muncul
+  useEffect(() => {
+    if (initialIndex > 0) {
+      setHasSwipedUp(true);
+    }
+  }, [initialIndex]);
+
+  // Helper untuk menandai bahwa pengguna sudah pernah swipe ke atas pada sesi ini
+  const markSwipedUp = useCallback(() => {
+    setHasSwipedUp(true);
+  }, []);
 
   // Touch gesture & drag offset state
   const [dragOffset, setDragOffset] = useState(0);
@@ -49,6 +86,8 @@ export default function MobileSwipeLiveViewer({
 
   // Iframe ref for active playing video
   const activeIframeRef = useRef<HTMLIFrameElement>(null);
+  // Ref untuk melacak apakah jeda video berasal dari ketukan sengaja pengguna
+  const isUserPausedRef = useRef<boolean>(false);
 
   // Sync initialIndex when viewer opens or changes
   useEffect(() => {
@@ -57,6 +96,7 @@ export default function MobileSwipeLiveViewer({
       setCurrentIndex(validIndex);
       setDragOffset(0);
       setIsPaused(false);
+      isUserPausedRef.current = false;
       setIsTitleExpanded(false);
     }
   }, [isOpen, initialIndex, items.length]);
@@ -64,6 +104,7 @@ export default function MobileSwipeLiveViewer({
   // Reset pause state whenever currentIndex changes
   useEffect(() => {
     setIsPaused(false);
+    isUserPausedRef.current = false;
   }, [currentIndex]);
 
   // Toast auto-hide
@@ -87,6 +128,7 @@ export default function MobileSwipeLiveViewer({
 
   // Unmute and play helper
   const handleUnmute = useCallback(() => {
+    isUserPausedRef.current = false;
     sendIframeCommand('unMute');
     sendIframeCommand('setVolume', [100]);
     sendIframeCommand('playVideo');
@@ -107,25 +149,154 @@ export default function MobileSwipeLiveViewer({
   // Play / Pause toggle helper ala TikTok
   const togglePlayPause = useCallback(() => {
     if (isPaused) {
+      isUserPausedRef.current = false;
       sendIframeCommand('playVideo');
       setIsPaused(false);
     } else {
+      isUserPausedRef.current = true;
       sendIframeCommand('pauseVideo');
       setIsPaused(true);
     }
   }, [isPaused, sendIframeCommand]);
 
+  // Handler cerdas ketukan area video ala TikTok / Reels:
+  // - Khusus di iOS saat masih termute: ketukan pertama langsung menyalakan suara
+  // - Di Android / non-iOS: suara sudah aktif sejak awal, sehingga ketukan langsung play/pause
+  const handleVideoAreaTap = useCallback(() => {
+    if (isIOS && isMuted) {
+      handleUnmute();
+    } else {
+      togglePlayPause();
+    }
+  }, [isIOS, isMuted, handleUnmute, togglePlayPause]);
+
+  // Handshake berkala ke YouTube iframe agar kontinu melaporkan playback state
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      try {
+        if (activeIframeRef.current?.contentWindow) {
+          activeIframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+            '*'
+          );
+        }
+      } catch {}
+    }, 800);
+
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
+  // Sinkronisasi status player YouTube (playing/paused/cued) secara real-time
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleWindowMessage = (event: MessageEvent) => {
+      try {
+        let data = event.data;
+        if (typeof data === 'string') {
+          try {
+            data = JSON.parse(data);
+          } catch {
+            return;
+          }
+        }
+
+        if (data?.event === 'infoDelivery' || data?.info) {
+          const info = data.info || data;
+          const playerState = info.playerState;
+
+          if (playerState === 1) {
+            // Sedang berputar (Playing)
+            setIsPaused(false);
+          } else if (playerState === 2) {
+            // Sedang dijeda (Paused)
+            if (isUserPausedRef.current) {
+              setIsPaused(true);
+            } else {
+              // Auto-pause oleh browser / background tab -> override agar tetap jalan
+              sendIframeCommand('playVideo');
+            }
+          } else if (playerState === 5 || playerState === -1) {
+            // Cued / unstarted -> segera kickstart autoplay
+            if (!isUserPausedRef.current) {
+              sendIframeCommand('playVideo');
+              if (!isMuted) {
+                sendIframeCommand('unMute');
+                sendIframeCommand('setVolume', [100]);
+              }
+            }
+          }
+
+          if (typeof info.muted === 'boolean') {
+            setIsMuted(info.muted);
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('message', handleWindowMessage);
+    return () => window.removeEventListener('message', handleWindowMessage);
+  }, [isOpen, isMuted, sendIframeCommand]);
+
+  // Penanganan background playback & instant auto-resume saat berpindah tab atau jendela
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' || !document.hidden) {
+        // Tab kembali aktif: jika pengguna tidak menjeda secara manual, langsung auto-resume
+        if (!isUserPausedRef.current) {
+          sendIframeCommand('playVideo');
+          if (!isMuted) {
+            sendIframeCommand('unMute');
+            sendIframeCommand('setVolume', [100]);
+          }
+        }
+      } else {
+        // Tab disembunyikan: coba keep-alive pemutaran jika tidak dijeda manual
+        if (!isUserPausedRef.current) {
+          sendIframeCommand('playVideo');
+          setTimeout(() => {
+            if (!isUserPausedRef.current) {
+              sendIframeCommand('playVideo');
+            }
+          }, 150);
+        }
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (!isUserPausedRef.current) {
+        sendIframeCommand('playVideo');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('blur', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('blur', handleVisibilityChange);
+    };
+  }, [isOpen, isMuted, sendIframeCommand]);
+
   // Navigation handlers
   const goToNext = useCallback(() => {
     if (currentIndex < items.length - 1) {
+      isUserPausedRef.current = false;
       setCurrentIndex((prev) => prev + 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
+      markSwipedUp();
     }
-  }, [currentIndex, items.length]);
+  }, [currentIndex, items.length, markSwipedUp]);
 
   const goToPrev = useCallback(() => {
     if (currentIndex > 0) {
+      isUserPausedRef.current = false;
       setCurrentIndex((prev) => prev - 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
@@ -191,11 +362,14 @@ export default function MobileSwipeLiveViewer({
 
     if (diff < -threshold && currentIndex < items.length - 1) {
       // Geser ke atas -> Next Video
+      isUserPausedRef.current = false;
       setCurrentIndex((prev) => prev + 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
+      markSwipedUp();
     } else if (diff > threshold && currentIndex > 0) {
       // Geser ke bawah -> Previous Video
+      isUserPausedRef.current = false;
       setCurrentIndex((prev) => prev - 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
@@ -259,7 +433,7 @@ export default function MobileSwipeLiveViewer({
 
       {/* TOP HEADER OVERLAY */}
       <header className="relative z-20 px-4 pt-[calc(10px+env(safe-area-inset-top,10px))] pb-2 flex items-center justify-between gap-2">
-        {/* Indikator Status & Counter */}
+        {/* Indikator Status: 'Live' atau 'Rekaman' */}
         <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/15 shadow-lg">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
@@ -267,7 +441,7 @@ export default function MobileSwipeLiveViewer({
             }`}
           />
           <span className="text-xs font-bold tracking-wide">
-            {currentIndex + 1} / {items.length} {currentItem.isLive ? 'Live' : 'Kajian'}
+            {currentItem.isLive ? 'Live' : 'Rekaman'}
           </span>
         </div>
 
@@ -319,7 +493,7 @@ export default function MobileSwipeLiveViewer({
             <iframe
               key={currentVideoId}
               ref={activeIframeRef}
-              src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${isMuted ? 1 : 0}&enablejsapi=1&playsinline=1&rel=0&modestbranding=1`}
+              src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${isIOS ? 1 : isMuted ? 1 : 0}&enablejsapi=1&playsinline=1&rel=0&modestbranding=1`}
               title={currentTitle}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
@@ -331,22 +505,20 @@ export default function MobileSwipeLiveViewer({
                     JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
                     '*'
                   );
-                  setTimeout(() => {
-                    sendIframeCommand('playVideo');
-                    if (!isMuted) {
-                      sendIframeCommand('unMute');
-                      sendIframeCommand('setVolume', [100]);
-                    }
-                  }, 400);
+                  sendIframeCommand('playVideo');
+                  if (!isMuted) {
+                    sendIframeCommand('unMute');
+                    sendIframeCommand('setVolume', [100]);
+                  }
                 } catch {}
               }}
             />
 
-            {/* Tap to Play/Pause Overlay Ala TikTok */}
+            {/* Tap to Unmute / Play-Pause Overlay Ala TikTok */}
             <div
-              onClick={togglePlayPause}
+              onClick={handleVideoAreaTap}
               className="absolute inset-0 z-10 cursor-pointer flex items-center justify-center select-none"
-              aria-label={isPaused ? 'Putar Video' : 'Jeda Video'}
+              aria-label={isMuted ? 'Nyalakan Suara' : isPaused ? 'Putar Video' : 'Jeda Video'}
             >
               {/* Centered Frosted Play Icon saat di-Pause */}
               {isPaused && (
@@ -467,12 +639,18 @@ export default function MobileSwipeLiveViewer({
             <span>Sebelumnya</span>
           </button>
 
-          <div className="flex items-center gap-1 text-white/70 font-medium">
-            <span className="material-symbols-outlined text-[15px] animate-bounce text-red-500">
-              swipe_vertical
-            </span>
-            <span>Geser {currentIndex < items.length - 1 ? 'ke atas' : 'ke bawah'}</span>
-          </div>
+          {!hasSwipedUp ? (
+            <div className="flex items-center gap-1 text-white/70 font-medium animate-in fade-in duration-300">
+              <span className="material-symbols-outlined text-[15px] animate-bounce text-red-500">
+                swipe_vertical
+              </span>
+              <span>Geser ke atas</span>
+            </div>
+          ) : (
+            <div className="text-[10px] text-white/40 tracking-wider font-medium">
+              {currentIndex + 1} / {items.length}
+            </div>
+          )}
 
           <button
             type="button"
