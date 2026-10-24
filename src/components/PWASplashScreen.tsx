@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 export default function PWASplashScreen() {
+  const pathname = usePathname();
+  const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
   const [shouldRender, setShouldRender] = useState(true);
   const [isFadingOut, setIsFadingOut] = useState(false);
 
@@ -41,7 +44,7 @@ export default function PWASplashScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  if (!shouldRender) return null;
+  if (isPipRoute || !shouldRender) return null;
 
   return (
     <div

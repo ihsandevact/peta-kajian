@@ -32,10 +32,12 @@ export default function MobileBottomNav({
     return () => subscription.unsubscribe();
   }, []);
 
+  const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
+
   const isBerandaActive = pathname === '/';
   const isMasjidActive = pathname.startsWith('/masjid');
   const isKajianActive = pathname.startsWith('/peta');
-  const isLiveActive = pathname.startsWith('/live');
+  const isLiveActive = pathname.startsWith('/live') && !isPipRoute;
   const isProfilActive =
     pathname.startsWith('/kontributor/profile') ||
     pathname.startsWith('/kontributor/dashboard') ||
@@ -57,12 +59,13 @@ export default function MobileBottomNav({
   }, [pathname]);
 
   const isAllowedPage =
-    pathname === '/' ||
-    pathname.startsWith('/masjid') ||
-    pathname.startsWith('/peta') ||
-    pathname.startsWith('/live');
+    !isPipRoute &&
+    (pathname === '/' ||
+      pathname.startsWith('/masjid') ||
+      pathname.startsWith('/peta') ||
+      pathname.startsWith('/live'));
 
-  if (!isAllowedPage) {
+  if (!isAllowedPage || isPipRoute) {
     return null;
   }
 
