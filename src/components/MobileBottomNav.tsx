@@ -15,7 +15,7 @@ export default function MobileBottomNav({
   className = '',
 }: MobileBottomNavProps) {
   const pathname = usePathname() || '/';
-  const { isHidden } = useBottomNav();
+  const { isHidden, isDarkTheme } = useBottomNav();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [optimisticIndex, setOptimisticIndex] = useState<number | null>(null);
 
@@ -68,6 +68,20 @@ export default function MobileBottomNav({
 
   const currentIndex = optimisticIndex !== null ? optimisticIndex : routeActiveIndex;
 
+  const getTabClass = (index: number, isLiveTab = false) => {
+    const isActive = currentIndex === index;
+    if (isActive) {
+      if (isLiveTab) return 'text-red-500 dark:text-red-400 font-black';
+      return isDarkTheme ? 'text-white font-extrabold' : 'text-emerald-600 dark:text-emerald-400 font-extrabold';
+    }
+    if (isDarkTheme) {
+      return 'text-white/60 hover:text-white font-medium hover:bg-white/10';
+    }
+    return isLiveTab
+      ? 'text-red-600/90 dark:text-red-400/90 font-bold hover:bg-red-500/10'
+      : 'text-on-surface-variant/70 hover:text-on-surface font-medium hover:bg-surface-container/30';
+  };
+
   return (
     <nav
       className={`md:hidden fixed z-50 left-3 right-3 sm:left-6 sm:right-6 max-w-md mx-auto bottom-[calc(10px+env(safe-area-inset-bottom,0px))] transition-transform duration-300 font-geist ${
@@ -75,7 +89,13 @@ export default function MobileBottomNav({
       } ${className}`}
       aria-label="Navigasi Menu Mobile"
     >
-      <div className="relative bg-surface/90 dark:bg-surface-container-low/90 backdrop-blur-xl border border-outline-variant/40 dark:border-white/10 rounded-full shadow-[0_10px_35px_rgba(0,0,0,0.14)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)] p-1.5 px-2 flex items-center">
+      <div
+        className={`relative backdrop-blur-2xl rounded-full p-1.5 px-2 flex items-center transition-all duration-300 ${
+          isDarkTheme
+            ? 'bg-black/75 dark:bg-black/85 border border-white/20 shadow-[0_12px_40px_rgba(0,0,0,0.7)]'
+            : 'bg-surface/90 dark:bg-surface-container-low/90 border border-outline-variant/40 dark:border-white/10 shadow-[0_10px_35px_rgba(0,0,0,0.14)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)]'
+        }`}
+      >
         {/* Sliding Active Pill Background (Meluncur halus antar tab) */}
         <div
           className="absolute top-1.5 bottom-1.5 rounded-full pointer-events-none transition-transform duration-300 ease-[cubic-bezier(0.25,1,0.5,1)] will-change-transform z-0"
@@ -87,7 +107,9 @@ export default function MobileBottomNav({
         >
           <div
             className={`w-full h-full rounded-full transition-colors duration-300 ${
-              currentIndex === 3
+              isDarkTheme
+                ? 'bg-red-500/25 ring-1 ring-red-400/40 shadow-xs'
+                : currentIndex === 3
                 ? 'bg-red-600/12 dark:bg-red-400/20 ring-1 ring-red-500/25 shadow-2xs'
                 : 'bg-emerald-600/12 dark:bg-emerald-400/20 ring-1 ring-emerald-500/25 shadow-2xs'
             }`}
@@ -98,11 +120,7 @@ export default function MobileBottomNav({
         <Link
           href="/"
           onClick={() => setOptimisticIndex(0)}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${
-            currentIndex === 0
-              ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
-              : 'text-on-surface-variant/70 hover:text-on-surface font-medium hover:bg-surface-container/30'
-          }`}
+          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${getTabClass(0)}`}
         >
           <div className="w-5 h-5 flex items-center justify-center shrink-0">
             <span
@@ -123,11 +141,7 @@ export default function MobileBottomNav({
         <Link
           href="/masjid"
           onClick={() => setOptimisticIndex(1)}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${
-            currentIndex === 1
-              ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
-              : 'text-on-surface-variant/70 hover:text-on-surface font-medium hover:bg-surface-container/30'
-          }`}
+          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${getTabClass(1)}`}
         >
           <div className="w-5 h-5 flex items-center justify-center shrink-0">
             <span
@@ -148,11 +162,7 @@ export default function MobileBottomNav({
         <Link
           href="/peta"
           onClick={() => setOptimisticIndex(2)}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 group ${
-            currentIndex === 2
-              ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
-              : 'text-on-surface-variant/70 hover:text-on-surface font-medium hover:bg-surface-container/30'
-          }`}
+          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 group ${getTabClass(2)}`}
         >
           <div className="w-6 h-6 flex items-center justify-center shrink-0">
             <img
@@ -173,12 +183,13 @@ export default function MobileBottomNav({
         {/* 4. TAB LIVE */}
         <Link
           href="/live"
-          onClick={() => setOptimisticIndex(3)}
-          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${
-            currentIndex === 3
-              ? 'text-red-600 dark:text-red-400 font-black'
-              : 'text-red-600/90 dark:text-red-400/90 font-bold hover:bg-red-500/10'
-          }`}
+          onClick={() => {
+            setOptimisticIndex(3);
+            if (isLiveActive && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('peta-kajian:switch-to-swipe'));
+            }
+          }}
+          className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${getTabClass(3, true)}`}
         >
           <div className="w-5 h-5 flex items-center justify-center relative shrink-0">
             <span
@@ -200,11 +211,7 @@ export default function MobileBottomNav({
           <Link
             href="/kontributor/profile"
             onClick={() => setOptimisticIndex(4)}
-            className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${
-              currentIndex === 4
-                ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
-                : 'text-on-surface-variant/70 hover:text-on-surface font-medium hover:bg-surface-container/30'
-            }`}
+            className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${getTabClass(4)}`}
           >
             <div className="w-5 h-5 flex items-center justify-center shrink-0">
               <span
@@ -224,11 +231,7 @@ export default function MobileBottomNav({
           <Link
             href="/login"
             onClick={() => setOptimisticIndex(4)}
-            className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${
-              currentIndex === 4
-                ? 'text-emerald-600 dark:text-emerald-400 font-extrabold'
-                : 'text-on-surface-variant/70 hover:text-on-surface font-medium hover:bg-surface-container/30'
-            }`}
+            className={`relative z-10 flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-full transition-all duration-200 active:scale-95 ${getTabClass(4)}`}
           >
             <div className="w-5 h-5 flex items-center justify-center shrink-0">
               <span

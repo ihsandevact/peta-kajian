@@ -18,13 +18,21 @@ import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
 import EndedStreamSkeleton from '@/components/live/EndedStreamSkeleton';
 import { type PendingStudySession } from '@/utils/studyNotes';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useBottomNav } from '@/context/BottomNavContext';
+import type { SwipeFeedItem } from '@/components/live/MobileSwipeLiveViewer';
 
 const StudyLoginModal = dynamic(() => import('@/components/StudyLoginModal'), {
   ssr: false,
 });
 
+const MobileSwipeLiveViewer = dynamic(
+  () => import('@/components/live/MobileSwipeLiveViewer'),
+  { ssr: false }
+);
+
 export default function LiveStreamingPage() {
-  const { playStream, openStudyMode } = useLivePlayer();
+  const { playStream, openStudyMode, closePlayer, isOpen: isLivePlayerOpen } = useLivePlayer();
+  const { setIsDarkTheme } = useBottomNav();
   const {
     channels,
     isLoading: loading,
@@ -43,6 +51,22 @@ export default function LiveStreamingPage() {
     channelName: string;
     speakerName?: string;
   } | null>(null);
+
+  // Mode tampilan mobile: 'swipe' (default reels/TikTok feed) vs 'list' (katalog/grid)
+  const [mobileViewMode, setMobileViewMode] = useState<'swipe' | 'list'>('swipe');
+  const [swipeInitialIndex, setSwipeInitialIndex] = useState(0);
+
+  // Sinkronkan tema Dark Glassmorphism pada Mobile Bottom Nav saat mode swipe aktif
+  useEffect(() => {
+    if (mobileViewMode === 'swipe') {
+      setIsDarkTheme(true);
+    } else {
+      setIsDarkTheme(false);
+    }
+    return () => {
+      setIsDarkTheme(false);
+    };
+  }, [mobileViewMode, setIsDarkTheme]);
 
   const modalIframeRef = useRef<HTMLIFrameElement>(null);
   const [isModalMuted, setIsModalMuted] = useState(true);
@@ -358,6 +382,95 @@ export default function LiveStreamingPage() {
     return endedChannelsList.find((c) => c.channel.id === selectedEndedChannelId)?.channel || null;
   }, [selectedEndedChannelId, endedChannelsList]);
 
+  // Gabungan siaran langsung aktif & rekaman kajian terkini untuk mode swipe mobile
+  const unifiedSwipeItems = useMemo<SwipeFeedItem[]>(() => {
+    const list: SwipeFeedItem[] = [];
+
+    // 1. Siaran Sedang LIVE (Prioritas Utama)
+    filteredLiveChannels.forEach((c) => {
+      if (c.current_video_id) {
+        list.push({
+          id: `live-${c.id}`,
+          videoId: c.current_video_id,
+          title: c.current_video_title || `Live Streaming ${c.channel_name}`,
+          speakerName: c.default_speaker_name || 'Asatidzah',
+          channelName: c.channel_name,
+          isLive: true,
+          posterUrl: `https://i.ytimg.com/vi/${c.current_video_id}/hqdefault.jpg`,
+        });
+      }
+    });
+
+    // 2. Rekaman Kajian Selesai (Diurutkan dari yang terbaru)
+    filteredEndedStreams.forEach((item) => {
+      list.push({
+        id: `ended-${item.videoId}`,
+        videoId: item.videoId,
+        title: item.title,
+        speakerName: item.speakerName || 'Asatidzah',
+        channelName: item.channelName,
+        isLive: false,
+        timeText: item.endedAt ? formatEndedTime(item.endedAt) : undefined,
+        posterUrl: `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+      });
+    });
+
+    return list;
+  }, [filteredLiveChannels, filteredEndedStreams]);
+
+  // Handler terpadu untuk masuk ke Mode Swipe (Mobile) dan otomatis menutup Mini Player jika sedang terbuka
+  const enterSwipeMode = useCallback(
+    (targetIndex?: number) => {
+      // Jika Mini Player sedang aktif / terbuka, otomatis tutup ("auto keluar")
+      if (isLivePlayerOpen) {
+        closePlayer();
+      }
+      if (typeof targetIndex === 'number' && targetIndex >= 0) {
+        setSwipeInitialIndex(targetIndex);
+      }
+      setMobileViewMode('swipe');
+    },
+    [isLivePlayerOpen, closePlayer]
+  );
+
+  // Listener event saat pengguna mengetuk tab Live pada navigasi bawah
+  useEffect(() => {
+    const handleSwitchToSwipe = () => {
+      enterSwipeMode();
+    };
+    window.addEventListener('peta-kajian:switch-to-swipe', handleSwitchToSwipe);
+    return () => {
+      window.removeEventListener('peta-kajian:switch-to-swipe', handleSwitchToSwipe);
+    };
+  }, [enterSwipeMode]);
+
+  // Safeguard: Jika pengguna berada di Mode Swipe pada mobile sementara Mini Player terbuka, otomatis tutup Mini Player
+  useEffect(() => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    if (isMobile && mobileViewMode === 'swipe' && isLivePlayerOpen) {
+      closePlayer();
+    }
+  }, [mobileViewMode, isLivePlayerOpen, closePlayer]);
+
+  // Handler terpadu untuk menonton siaran (Mobile: Buka di posisi Mode Swipe & tutup Mini Player, Desktop: Modal Player)
+  const handleWatchVideo = useCallback(
+    (video: {
+      videoId: string;
+      title: string;
+      channelName: string;
+      speakerName?: string;
+    }) => {
+      const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+      if (isMobile) {
+        const idx = unifiedSwipeItems.findIndex((it) => it.videoId === video.videoId);
+        enterSwipeMode(idx >= 0 ? idx : 0);
+      } else {
+        setSelectedVideo(video);
+      }
+    },
+    [unifiedSwipeItems, enterSwipeMode]
+  );
+
   // Reset paginasi saat kata kunci pencarian atau filter channel berubah
   useEffect(() => {
     setVisibleEndedCount(12);
@@ -427,87 +540,131 @@ export default function LiveStreamingPage() {
 
   return (
     <div className="min-h-screen bg-surface font-geist text-on-surface flex flex-col pb-28 sm:pb-8">
-      {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
-      <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
-          
-          {/* Sisi Kiri: Tombol Back ke Peta & Logo */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Link
-              href="/"
-              className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface transition-colors shrink-0"
-              title="Kembali ke Peta Kajian"
-            >
-              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-              <span className="hidden sm:inline">Peta Kajian</span>
-            </Link>
+      {/* TAMPILAN SWIPE FEED UTAMA KHUSUS MOBILE */}
+      {mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 && (
+        <div className="sm:hidden">
+          <MobileSwipeLiveViewer
+            items={unifiedSwipeItems}
+            initialIndex={swipeInitialIndex}
+            isOpen={true}
+            onSwitchToList={() => setMobileViewMode('list')}
+            onPlayMiniPlayer={(stream) => {
+              playStream({
+                videoId: stream.videoId,
+                title: stream.title,
+                channelName: stream.channelName,
+                speakerName: stream.speakerName || '',
+              });
+              setMobileViewMode('list');
+            }}
+          />
+        </div>
+      )}
 
-            <div className="h-5 w-px bg-surface-container-high hidden sm:block shrink-0" />
+      {/* TAMPILAN KATALOG / GRID (DESKTOP SELALU AKTIF, MOBILE HANYA SAAT MODE LIST ATAU SAAT BELUM ADA DATA) */}
+      <div className={mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 ? 'hidden sm:flex flex-col flex-1' : 'flex flex-col flex-1'}>
+        {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
+        <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
+          <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
+            
+            {/* Sisi Kiri: Tombol Back ke Peta & Logo */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <Link
+                href="/"
+                className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface transition-colors shrink-0"
+                title="Kembali ke Peta Kajian"
+              >
+                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                <span className="hidden sm:inline">Peta Kajian</span>
+              </Link>
 
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-red-600/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center font-bold shrink-0">
-                <span className="material-symbols-outlined text-[19px]">smart_display</span>
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <h1 className="font-bold text-xs sm:text-base leading-tight truncate">Live Kajian</h1>
+              <div className="h-5 w-px bg-surface-container-high hidden sm:block shrink-0" />
+
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-red-600/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center font-bold shrink-0">
+                  <span className="material-symbols-outlined text-[19px]">smart_display</span>
                 </div>
-                <p className="text-[10px] sm:text-[11px] text-outline truncate hidden xs:block">
-                  Siaran Langsung Kajian Islam
-                </p>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="font-bold text-xs sm:text-base leading-tight truncate">Live Kajian</h1>
+                  </div>
+                  <p className="text-[10px] sm:text-[11px] text-outline truncate hidden xs:block">
+                    Siaran Langsung Kajian Islam
+                  </p>
+                </div>
               </div>
             </div>
+
+            {/* Sisi Kanan: Status Counter & Menu Actions */}
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              {/* Pill Badge Sedang Live (Desktop Only) */}
+              {liveChannels.length > 0 ? (
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600 text-white text-xs font-bold shadow-xs animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  <span>{liveChannels.length} Sedang Live</span>
+                </div>
+              ) : upcomingStreams.length > 0 ? (
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-xs font-bold shadow-xs">
+                  <span className="material-symbols-outlined text-[14px]">schedule</span>
+                  <span>{upcomingStreams.length} Siaran Terjadwal</span>
+                </div>
+              ) : endedStreams.length > 0 ? (
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 text-xs font-bold shadow-xs">
+                  <span className="material-symbols-outlined text-[14px]">history</span>
+                  <span>{endedStreams.length} Rekaman Tersedia</span>
+                </div>
+              ) : (
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-xs font-medium text-outline">
+                  <span className="w-2 h-2 rounded-full bg-gray-400" />
+                  <span>Belum Ada Siaran Aktif</span>
+                </div>
+              )}
+
+              {/* Tombol Refresh */}
+              <button
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-on-surface-variant hover:bg-surface-container flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                title="Perbarui Data"
+              >
+                <span className={`material-symbols-outlined text-[18px] sm:text-[20px] ${isFetching ? 'animate-spin' : ''}`}>
+                  refresh
+                </span>
+              </button>
+            </div>
           </div>
+        </header>
 
-          {/* Sisi Kanan: Status Counter & Menu Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            {/* Pill Badge Sedang Live (Desktop Only) */}
-            {liveChannels.length > 0 ? (
-              <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-600 text-white text-xs font-bold shadow-xs animate-pulse">
-                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                <span>{liveChannels.length} Sedang Live</span>
-              </div>
-            ) : upcomingStreams.length > 0 ? (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30 text-xs font-bold shadow-xs">
-                <span className="material-symbols-outlined text-[14px]">schedule</span>
-                <span>{upcomingStreams.length} Siaran Terjadwal</span>
-              </div>
-            ) : endedStreams.length > 0 ? (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/30 text-xs font-bold shadow-xs">
-                <span className="material-symbols-outlined text-[14px]">history</span>
-                <span>{endedStreams.length} Rekaman Tersedia</span>
-              </div>
-            ) : (
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container text-xs font-medium text-outline">
-                <span className="w-2 h-2 rounded-full bg-gray-400" />
-                <span>Belum Ada Siaran Aktif</span>
-              </div>
-            )}
+        {/* HERO SECTION / BANNER */}
+        <section className="bg-gradient-to-b from-surface-container-low to-surface py-5 sm:py-8 px-3.5 sm:px-6 border-b border-surface-container-high/40">
+          <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
+            <div className="max-w-2xl">
+              {/* Tombol Pintas Buka Mode Swipe (Khusus Mobile saat Mode List) */}
+              {unifiedSwipeItems.length > 0 && (
+                <div className="sm:hidden mb-3">
+                  <button
+                    type="button"
+                    onClick={() => enterSwipeMode()}
+                    className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-white font-bold text-xs flex items-center justify-between shadow-md active:scale-98 transition-all cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[19px] animate-bounce">
+                        swipe_vertical
+                      </span>
+                      <span>Putar Reels / Swipe (Live & Rekaman)</span>
+                    </div>
+                    <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-black">
+                      {unifiedSwipeItems.length} Kajian
+                    </span>
+                  </button>
+                </div>
+              )}
 
-            {/* Tombol Refresh */}
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-on-surface-variant hover:bg-surface-container flex items-center justify-center transition-colors shrink-0 cursor-pointer"
-              title="Perbarui Data"
-            >
-              <span className={`material-symbols-outlined text-[18px] sm:text-[20px] ${isFetching ? 'animate-spin' : ''}`}>
-                refresh
-              </span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* HERO SECTION / BANNER */}
-      <section className="bg-gradient-to-b from-surface-container-low to-surface py-5 sm:py-8 px-3.5 sm:px-6 border-b border-surface-container-high/40">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-          <div className="max-w-2xl">
-            <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-[11px] sm:text-xs font-semibold border border-red-200 dark:border-red-900/50">
-                <span className="material-symbols-outlined text-[15px] sm:text-[16px] text-red-600">live_tv</span>
-                <span>Pusat Siaran Live & Jadwal Tayang</span>
-              </div>
+              <div className="flex items-center justify-between gap-2 mb-2 sm:mb-3">
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 text-[11px] sm:text-xs font-semibold border border-red-200 dark:border-red-900/50">
+                  <span className="material-symbols-outlined text-[15px] sm:text-[16px] text-red-600">live_tv</span>
+                  <span>Pusat Siaran Live & Jadwal Tayang</span>
+                </div>
 
               {/* Quick Actions Khusus Mobile (Refresh Data) */}
               <div className="md:hidden flex items-center gap-1.5">
@@ -714,7 +871,7 @@ export default function LiveStreamingPage() {
                             <div
                               className="relative aspect-video w-full bg-black cursor-pointer overflow-hidden"
                               onClick={() =>
-                                setSelectedVideo({
+                                handleWatchVideo({
                                   videoId,
                                   title,
                                   channelName: channel.channel_name,
@@ -757,7 +914,7 @@ export default function LiveStreamingPage() {
                                 <h4
                                   className="font-bold text-sm sm:text-base text-on-surface line-clamp-2 leading-snug cursor-pointer hover:text-red-600 transition-colors"
                                   onClick={() =>
-                                    setSelectedVideo({
+                                    handleWatchVideo({
                                       videoId,
                                       title,
                                       channelName: channel.channel_name,
@@ -773,7 +930,7 @@ export default function LiveStreamingPage() {
                               <div className="flex items-center gap-2 pt-3 border-t border-surface-container-high/60">
                                 <button
                                   onClick={() =>
-                                    setSelectedVideo({
+                                    handleWatchVideo({
                                       videoId,
                                       title,
                                       channelName: channel.channel_name,
@@ -1316,15 +1473,25 @@ export default function LiveStreamingPage() {
                             {/* Video Thumbnail Area */}
                             <div
                               className="relative aspect-video w-full bg-black cursor-pointer overflow-hidden"
-                              onClick={() =>
-                                playStream({
-                                  videoId,
-                                  title,
-                                  channelName: item.channelName,
-                                  speakerName: speaker,
-                                  handle: item.channel.channel_handle,
-                                })
-                              }
+                              onClick={() => {
+                                const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+                                if (isMobile) {
+                                  handleWatchVideo({
+                                    videoId,
+                                    title,
+                                    channelName: item.channelName,
+                                    speakerName: speaker,
+                                  });
+                                } else {
+                                  playStream({
+                                    videoId,
+                                    title,
+                                    channelName: item.channelName,
+                                    speakerName: speaker,
+                                    handle: item.channel.channel_handle,
+                                  });
+                                }
+                              }}
                             >
                               <img
                                 src={posterUrl}
@@ -1379,15 +1546,25 @@ export default function LiveStreamingPage() {
 
                                 <h4
                                   className="font-bold text-sm sm:text-base text-on-surface line-clamp-2 leading-snug cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                                  onClick={() =>
-                                    playStream({
-                                      videoId,
-                                      title,
-                                      channelName: item.channelName,
-                                      speakerName: speaker,
-                                      handle: item.channel.channel_handle,
-                                    })
-                                  }
+                                  onClick={() => {
+                                    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+                                    if (isMobile) {
+                                      handleWatchVideo({
+                                        videoId,
+                                        title,
+                                        channelName: item.channelName,
+                                        speakerName: speaker,
+                                      });
+                                    } else {
+                                      playStream({
+                                        videoId,
+                                        title,
+                                        channelName: item.channelName,
+                                        speakerName: speaker,
+                                        handle: item.channel.channel_handle,
+                                      });
+                                    }
+                                  }}
                                   title={title}
                                 >
                                   {title}
@@ -1400,15 +1577,25 @@ export default function LiveStreamingPage() {
                               {/* Action Buttons */}
                               <div className="flex items-center gap-2 pt-3 border-t border-surface-container-high/60">
                                 <button
-                                  onClick={() =>
-                                    playStream({
-                                      videoId,
-                                      title,
-                                      channelName: item.channelName,
-                                      speakerName: speaker,
-                                      handle: item.channel.channel_handle,
-                                    })
-                                  }
+                                  onClick={() => {
+                                    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+                                    if (isMobile) {
+                                      handleWatchVideo({
+                                        videoId,
+                                        title,
+                                        channelName: item.channelName,
+                                        speakerName: speaker,
+                                      });
+                                    } else {
+                                      playStream({
+                                        videoId,
+                                        title,
+                                        channelName: item.channelName,
+                                        speakerName: speaker,
+                                        handle: item.channel.channel_handle,
+                                      });
+                                    }
+                                  }}
                                   className="flex-1 h-9 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                                 >
                                   <span className="material-symbols-outlined text-[18px]">play_arrow</span>
@@ -1625,6 +1812,7 @@ export default function LiveStreamingPage() {
           </div>
         </div>
       </footer>
+      </div>
 
       {/* MODAL EMBED VIDEO PLAYER */}
       {selectedVideo && (
