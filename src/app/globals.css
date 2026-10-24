@@ -94,6 +94,13 @@
   display: none !important;
 }
 
+.maplibregl-ctrl-bottom-right,
+.maplibregl-ctrl-top-right,
+.maplibregl-ctrl-bottom-left,
+.maplibregl-ctrl-top-left {
+  z-index: 20 !important;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 

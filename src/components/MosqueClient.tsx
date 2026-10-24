@@ -1150,9 +1150,28 @@ export default function MosqueClient() {
 
         {/* MAP DISPLAY (PETA KANAN / MOBILE FULL) */}
         <main className="flex-1 h-full relative block z-10 overflow-hidden">
-          {/* Floating Controls di Peta Mobile (disembunyikan saat panel rute atau navigasi aktif) */}
-          {!isNavigating && !activeRouteMosque && (
-            <div className="sm:hidden absolute top-3 left-3 right-3 z-20 flex flex-col gap-1.5 pointer-events-none">
+          <MosqueMap
+            mosques={mapMosques}
+            selectedMosque={selectedMosque}
+            onSelectMosque={handleSelectMosque}
+            userLocation={userLocation}
+            radiusKm={isRadiusEnabled && userLocation ? debouncedRadiusKm : null}
+            focusArea={focusArea}
+            activeRoute={activeRoute}
+            isNavigating={isNavigating}
+            userHeading={userHeading}
+            onStartRoute={handleStartRoute}
+            onOpenProfile={handleOpenProfile}
+            vehicleIcon={vehicleIcon}
+            onVehicleIconChange={setVehicleIcon}
+            savedParkingSpot={savedParkingSpot}
+            onClearParkingSpot={handleClearParking}
+            mobileView={mobileView}
+          />
+
+          {/* Floating Controls di Peta Mobile (dirender setelah map dengan z-30 agar selalu di atas pin) */}
+          {!isNavigating && !activeRouteMosque && mobileView === 'map' && (
+            <div className="sm:hidden absolute top-3 left-3 right-3 z-30 flex flex-col gap-1.5 pointer-events-none">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 pointer-events-auto">
                   <button
@@ -1219,32 +1238,13 @@ export default function MosqueClient() {
 
           {/* Floating Indicator saat Memuat Titik Masjid di Peta */}
           {loading && !isNavigating && (
-            <div className="absolute bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
+            <div className="absolute bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
               <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-surface/95 border border-outline-variant/60 shadow-lg backdrop-blur-md text-xs font-bold text-on-surface">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
                 <span className="animate-pulse">Memuat titik masjid di peta...</span>
               </div>
             </div>
           )}
-
-          <MosqueMap
-            mosques={mapMosques}
-            selectedMosque={selectedMosque}
-            onSelectMosque={handleSelectMosque}
-            userLocation={userLocation}
-            radiusKm={isRadiusEnabled && userLocation ? debouncedRadiusKm : null}
-            focusArea={focusArea}
-            activeRoute={activeRoute}
-            isNavigating={isNavigating}
-            userHeading={userHeading}
-            onStartRoute={handleStartRoute}
-            onOpenProfile={handleOpenProfile}
-            vehicleIcon={vehicleIcon}
-            onVehicleIconChange={setVehicleIcon}
-            savedParkingSpot={savedParkingSpot}
-            onClearParkingSpot={handleClearParking}
-            mobileView={mobileView}
-          />
 
           {/* Panel Rute In-App Pratinjau (Tampil sebelum mulai navigasi langsung, identik dengan HomeClient) */}
           {activeRouteMosque && !isNavigating && routeDestinationSession && (

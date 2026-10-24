@@ -91,7 +91,7 @@ const MosqueMapMarker = React.memo(
         longitude={mosque.lng}
         latitude={mosque.lat}
         anchor="bottom"
-        style={{ zIndex: isSelected ? 35 : 20 }}
+        style={{ zIndex: isSelected ? 12 : 5 }}
         onClick={handleClick}
       >
         <div className="group flex flex-col items-center cursor-pointer select-none">
@@ -872,7 +872,7 @@ export default function MosqueMap({
             longitude={savedParkingSpot.lng}
             latitude={savedParkingSpot.lat}
             anchor="bottom"
-            style={{ zIndex: 38 }}
+            style={{ zIndex: 14 }}
             onClick={(e) => {
               e.originalEvent.stopPropagation();
               setSelectedParkingPopup(true);
@@ -896,7 +896,7 @@ export default function MosqueMap({
             onClose={() => setSelectedParkingPopup(false)}
             closeButton={false}
             offset={12}
-            className="z-50 font-geist"
+            className="z-25 font-geist"
           >
             <div className="p-3 bg-surface-container-lowest rounded-2xl shadow-xl border border-surface-container-high max-w-[220px]">
               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
@@ -937,7 +937,7 @@ export default function MosqueMap({
             longitude={userLocation.lng}
             latitude={userLocation.lat}
             anchor="center"
-            style={{ zIndex: 45 }}
+            style={{ zIndex: 15 }}
           >
             {isNavigating ? (
               <div
@@ -1072,7 +1072,7 @@ export default function MosqueMap({
               onClose={() => onSelectMosque(null)}
               closeButton={false}
               closeOnClick={false}
-              className="z-50"
+              className="z-25"
               offset={38}
               maxWidth="none"
             >
