@@ -256,6 +256,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Hindari pointer-events terkunci 'none' pada body akibat race condition penutupan dialog/drawer Radix/Vaul */
+    pointer-events: auto !important;
   }
   html {
     @apply font-sans;

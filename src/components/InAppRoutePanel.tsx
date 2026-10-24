@@ -75,6 +75,16 @@ export default function InAppRoutePanel({
     setSnapPoint(defaultSnapPoint);
   }, [defaultSnapPoint]);
 
+  // Pastikan pointer-events dan scroll lock selalu dinormalkan saat panel rute unmount
+  React.useEffect(() => {
+    return () => {
+      if (typeof document !== 'undefined') {
+        document.body.style.pointerEvents = 'auto';
+        document.body.removeAttribute('data-scroll-locked');
+      }
+    };
+  }, []);
+
   const etaInfo = React.useMemo(() => {
     if (!routeResult) return null;
     return calculateEtaComparison(routeResult.durationMinutes, session.start_datetime);
@@ -398,7 +408,7 @@ export default function InAppRoutePanel({
           open={true}
         >
           <Drawer.Portal>
-            <Drawer.Content className="md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col h-[90dvh] max-h-[90dvh] bg-surface-container-lowest/98 backdrop-blur-md rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.15)] border-t border-surface-container-high/80 focus:outline-none font-geist">
+            <Drawer.Content className="md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col h-[90dvh] max-h-[90dvh] bg-surface-container-lowest/98 backdrop-blur-md rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.15)] border-t border-surface-container-high/80 focus:outline-none font-geist pointer-events-auto">
               <Drawer.Title className="sr-only">Petunjuk Arah Rute In-App</Drawer.Title>
               <Drawer.Description className="sr-only">
                 Rincian rute, pilihan jalur alternatif, dan navigasi langsung ke lokasi kajian

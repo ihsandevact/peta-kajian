@@ -85,7 +85,7 @@ export default function MobileBottomNav({
   return (
     <nav
       className={`md:hidden fixed z-50 left-3 right-3 sm:left-6 sm:right-6 max-w-md mx-auto bottom-[calc(10px+env(safe-area-inset-bottom,0px))] transition-transform duration-300 font-geist ${
-        isHidden ? 'translate-y-[150%] opacity-0 pointer-events-none' : ''
+        isHidden ? 'translate-y-[150%] opacity-0 pointer-events-none' : 'pointer-events-auto'
       } ${className}`}
       aria-label="Navigasi Menu Mobile"
     >

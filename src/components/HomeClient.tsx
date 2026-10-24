@@ -114,6 +114,10 @@ export default function HomeClient() {
   const { setIsHidden: setIsBottomNavHidden } = useBottomNav();
   useEffect(() => {
     setIsBottomNavHidden(Boolean(activeRouteSession));
+    if (!activeRouteSession && typeof document !== 'undefined') {
+      document.body.style.pointerEvents = 'auto';
+      document.body.removeAttribute('data-scroll-locked');
+    }
     return () => setIsBottomNavHidden(false);
   }, [activeRouteSession, setIsBottomNavHidden]);
   const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
@@ -482,6 +486,12 @@ export default function HomeClient() {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
+
+    // Bersihkan pointer-events lock Radix/Vaul pada body
+    if (typeof document !== 'undefined') {
+      document.body.style.pointerEvents = 'auto';
+      document.body.removeAttribute('data-scroll-locked');
+    }
   }, []);
 
   // Handler pemilihan kajian terpusat: otomatis membersihkan rute/navigasi jika memilih kajian lain
@@ -508,6 +518,20 @@ export default function HomeClient() {
     if (prevSession) {
       // Kloning objek agar referensi state baru dan memicu flyToSession di Map.tsx
       setSelectedSession({ ...prevSession });
+    }
+
+    // Pastikan pointer-events dan scroll-lock selalu pulih saat menutup rute/navigasi
+    if (typeof document !== 'undefined') {
+      document.body.style.pointerEvents = 'auto';
+      document.body.removeAttribute('data-scroll-locked');
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto';
+        document.body.removeAttribute('data-scroll-locked');
+      }, 50);
+      setTimeout(() => {
+        document.body.style.pointerEvents = 'auto';
+        document.body.removeAttribute('data-scroll-locked');
+      }, 500);
     }
   }, [activeRouteSession, handleExitLiveNav]);
 
@@ -1167,7 +1191,7 @@ export default function HomeClient() {
               >
                 <Drawer.Portal>
                   <Drawer.Content 
-                    className="md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col h-[92dvh] max-h-[92dvh] bg-surface-container-lowest rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-surface-container-high/60 focus:outline-none pb-[calc(64px+env(safe-area-inset-bottom,0px))]"
+                    className="md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col h-[92dvh] max-h-[92dvh] bg-surface-container-lowest rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-surface-container-high/60 focus:outline-none pb-[calc(64px+env(safe-area-inset-bottom,0px))] pointer-events-auto"
                   >
                     <Drawer.Title className="sr-only">Daftar &amp; Filter Kajian</Drawer.Title>
                     <Drawer.Description className="sr-only">Navigasi dan filter daftar jadwal kajian</Drawer.Description>
