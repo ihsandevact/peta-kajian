@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { BottomNavProvider } from "@/context/BottomNavContext";
 import MobileBottomNav from "@/components/MobileBottomNav";
+import NavigationHistoryTracker from "@/components/navigation/NavigationHistoryTracker";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import { LivePlayerProvider } from "@/context/LivePlayerContext";
 import PersistentFloatingLivePlayer from "@/components/PersistentFloatingLivePlayer";
@@ -67,6 +68,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <PWASplashScreen />
             <LivePlayerProvider>
               <BottomNavProvider>
+                <NavigationHistoryTracker />
                 {children}
                 <MobileBottomNav />
                 <PersistentFloatingLivePlayer />

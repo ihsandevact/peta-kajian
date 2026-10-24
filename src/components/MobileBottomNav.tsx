@@ -56,12 +56,13 @@ export default function MobileBottomNav({
     setOptimisticIndex(null);
   }, [pathname]);
 
-  if (
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/auth') ||
-    pathname.startsWith('/kontributor') ||
-    pathname.startsWith('/profile')
-  ) {
+  const isAllowedPage =
+    pathname === '/' ||
+    pathname.startsWith('/masjid') ||
+    pathname.startsWith('/peta') ||
+    pathname.startsWith('/live');
+
+  if (!isAllowedPage) {
     return null;
   }
 

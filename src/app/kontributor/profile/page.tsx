@@ -10,6 +10,7 @@ import { deleteKajian } from '@/app/actions/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { checkIsAdmin, getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
 import ProfileMenuBottomSheet from '@/components/profile/ProfileMenuBottomSheet';
+import DynamicBackButton from '@/components/navigation/DynamicBackButton';
 import { useAttendance } from '@/utils/attendance';
 import { useBookmarks } from '@/utils/bookmarks';
 import RequestContributorModal from '@/components/RequestContributorModal';
@@ -399,14 +400,7 @@ export default function ContributorProfilePage() {
       {/* Top Navigation */}
       <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
         <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container shrink-0"
-          >
-            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            <span className="hidden sm:inline">Kembali ke Beranda</span>
-            <span className="sm:hidden text-[11px]">Beranda</span>
-          </Link>
+          <DynamicBackButton />
 
           {/* Desktop Actions */}
           <div className="hidden sm:flex items-center gap-1.5 sm:gap-2 shrink-0">

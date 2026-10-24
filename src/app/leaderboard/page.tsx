@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { fetchContributorLeaderboard, type ContributorEntry, type LeaderboardGroup } from '@/lib/services/kajian';
 import { checkIsAdmin, getUserRoleAndStatus, type AppUserRole } from '@/lib/services/admin';
-import MobileNavDrawer from '@/components/MobileNavDrawer';
+import AppMenuBottomSheet from '@/components/navigation/AppMenuBottomSheet';
+import DynamicBackButton from '@/components/navigation/DynamicBackButton';
 
 export default function LeaderboardPage() {
   const [data, setData] = useState<LeaderboardGroup>({ volunteers: [], channels: [] });
@@ -88,14 +89,7 @@ export default function LeaderboardPage() {
       {/* Top Navigation Bar */}
       <header className="sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
         <div className="max-w-2xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1 sm:gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container shrink-0"
-          >
-            <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-            <span className="hidden sm:inline">Kembali ke Peta</span>
-            <span className="sm:hidden text-[11px]">Peta</span>
-          </Link>
+          <DynamicBackButton />
 
           {/* Desktop Right Actions */}
           <div className="hidden sm:flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -154,21 +148,36 @@ export default function LeaderboardPage() {
           <button
             type="button"
             onClick={() => setIsDrawerOpen(true)}
-            className="sm:hidden w-8 h-8 rounded-lg bg-surface-container border border-surface-container-high flex items-center justify-center text-on-surface hover:bg-surface-container-high transition-colors cursor-pointer active:scale-95"
+            className="sm:hidden w-9 h-9 rounded-xl bg-surface-container/80 hover:bg-surface-container-high border border-outline-variant/50 flex items-center justify-center text-on-surface shadow-2xs active:scale-95 transition-all cursor-pointer"
             aria-label="Buka Menu Navigasi"
           >
-            <span className="material-symbols-outlined text-[20px]">menu</span>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-on-surface"
+            >
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="14" y2="12" />
+              <line x1="4" y1="18" x2="18" y2="18" />
+            </svg>
           </button>
         </div>
       </header>
 
-      {/* Slide-over Mobile Sidebar Drawer */}
-      <MobileNavDrawer
+      {/* Vaul Bottom Sheet Menu Mobile */}
+      <AppMenuBottomSheet
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         currentUser={
           currentUser
             ? {
+                id: currentUser.id,
                 name: currentUserName,
                 email: currentUser.email,
                 avatarUrl: currentUserAvatar,
