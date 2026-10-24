@@ -46,14 +46,21 @@ export default function MobileSwipeLiveViewer({
 }: MobileSwipeLiveViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   // Deteksi khusus iOS (Apple WebKit memblokir unmuted autoplay)
-  const isIOS = useMemo(() => checkIsIOS(), []);
+  const [isIOS, setIsIOS] = useState(false);
+  useEffect(() => {
+    setIsIOS(checkIsIOS());
+  }, []);
 
-  // Di iOS default = true (muted agar autoplay berjalan instan tanpa diblokir Safari).
-  // Di Android & lainnya default = false (langsung bersuara seketika).
-  const [isMuted, setIsMuted] = useState(() => checkIsIOS());
+  // Di mobile default = true (muted agar autoplay berjalan instan tanpa diblokir Safari & WebKit).
+  const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [autoplayFailed, setAutoplayFailed] = useState(false);
   const [isTitleExpanded, setIsTitleExpanded] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Ref untuk melacak upaya kickstart autoplay berkala
+  const autoplayAttemptsRef = useRef(0);
 
   // State untuk melacak apakah pengguna sudah pernah melakukan swipe ke atas dalam sesi kunjungan saat ini
   const [hasSwipedUp, setHasSwipedUp] = useState<boolean>(false);
@@ -96,16 +103,33 @@ export default function MobileSwipeLiveViewer({
       setCurrentIndex(validIndex);
       setDragOffset(0);
       setIsPaused(false);
+      setIsPlaying(false);
+      setAutoplayFailed(false);
+      autoplayAttemptsRef.current = 0;
       isUserPausedRef.current = false;
       setIsTitleExpanded(false);
     }
   }, [isOpen, initialIndex, items.length]);
 
-  // Reset pause state whenever currentIndex changes
+  // Reset playback & kickstart states whenever currentIndex changes
   useEffect(() => {
     setIsPaused(false);
+    setIsPlaying(false);
+    setAutoplayFailed(false);
+    autoplayAttemptsRef.current = 0;
     isUserPausedRef.current = false;
   }, [currentIndex]);
+
+  // Deteksi jika autoplay tertahan browser (misal di iPhone saat Low Power Mode aktif)
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setTimeout(() => {
+      if (!isPlaying && !isUserPausedRef.current) {
+        setAutoplayFailed(true);
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [isOpen, currentIndex, isPlaying]);
 
   // Toast auto-hide
   useEffect(() => {
@@ -134,6 +158,8 @@ export default function MobileSwipeLiveViewer({
     sendIframeCommand('playVideo');
     setIsMuted(false);
     setIsPaused(false);
+    setIsPlaying(true);
+    setAutoplayFailed(false);
   }, [sendIframeCommand]);
 
   // Mute toggle helper
@@ -148,29 +174,39 @@ export default function MobileSwipeLiveViewer({
 
   // Play / Pause toggle helper ala TikTok
   const togglePlayPause = useCallback(() => {
-    if (isPaused) {
+    if (isPaused || !isPlaying) {
       isUserPausedRef.current = false;
       sendIframeCommand('playVideo');
       setIsPaused(false);
+      setIsPlaying(true);
+      setAutoplayFailed(false);
     } else {
       isUserPausedRef.current = true;
       sendIframeCommand('pauseVideo');
       setIsPaused(true);
+      setIsPlaying(false);
     }
-  }, [isPaused, sendIframeCommand]);
+  }, [isPaused, isPlaying, sendIframeCommand]);
 
   // Handler cerdas ketukan area video ala TikTok / Reels:
-  // - Khusus di iOS saat masih termute: ketukan pertama langsung menyalakan suara
-  // - Di Android / non-iOS: suara sudah aktif sejak awal, sehingga ketukan langsung play/pause
+  // - Jika belum berputar / dijeda / autoplay tertahan browser: LANGSUNG playVideo & unMute
+  // - Jika sudah berputar lancar: bertindak sebagai toggle play / pause
   const handleVideoAreaTap = useCallback(() => {
-    if (isIOS && isMuted) {
-      handleUnmute();
+    if (!isPlaying || isPaused || autoplayFailed) {
+      isUserPausedRef.current = false;
+      sendIframeCommand('playVideo');
+      setIsPaused(false);
+      setIsPlaying(true);
+      setAutoplayFailed(false);
+      if (isMuted) {
+        handleUnmute();
+      }
     } else {
       togglePlayPause();
     }
-  }, [isIOS, isMuted, handleUnmute, togglePlayPause]);
+  }, [isPlaying, isPaused, autoplayFailed, isMuted, handleUnmute, togglePlayPause, sendIframeCommand]);
 
-  // Handshake berkala ke YouTube iframe agar kontinu melaporkan playback state
+  // Handshake berkala & agresif kickstart autoplay di YouTube iframe
   useEffect(() => {
     if (!isOpen) return;
 
@@ -181,14 +217,20 @@ export default function MobileSwipeLiveViewer({
             JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
             '*'
           );
+
+          // Lakukan kickstart playVideo hingga 6 kali dalam 3 detik pertama jika belum terdeteksi playing
+          if (!isUserPausedRef.current && autoplayAttemptsRef.current < 6) {
+            sendIframeCommand('playVideo');
+            autoplayAttemptsRef.current += 1;
+          }
         }
       } catch {}
-    }, 800);
+    }, 500);
 
     return () => clearInterval(interval);
-  }, [isOpen]);
+  }, [isOpen, currentIndex, sendIframeCommand]);
 
-  // Sinkronisasi status player YouTube (playing/paused/cued) secara real-time
+  // Sinkronisasi status player YouTube (playing/paused/cued/onReady) secara real-time
   useEffect(() => {
     if (!isOpen) return;
 
@@ -203,17 +245,27 @@ export default function MobileSwipeLiveViewer({
           }
         }
 
+        // Tangani event onReady langsung dari YouTube widget -> segera picu playVideo
+        if (data?.event === 'onReady') {
+          if (!isUserPausedRef.current) {
+            sendIframeCommand('playVideo');
+          }
+        }
+
         if (data?.event === 'infoDelivery' || data?.info) {
           const info = data.info || data;
           const playerState = info.playerState;
 
           if (playerState === 1) {
             // Sedang berputar (Playing)
+            setIsPlaying(true);
             setIsPaused(false);
+            setAutoplayFailed(false);
           } else if (playerState === 2) {
             // Sedang dijeda (Paused)
             if (isUserPausedRef.current) {
               setIsPaused(true);
+              setIsPlaying(false);
             } else {
               // Auto-pause oleh browser / background tab -> override agar tetap jalan
               sendIframeCommand('playVideo');
@@ -222,10 +274,6 @@ export default function MobileSwipeLiveViewer({
             // Cued / unstarted -> segera kickstart autoplay
             if (!isUserPausedRef.current) {
               sendIframeCommand('playVideo');
-              if (!isMuted) {
-                sendIframeCommand('unMute');
-                sendIframeCommand('setVolume', [100]);
-              }
             }
           }
 
@@ -238,7 +286,7 @@ export default function MobileSwipeLiveViewer({
 
     window.addEventListener('message', handleWindowMessage);
     return () => window.removeEventListener('message', handleWindowMessage);
-  }, [isOpen, isMuted, sendIframeCommand]);
+  }, [isOpen, sendIframeCommand]);
 
   // Penanganan background playback & instant auto-resume saat berpindah tab atau jendela
   useEffect(() => {
@@ -366,6 +414,9 @@ export default function MobileSwipeLiveViewer({
       setCurrentIndex((prev) => prev + 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
+      setIsPlaying(false);
+      setAutoplayFailed(false);
+      autoplayAttemptsRef.current = 0;
       markSwipedUp();
     } else if (diff > threshold && currentIndex > 0) {
       // Geser ke bawah -> Previous Video
@@ -373,6 +424,9 @@ export default function MobileSwipeLiveViewer({
       setCurrentIndex((prev) => prev - 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
+      setIsPlaying(false);
+      setAutoplayFailed(false);
+      autoplayAttemptsRef.current = 0;
     }
 
     setIsDragging(false);
@@ -493,7 +547,7 @@ export default function MobileSwipeLiveViewer({
             <iframe
               key={currentVideoId}
               ref={activeIframeRef}
-              src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${isIOS ? 1 : isMuted ? 1 : 0}&enablejsapi=1&playsinline=1&rel=0&modestbranding=1`}
+              src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&controls=0&rel=0&modestbranding=1&origin=${typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : ''}`}
               title={currentTitle}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
@@ -506,10 +560,6 @@ export default function MobileSwipeLiveViewer({
                     '*'
                   );
                   sendIframeCommand('playVideo');
-                  if (!isMuted) {
-                    sendIframeCommand('unMute');
-                    sendIframeCommand('setVolume', [100]);
-                  }
                 } catch {}
               }}
             />
@@ -520,10 +570,17 @@ export default function MobileSwipeLiveViewer({
               className="absolute inset-0 z-10 cursor-pointer flex items-center justify-center select-none"
               aria-label={isMuted ? 'Nyalakan Suara' : isPaused ? 'Putar Video' : 'Jeda Video'}
             >
-              {/* Centered Frosted Play Icon saat di-Pause */}
-              {isPaused && (
-                <div className="w-16 h-16 rounded-full bg-black/65 backdrop-blur-md text-white flex items-center justify-center shadow-2xl border border-white/20 animate-in zoom-in-75 duration-200">
-                  <span className="material-symbols-outlined text-[38px] ml-1">play_arrow</span>
+              {/* Centered Frosted Play Icon saat di-Pause atau jika Autoplay ditahan Browser */}
+              {(isPaused || autoplayFailed) && (
+                <div className="flex flex-col items-center gap-2 animate-in zoom-in-75 duration-200">
+                  <div className="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md text-white flex items-center justify-center shadow-2xl border border-white/25 active:scale-90 transition-transform">
+                    <span className="material-symbols-outlined text-[38px] ml-1 text-white">play_arrow</span>
+                  </div>
+                  {autoplayFailed && (
+                    <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md text-white/90 text-[11px] font-semibold border border-white/15 shadow-lg">
+                      Ketuk untuk Memutar
+                    </span>
+                  )}
                 </div>
               )}
             </div>
