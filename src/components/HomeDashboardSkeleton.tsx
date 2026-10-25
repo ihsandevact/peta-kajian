@@ -3,11 +3,11 @@ import React from 'react';
 /**
  * Skeleton untuk kartu kajian di Beranda (Grid 1 / 2 / 3 kolom)
  */
-export function HomeKajianCardSkeleton() {
+export function HomeKajianCardSkeleton({ className = '' }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface shadow-xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3"
+      className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface shadow-xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
     >
       <div className="space-y-2 animate-pulse">
         {/* Baris Badges Tanggal & Jarak */}
@@ -47,11 +47,11 @@ export function HomeKajianCardSkeleton() {
 /**
  * Skeleton untuk kartu direktori masjid di Beranda (Grid 1 / 2 / 4 kolom)
  */
-export function HomeMosqueCardSkeleton() {
+export function HomeMosqueCardSkeleton({ className = '' }: { className?: string }) {
   return (
     <div
       aria-hidden="true"
-      className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface shadow-xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3"
+      className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface shadow-xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
     >
       <div className="space-y-2 animate-pulse">
         {/* Ikon Kubah Masjid & Badge Jarak */}
@@ -76,6 +76,40 @@ export function HomeMosqueCardSkeleton() {
         <div className="h-7 w-16 sm:w-20 rounded-lg sm:rounded-xl bg-emerald-600/20" />
       </div>
     </div>
+  );
+}
+
+/**
+ * Skeleton untuk kartu kutipan hadits harian di Beranda
+ */
+export function DailyHadithSkeleton() {
+  return (
+    <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
+      <div className="rounded-2xl sm:rounded-3xl bg-surface border border-emerald-500/20 p-3.5 sm:p-5 shadow-xs space-y-2.5 animate-pulse">
+        {/* Baris Atas */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-600/15" />
+            <div className="h-4 w-24 rounded bg-surface-container-high" />
+            <div className="h-4 w-20 rounded-full bg-emerald-600/10" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-7 w-12 sm:w-16 rounded-lg sm:rounded-xl bg-surface-container-high" />
+            <div className="h-7 w-12 sm:w-16 rounded-lg sm:rounded-xl bg-surface-container-high" />
+            <div className="h-7 w-14 sm:w-18 rounded-lg sm:rounded-xl bg-emerald-600/20" />
+          </div>
+        </div>
+
+        {/* Teks Terjemahan Hadits */}
+        <div className="space-y-1.5 pt-1">
+          <div className="h-4 sm:h-4.5 bg-surface-container-high rounded w-full" />
+          <div className="h-4 sm:h-4.5 bg-surface-container-high rounded w-4/5" />
+        </div>
+
+        {/* Perawi */}
+        <div className="h-3 w-36 rounded bg-emerald-600/15 mt-2" />
+      </div>
+    </section>
   );
 }
 
@@ -202,7 +236,10 @@ export default function HomeDashboardSkeleton() {
         </div>
       </section>
 
-      {/* 4. SEKSI JADWAL KAJIAN TERDEKAT & HARI INI */}
+      {/* 4. SEKSI MUTIARA HADITS SKELETON */}
+      <DailyHadithSkeleton />
+
+      {/* 5. SEKSI JADWAL KAJIAN TERDEKAT & HARI INI */}
       <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-8 sm:pb-10 w-full space-y-3.5 sm:space-y-4">
         {/* Header Seksi & Tab Filter Placeholder */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3 animate-pulse">
@@ -218,10 +255,10 @@ export default function HomeDashboardSkeleton() {
           </div>
         </div>
 
-        {/* Grid 6 Kartu Kajian */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <HomeKajianCardSkeleton key={i} />
+        {/* Grid 4 Kartu Kajian (Mobile Swipe / Desktop 4-Kolom) */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <HomeKajianCardSkeleton key={i} className="w-[82vw] sm:w-auto shrink-0 snap-start" />
           ))}
         </div>
 
@@ -242,10 +279,10 @@ export default function HomeDashboardSkeleton() {
             <div className="h-4 w-32 rounded bg-teal-600/20 self-start sm:self-auto" />
           </div>
 
-          {/* Grid 4 Kartu Masjid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          {/* Grid 4 Kartu Masjid (Mobile Swipe / Desktop 4-Kolom) */}
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar">
             {Array.from({ length: 4 }).map((_, i) => (
-              <HomeMosqueCardSkeleton key={i} />
+              <HomeMosqueCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start" />
             ))}
           </div>
         </div>

@@ -19,6 +19,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { type StudySession } from '@/lib/services/kajian';
 import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
 import { HomeKajianCardSkeleton, HomeMosqueCardSkeleton } from '@/components/HomeDashboardSkeleton';
+import DailyHadithCard from '@/components/DailyHadithCard';
 
 // Dynamic lazy imports for heavy interactive overlays
 const MoreMenuBottomSheet = dynamic(() => import('@/components/MoreMenuBottomSheet'), { ssr: false });
@@ -192,7 +193,7 @@ export default function HomeDashboardClient() {
       list = list.filter((item) => item.info.isToday && !item.info.isPast);
       if (list.length === 0) {
         // Fallback ke kajian mendatang terdekat jika hari ini belum ada
-        list = sessions.slice(0, 6).map((s) => ({
+        list = sessions.slice(0, 4).map((s) => ({
           session: s,
           info: getEffectiveSessionInfo(s, now),
           distance:
@@ -212,7 +213,7 @@ export default function HomeDashboardClient() {
       list = list.filter((item) => item.session.is_online);
     }
 
-    return list.slice(0, 6);
+    return list.slice(0, 4);
   }, [sessions, activeKajianTab, userLocation]);
 
   // 2. Data Live Streaming (TanStack Query)
@@ -761,7 +762,10 @@ export default function HomeDashboardClient() {
         </section>
       )}
 
-      {/* 5. SEKSI KAJIAN HARI INI & PILIHAN */}
+      {/* 5. SEKSI MUTIARA HADITS (FAEDAH ILMU) */}
+      <DailyHadithCard />
+
+      {/* 6. SEKSI KAJIAN HARI INI & PILIHAN */}
       <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-8 sm:pb-10 w-full space-y-3.5 sm:space-y-4">
         {/* Header Seksi & Tab Filter */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
@@ -803,9 +807,9 @@ export default function HomeDashboardClient() {
 
         {/* Daftar Kartu Kajian */}
         {isSessionsLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <HomeKajianCardSkeleton key={i} />
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <HomeKajianCardSkeleton key={i} className="w-[82vw] sm:w-auto shrink-0 snap-start" />
             ))}
           </div>
         ) : filteredKajianList.length === 0 ? (
@@ -820,7 +824,7 @@ export default function HomeDashboardClient() {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
             {filteredKajianList.map(({ session, info, distance }) => {
               const booked = isBookmarked(session.id);
               const attend = isAttending(session.id);
@@ -834,7 +838,7 @@ export default function HomeDashboardClient() {
               return (
                 <div
                   key={session.id}
-                  className="group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-emerald-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
+                  className="w-[82vw] sm:w-auto shrink-0 snap-start group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-emerald-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
                 >
                   <div className="space-y-1.5 sm:space-y-2">
                     {/* Badge Tanggal & Jarak */}
@@ -954,11 +958,11 @@ export default function HomeDashboardClient() {
             </Link>
           </div>
 
-          {/* Grid Masjid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+          {/* Grid Masjid (Mobile Swipe / Desktop 4-Kolom) */}
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar">
             {isMosquesLoading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <HomeMosqueCardSkeleton key={i} />
+                  <HomeMosqueCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start" />
                 ))
               : nearbyMosques.map((mosque) => {
                   const travel =
@@ -969,7 +973,7 @@ export default function HomeDashboardClient() {
                   return (
                     <div
                       key={mosque.id}
-                      className="group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-teal-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
+                      className="w-[78vw] sm:w-auto shrink-0 snap-start group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-teal-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
                     >
                       <div className="space-y-1.5 sm:space-y-2">
                         <div className="flex items-start justify-between gap-1.5">
