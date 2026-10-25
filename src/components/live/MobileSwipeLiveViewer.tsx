@@ -36,7 +36,7 @@ const checkIsIOS = () => {
   return isIosDevice || isIPadOS;
 };
 
-export default function MobileSwipeLiveViewer({
+function MobileSwipeLiveViewer({
   items,
   initialIndex,
   isOpen,
@@ -90,6 +90,31 @@ export default function MobileSwipeLiveViewer({
   const [isDragging, setIsDragging] = useState(false);
   const touchStartY = useRef<number | null>(null);
   const touchCurrentY = useRef<number | null>(null);
+  const rafId = useRef<number | null>(null);
+
+  // Bersihkan rafId saat komponen di-unmount
+  useEffect(() => {
+    return () => {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+      }
+    };
+  }, []);
+
+  // Preload poster video berikutnya & sebelumnya di latar belakang agar transisi swipe instan tanpa kedip
+  useEffect(() => {
+    if (items.length === 0) return;
+    const nextPoster = items[currentIndex + 1]?.posterUrl;
+    if (nextPoster) {
+      const img = new Image();
+      img.src = nextPoster;
+    }
+    const prevPoster = items[currentIndex - 1]?.posterUrl;
+    if (prevPoster) {
+      const img = new Image();
+      img.src = prevPoster;
+    }
+  }, [currentIndex, items]);
 
   // Iframe ref for active playing video
   const activeIframeRef = useRef<HTMLIFrameElement>(null);
@@ -206,9 +231,12 @@ export default function MobileSwipeLiveViewer({
     }
   }, [isPlaying, isPaused, autoplayFailed, isMuted, handleUnmute, togglePlayPause, sendIframeCommand]);
 
-  // Handshake berkala & agresif kickstart autoplay di YouTube iframe
+  // Handshake berkala & adaptif kickstart autoplay di YouTube iframe (hemat baterai saat stabil)
   useEffect(() => {
     if (!isOpen) return;
+
+    // Polling agresif (500ms) saat belum berputar, melambat ke polling hemat baterai (3000ms) saat stabil
+    const pollInterval = isPlaying ? 3000 : 500;
 
     const interval = setInterval(() => {
       try {
@@ -219,16 +247,16 @@ export default function MobileSwipeLiveViewer({
           );
 
           // Lakukan kickstart playVideo hingga 6 kali dalam 3 detik pertama jika belum terdeteksi playing
-          if (!isUserPausedRef.current && autoplayAttemptsRef.current < 6) {
+          if (!isUserPausedRef.current && !isPlaying && autoplayAttemptsRef.current < 6) {
             sendIframeCommand('playVideo');
             autoplayAttemptsRef.current += 1;
           }
         }
       } catch {}
-    }, 500);
+    }, pollInterval);
 
     return () => clearInterval(interval);
-  }, [isOpen, currentIndex, sendIframeCommand]);
+  }, [isOpen, currentIndex, isPlaying, sendIframeCommand]);
 
   // Sinkronisasi status player YouTube (playing/paused/cued/onReady) secara real-time
   useEffect(() => {
@@ -391,14 +419,26 @@ export default function MobileSwipeLiveViewer({
     const diff = touchCurrentY.current - touchStartY.current;
 
     // Resistance saat berada di batas atas atau batas bawah
-    if ((currentIndex === 0 && diff > 0) || (currentIndex === items.length - 1 && diff < 0)) {
-      setDragOffset(diff * 0.25);
-    } else {
-      setDragOffset(diff);
+    const targetOffset =
+      (currentIndex === 0 && diff > 0) || (currentIndex === items.length - 1 && diff < 0)
+        ? diff * 0.25
+        : diff;
+
+    // Throttle rendering via requestAnimationFrame agar selaras dengan 60fps/120fps vsync layar
+    if (rafId.current === null) {
+      rafId.current = requestAnimationFrame(() => {
+        setDragOffset(targetOffset);
+        rafId.current = null;
+      });
     }
   };
 
   const handleTouchEnd = () => {
+    if (rafId.current !== null) {
+      cancelAnimationFrame(rafId.current);
+      rafId.current = null;
+    }
+
     if (touchStartY.current === null || touchCurrentY.current === null) {
       setIsDragging(false);
       setDragOffset(0);
@@ -474,14 +514,19 @@ export default function MobileSwipeLiveViewer({
   return (
     <div
       className="fixed inset-0 z-40 bg-black text-white flex flex-col justify-between select-none overflow-hidden touch-none font-geist"
+      style={{ contain: 'strict' }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
       {/* AMBIENT BLURRED BACKDROP DARI POSTER VIDEO */}
       <div
-        className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-35 scale-125 pointer-events-none transition-all duration-700"
-        style={{ backgroundImage: `url(${currentPoster})` }}
+        className="absolute inset-0 bg-cover bg-center filter blur-3xl opacity-35 scale-125 pointer-events-none transition-opacity duration-700"
+        style={{
+          backgroundImage: `url(${currentPoster})`,
+          transform: 'translate3d(0, 0, 0)',
+          backfaceVisibility: 'hidden',
+        }}
       />
       <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-transparent to-black/90 pointer-events-none z-1" />
 
@@ -538,7 +583,8 @@ export default function MobileSwipeLiveViewer({
         <div
           className="w-full h-full flex flex-col items-center justify-center relative transition-transform"
           style={{
-            transform: `translateY(${dragOffset}px)`,
+            transform: `translate3d(0, ${dragOffset}px, 0)`,
+            willChange: isDragging ? 'transform' : 'auto',
             transition: isDragging ? 'none' : 'transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)',
           }}
         >
@@ -727,3 +773,5 @@ export default function MobileSwipeLiveViewer({
     </div>
   );
 }
+
+export default React.memo(MobileSwipeLiveViewer);

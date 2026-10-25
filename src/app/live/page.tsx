@@ -483,6 +483,30 @@ export default function LiveStreamingPage() {
     [unifiedSwipeItems, enterSwipeMode]
   );
 
+  // Callback stabil untuk beralih ke mode list/katalog dari mode swipe
+  const handleSwitchToList = useCallback(() => {
+    setMobileViewMode('list');
+  }, []);
+
+  // Callback stabil untuk membuka mini player dari tombol aksi mode swipe
+  const handlePlayMiniPlayerFromSwipe = useCallback(
+    (stream: {
+      videoId: string;
+      title: string;
+      channelName: string;
+      speakerName?: string;
+    }) => {
+      playStream({
+        videoId: stream.videoId,
+        title: stream.title,
+        channelName: stream.channelName,
+        speakerName: stream.speakerName || '',
+      });
+      setMobileViewMode('list');
+    },
+    [playStream]
+  );
+
   // Reset paginasi saat kata kunci pencarian atau filter channel berubah
   useEffect(() => {
     setVisibleEndedCount(12);
@@ -559,22 +583,19 @@ export default function LiveStreamingPage() {
             items={unifiedSwipeItems}
             initialIndex={swipeInitialIndex}
             isOpen={true}
-            onSwitchToList={() => setMobileViewMode('list')}
-            onPlayMiniPlayer={(stream) => {
-              playStream({
-                videoId: stream.videoId,
-                title: stream.title,
-                channelName: stream.channelName,
-                speakerName: stream.speakerName || '',
-              });
-              setMobileViewMode('list');
-            }}
+            onSwitchToList={handleSwitchToList}
+            onPlayMiniPlayer={handlePlayMiniPlayerFromSwipe}
           />
         </div>
       )}
 
       {/* TAMPILAN KATALOG / GRID (DESKTOP SELALU AKTIF, MOBILE HANYA SAAT MODE LIST ATAU SAAT BELUM ADA DATA) */}
-      <div className={isMobileScreen && mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 ? 'hidden sm:flex flex-col flex-1' : 'flex flex-col flex-1'}>
+      <div
+        className={isMobileScreen && mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 ? 'hidden sm:flex flex-col flex-1' : 'flex flex-col flex-1'}
+        style={{
+          contentVisibility: isMobileScreen && mobileViewMode === 'swipe' && unifiedSwipeItems.length > 0 ? 'hidden' : 'visible',
+        }}
+      >
         {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
         <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
