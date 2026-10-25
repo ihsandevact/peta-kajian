@@ -256,9 +256,9 @@ export default function HomeDashboardSkeleton() {
         </div>
 
         {/* Grid 4 Kartu Kajian (Mobile Swipe / Desktop 4-Kolom) */}
-        <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
+        <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
           {Array.from({ length: 4 }).map((_, i) => (
-            <HomeKajianCardSkeleton key={i} className="w-[82vw] sm:w-auto shrink-0 snap-start" />
+            <HomeKajianCardSkeleton key={i} className="w-[82vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0" />
           ))}
         </div>
 
@@ -280,9 +280,9 @@ export default function HomeDashboardSkeleton() {
           </div>
 
           {/* Grid 4 Kartu Masjid (Mobile Swipe / Desktop 4-Kolom) */}
-          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar">
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar">
             {Array.from({ length: 4 }).map((_, i) => (
-              <HomeMosqueCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start" />
+              <HomeMosqueCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0" />
             ))}
           </div>
         </div>

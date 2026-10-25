@@ -929,9 +929,9 @@ export default function HomeDashboardClient() {
 
         {/* Daftar Kartu Kajian */}
         {isSessionsLoading ? (
-          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
             {Array.from({ length: 4 }).map((_, i) => (
-              <HomeKajianCardSkeleton key={i} className="w-[82vw] sm:w-auto shrink-0 snap-start" />
+              <HomeKajianCardSkeleton key={i} className="w-[82vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0" />
             ))}
           </div>
         ) : filteredKajianList.length === 0 ? (
@@ -946,7 +946,7 @@ export default function HomeDashboardClient() {
             </Link>
           </div>
         ) : (
-          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
             {filteredKajianList.map(({ session, info, distance }) => {
               const booked = isBookmarked(session.id);
               const attend = isAttending(session.id);
@@ -960,7 +960,7 @@ export default function HomeDashboardClient() {
               return (
                 <div
                   key={session.id}
-                  className="w-[82vw] sm:w-auto shrink-0 snap-start group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-emerald-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
+                  className="w-[82vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0 group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-emerald-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
                 >
                   <div className="space-y-1.5 sm:space-y-2">
                     {/* Badge Tanggal & Jarak */}
@@ -1081,10 +1081,10 @@ export default function HomeDashboardClient() {
           </div>
 
           {/* Grid Masjid (Mobile Swipe / Desktop 4-Kolom) */}
-          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar">
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-2 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-scrollbar">
             {isMosquesLoading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <HomeMosqueCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start" />
+                  <HomeMosqueCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0" />
                 ))
               : nearbyMosques.map((mosque) => {
                   const travel =
@@ -1095,7 +1095,7 @@ export default function HomeDashboardClient() {
                   return (
                     <div
                       key={mosque.id}
-                      className="w-[78vw] sm:w-auto shrink-0 snap-start group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-teal-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
+                      className="w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0 group p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface hover:border-teal-500/50 hover:shadow-md transition-all flex flex-col justify-between space-y-2.5 sm:space-y-3"
                     >
                       <div className="space-y-1.5 sm:space-y-2">
                         <div className="flex items-start justify-between gap-1.5">
