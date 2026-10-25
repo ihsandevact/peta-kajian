@@ -212,6 +212,35 @@ export default function MoreMenuBottomSheet({
                   chevron_right
                 </span>
               </Link>
+
+              {/* Kumpulan Doa Sunnah (Hisnul Muslim) */}
+              <Link
+                href="/doa"
+                onClick={onClose}
+                className="flex items-center justify-between p-3 rounded-2xl bg-surface hover:bg-surface-container-low border border-outline-variant/40 transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-[18px]">menu_book</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-on-surface group-hover:text-emerald-600 transition-colors truncate">
+                        Doa Harian Sunnah
+                      </h4>
+                      <span className="px-1.5 py-0.2 rounded bg-teal-600/10 text-teal-700 dark:text-teal-300 text-[9px] font-bold">
+                        Hisnul Muslim
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant truncate">
+                      Kumpulan doa sehari-hari dari Al-Qur'an &amp; As-Sunnah
+                    </p>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-[16px] text-outline group-hover:translate-x-0.5 transition-transform shrink-0">
+                  chevron_right
+                </span>
+              </Link>
             </div>
 
             {/* 4. MENU NAVIGASI UTAMA */}
