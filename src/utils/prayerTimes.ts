@@ -24,6 +24,34 @@ export interface DailyPrayerTimes {
   };
 }
 
+export interface FullPrayerSchedule {
+  imsak: string;
+  subuh: string;
+  terbit: string;
+  dhuha: string;
+  dzuhur: string;
+  ashar: string;
+  maghrib: string;
+  isya: string;
+  timezoneLabel: 'WIB' | 'WITA' | 'WIT';
+  utcOffsetHours: number;
+  currentMinutes: number;
+  nextPrayer: {
+    id: 'imsak' | 'subuh' | 'terbit' | 'dhuha' | 'dzuhur' | 'ashar' | 'maghrib' | 'isya';
+    name: string;
+    time: string;
+    minutesRemaining: number;
+    countdownText: string;
+  };
+  prayers: Array<{
+    id: 'imsak' | 'subuh' | 'terbit' | 'dhuha' | 'dzuhur' | 'ashar' | 'maghrib' | 'isya';
+    name: string;
+    time: string;
+    minutes: number;
+    isPrimary: boolean;
+  }>;
+}
+
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -202,5 +230,98 @@ export function getPrayerScheduleAndNext(
       minutesRemaining,
       countdownText: formatCountdownMinutes(minutesRemaining),
     },
+  };
+}
+
+export function getFullPrayerSchedule(
+  lat: number,
+  lng: number,
+  now: Date = new Date()
+): FullPrayerSchedule {
+  const { utcOffsetHours, label: timezoneLabel } = getIndonesiaTimezone(lng);
+
+  // Hitung waktu lokal pada zona waktu lokasi target
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  const targetLocalDate = new Date(utcMs + utcOffsetHours * 3600000);
+
+  const year = targetLocalDate.getFullYear();
+  const month = targetLocalDate.getMonth() + 1;
+  const day = targetLocalDate.getDate();
+  const currentMinutes =
+    targetLocalDate.getHours() * 60 + targetLocalDate.getMinutes();
+
+  const jd = getJulianDate(year, month, day) - lng / (15 * 24);
+  const { declination, equationOfTime } = getSunPosition(jd + 0.5);
+
+  const transit = 12 + utcOffsetHours - lng / 15 - equationOfTime;
+
+  // Hitung menit sholat dan amalan
+  const subuhMin = hoursToTotalMinutes(
+    transit - computeHourAngle(lat, declination, 20),
+    2
+  );
+  const imsakMin = subuhMin - 10;
+  const terbitMin = hoursToTotalMinutes(
+    transit - computeHourAngle(lat, declination, 0.833),
+    0
+  );
+  const dhuhaMin = terbitMin + 20;
+  const dzuhurMin = hoursToTotalMinutes(transit, 2);
+  const asharMin = hoursToTotalMinutes(
+    transit + computeAsrHourAngle(lat, declination, 1),
+    2
+  );
+  const maghribMin = hoursToTotalMinutes(
+    transit + computeHourAngle(lat, declination, 0.833),
+    2
+  );
+  const isyaMin = hoursToTotalMinutes(
+    transit + computeHourAngle(lat, declination, 18),
+    2
+  );
+
+  const prayers: FullPrayerSchedule['prayers'] = [
+    { id: 'imsak', name: 'Imsak', minutes: imsakMin, time: formatMinutesToHHMM(imsakMin), isPrimary: false },
+    { id: 'subuh', name: 'Subuh', minutes: subuhMin, time: formatMinutesToHHMM(subuhMin), isPrimary: true },
+    { id: 'terbit', name: 'Terbit', minutes: terbitMin, time: formatMinutesToHHMM(terbitMin), isPrimary: false },
+    { id: 'dhuha', name: 'Dhuha', minutes: dhuhaMin, time: formatMinutesToHHMM(dhuhaMin), isPrimary: false },
+    { id: 'dzuhur', name: 'Dzuhur', minutes: dzuhurMin, time: formatMinutesToHHMM(dzuhurMin), isPrimary: true },
+    { id: 'ashar', name: 'Ashar', minutes: asharMin, time: formatMinutesToHHMM(asharMin), isPrimary: true },
+    { id: 'maghrib', name: 'Maghrib', minutes: maghribMin, time: formatMinutesToHHMM(maghribMin), isPrimary: true },
+    { id: 'isya', name: 'Isya', minutes: isyaMin, time: formatMinutesToHHMM(isyaMin), isPrimary: true },
+  ];
+
+  // Cari jadwal berikutnya (hanya dari 5 sholat wajib + dhuha/imsak)
+  let next = prayers.find((p) => p.minutes > currentMinutes);
+  let minutesRemaining: number;
+
+  if (next) {
+    minutesRemaining = next.minutes - currentMinutes;
+  } else {
+    // Jika sudah lewat Isya, waktu berikutnya adalah Imsak/Subuh esok hari
+    next = prayers[0];
+    minutesRemaining = 1440 - currentMinutes + next.minutes;
+  }
+
+  return {
+    imsak: formatMinutesToHHMM(imsakMin),
+    subuh: formatMinutesToHHMM(subuhMin),
+    terbit: formatMinutesToHHMM(terbitMin),
+    dhuha: formatMinutesToHHMM(dhuhaMin),
+    dzuhur: formatMinutesToHHMM(dzuhurMin),
+    ashar: formatMinutesToHHMM(asharMin),
+    maghrib: formatMinutesToHHMM(maghribMin),
+    isya: formatMinutesToHHMM(isyaMin),
+    timezoneLabel,
+    utcOffsetHours,
+    currentMinutes,
+    nextPrayer: {
+      id: next.id,
+      name: next.name,
+      time: next.time,
+      minutesRemaining,
+      countdownText: formatCountdownMinutes(minutesRemaining),
+    },
+    prayers,
   };
 }
