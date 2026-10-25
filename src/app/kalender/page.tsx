@@ -322,12 +322,12 @@ export default function KalenderPage() {
         {/* 5. KARTU DETAIL TANGGAL TERPILIH */}
         {selectedCell && (
           <div className="p-4 sm:p-5 rounded-3xl bg-surface border border-outline-variant/60 shadow-xs space-y-3">
-            <div className="flex items-start justify-between gap-3 border-b border-outline-variant/30 pb-3">
-              <div>
-                <span className="text-[10px] uppercase tracking-wider font-extrabold text-on-surface-variant">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2.5 sm:gap-4 border-b border-outline-variant/30 pb-3">
+              <div className="min-w-0">
+                <span className="text-[10px] uppercase tracking-wider font-extrabold text-on-surface-variant block mb-0.5">
                   Detail Tanggal Terpilih
                 </span>
-                <h4 className="text-base sm:text-lg font-black text-on-surface">
+                <h4 className="text-base sm:text-lg font-black text-on-surface leading-snug">
                   {selectedCell.date.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 </h4>
                 <p className="text-xs sm:text-sm font-extrabold text-emerald-700 dark:text-emerald-400 mt-0.5">
@@ -336,15 +336,18 @@ export default function KalenderPage() {
               </div>
 
               {selectedCell.hijri.fastingInfo && (
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-extrabold border shrink-0 ${
-                    selectedCell.hijri.fastingInfo.isForbidden
-                      ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30'
-                      : 'bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
-                  }`}
-                >
-                  {selectedCell.hijri.fastingInfo.label}
-                </span>
+                <div className="self-start sm:self-auto sm:shrink-0 pt-0.5 sm:pt-0">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold border ${
+                      selectedCell.hijri.fastingInfo.isForbidden
+                        ? 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30'
+                        : 'bg-emerald-600/15 text-emerald-800 dark:text-emerald-300 border-emerald-500/30'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">event_available</span>
+                    <span>{selectedCell.hijri.fastingInfo.label}</span>
+                  </span>
+                </div>
               )}
             </div>
 
