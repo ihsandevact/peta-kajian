@@ -18,6 +18,7 @@ import { useLivePlayer } from '@/context/LivePlayerContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import { type StudySession } from '@/lib/services/kajian';
 import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
+import { HomeKajianCardSkeleton, HomeMosqueCardSkeleton } from '@/components/HomeDashboardSkeleton';
 
 // Dynamic lazy imports for heavy interactive overlays
 const MoreMenuBottomSheet = dynamic(() => import('@/components/MoreMenuBottomSheet'), { ssr: false });
@@ -804,15 +805,7 @@ export default function HomeDashboardClient() {
         {isSessionsLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-outline-variant/40 bg-surface space-y-3 animate-pulse"
-              >
-                <div className="h-4 bg-surface-container-high rounded w-28" />
-                <div className="h-5 bg-surface-container-high rounded w-4/5" />
-                <div className="h-3.5 bg-surface-container-high rounded w-1/2" />
-                <div className="h-4 bg-surface-container-high rounded w-2/3" />
-              </div>
+              <HomeKajianCardSkeleton key={i} />
             ))}
           </div>
         ) : filteredKajianList.length === 0 ? (
@@ -965,14 +958,7 @@ export default function HomeDashboardClient() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
             {isMosquesLoading
               ? Array.from({ length: 4 }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="p-3.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-outline-variant/40 bg-surface space-y-3 animate-pulse"
-                  >
-                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-surface-container-high" />
-                    <div className="h-4 sm:h-5 bg-surface-container-high rounded w-3/4" />
-                    <div className="h-3 sm:h-3.5 bg-surface-container-high rounded w-1/2" />
-                  </div>
+                  <HomeMosqueCardSkeleton key={i} />
                 ))
               : nearbyMosques.map((mosque) => {
                   const travel =

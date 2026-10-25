@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
+import HomeDashboardSkeleton from '@/components/HomeDashboardSkeleton';
 import HomeDashboardClient from '@/components/HomeDashboardClient';
 import type { FilterState } from '@/components/HomeClient';
 
@@ -43,14 +44,7 @@ export default async function Page({ searchParams }: PageProps) {
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="w-full min-h-screen bg-background flex flex-col items-center justify-center font-geist gap-3">
-          <div className="w-10 h-10 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-on-surface-variant font-medium">Memuat Beranda...</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<HomeDashboardSkeleton />}>
       <HomeDashboardClient />
     </Suspense>
   );
