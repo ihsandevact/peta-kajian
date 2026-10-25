@@ -64,6 +64,7 @@ export default function MobileNavDrawer({
   const mainNavLinks = currentUser
     ? [
         { id: 'nav-home', href: '/', label: 'Beranda', icon: 'home', desc: 'Ringkasan & info terkini' },
+        { id: 'nav-dzikir', href: '/dzikir', label: 'Dzikir Pagi & Petang', icon: 'wb_twilight', desc: 'Dzikir sunnah & tasbih digital' },
         { id: 'nav-map', href: '/peta', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
         { id: 'nav-masjid', href: '/masjid', label: 'Cari Masjid', icon: 'mosque', desc: 'Direktori & rute masjid terdekat' },
         { id: 'nav-live', href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
@@ -82,6 +83,7 @@ export default function MobileNavDrawer({
       ]
     : [
         { id: 'nav-home', href: '/', label: 'Beranda', icon: 'home', desc: 'Ringkasan & info terkini' },
+        { id: 'nav-dzikir', href: '/dzikir', label: 'Dzikir Pagi & Petang', icon: 'wb_twilight', desc: 'Dzikir sunnah & tasbih digital' },
         { id: 'nav-map', href: '/peta', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
         { id: 'nav-masjid', href: '/masjid', label: 'Cari Masjid', icon: 'mosque', desc: 'Direktori & rute masjid terdekat' },
         { id: 'nav-live', href: '/live', label: 'Live Kajian', icon: 'smart_display', desc: 'Siaran langsung kajian Islam' },
