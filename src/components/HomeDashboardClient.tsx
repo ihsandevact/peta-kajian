@@ -350,7 +350,26 @@ export default function HomeDashboardClient() {
 
           {/* Header Actions (Theme, Login/Profile, Mobile Hamburger) */}
           <div className="flex items-center gap-2">
-            <ThemeToggle variant="icon" />
+            <button
+              type="button"
+              onClick={requestUserLocation}
+              disabled={isLocating}
+              className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/60 transition-colors cursor-pointer"
+              title={`Lokasi: ${locationName}. Ketuk untuk perbarui GPS`}
+              aria-label={`Lokasi: ${locationName}`}
+            >
+              <span
+                className={`material-symbols-outlined text-[18px] text-emerald-600 ${
+                  isLocating ? 'animate-spin' : ''
+                }`}
+              >
+                {isLocating ? 'progress_activity' : 'near_me'}
+              </span>
+            </button>
+            <ThemeToggle
+              variant="icon"
+              className="!w-9 !h-9 !rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/60 shadow-none"
+            />
 
             {currentUser ? (
               <Link
@@ -390,18 +409,33 @@ export default function HomeDashboardClient() {
       {/* 2. HERO BENTO SECTION: Waktu Sholat Kemenag RI & Pencarian Cepat */}
       <section className="relative overflow-hidden bg-gradient-to-b from-emerald-600/10 via-emerald-600/5 to-transparent pt-4 sm:pt-6 pb-6 sm:pb-8 border-b border-outline-variant/30">
         {/* Quick Switch Dark Mode Khusus Mobile (Pojok Kanan Atas, Ukuran Ringkas Hijau) */}
-        <div className="md:hidden absolute top-3.5 right-3.5 z-20">
+        <div className="md:hidden absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={requestUserLocation}
+            disabled={isLocating}
+            className="w-8 h-8 rounded-xl bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center text-on-surface transition-all cursor-pointer active:scale-95"
+            title={`Lokasi: ${locationName}. Ketuk untuk perbarui GPS`}
+            aria-label={`Lokasi: ${locationName}`}
+          >
+            <span
+              className={`material-symbols-outlined text-[17px] text-emerald-600 ${
+                isLocating ? 'animate-spin' : ''
+              }`}
+            >
+              {isLocating ? 'progress_activity' : 'near_me'}
+            </span>
+          </button>
           <ThemeToggle
             variant="icon"
-            size="sm"
-            className="bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs rounded-lg"
+            className="!w-8 !h-8 !rounded-xl bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs"
           />
         </div>
 
         <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
           {/* Baris Sapaan & Tanggal */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-2.5 sm:gap-3 pr-9 md:pr-0">
-            <div>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div className="pr-20 md:pr-0 min-w-0 flex-1">
               <p
                 suppressHydrationWarning
                 className="text-[11px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider"
@@ -418,24 +452,26 @@ export default function HomeDashboardClient() {
               </p>
             </div>
 
-            {/* Tombol Deteksi Lokasi GPS */}
-            <div className="flex items-center gap-2 self-start md:self-auto">
-              <button
-                type="button"
-                onClick={requestUserLocation}
-                disabled={isLocating}
-                className="inline-flex items-center gap-1 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs text-[11px] sm:text-xs font-bold text-on-surface transition-all cursor-pointer"
-                title="Perbarui koordinat lokasi GPS"
-              >
-                <span
-                  className={`material-symbols-outlined text-[15px] sm:text-[16px] text-emerald-600 ${
-                    isLocating ? 'animate-spin' : ''
-                  }`}
-                >
-                  {isLocating ? 'progress_activity' : 'near_me'}
+            {/* Global Search Input (Dipindahkan ke posisi lokasi sebelumnya) */}
+            <div className="w-full md:w-80 lg:w-96 shrink-0 pt-1 md:pt-0">
+              <form onSubmit={handleSearchSubmit} className="relative w-full">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant">
+                  search
                 </span>
-                <span className="truncate max-w-[150px] sm:max-w-[160px]">{locationName}</span>
-              </button>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari kajian, ustadz, atau masjid..."
+                  className="w-full pl-9 pr-14 py-2 sm:py-2.5 text-xs sm:text-sm bg-surface rounded-xl sm:rounded-2xl border border-outline-variant/60 shadow-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-on-surface placeholder:text-on-surface-variant/60"
+                />
+                <button
+                  type="submit"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-extrabold transition-colors cursor-pointer"
+                >
+                  Cari
+                </button>
+              </form>
             </div>
           </div>
 
@@ -524,26 +560,6 @@ export default function HomeDashboardClient() {
               })}
             </div>
           </div>
-
-          {/* Global Search Input */}
-          <form onSubmit={handleSearchSubmit} className="relative max-w-3xl mx-auto">
-            <span className="material-symbols-outlined absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-[18px] sm:text-[20px] text-on-surface-variant">
-              search
-            </span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari kajian, ustadz, atau masjid..."
-              className="w-full pl-9 pr-16 sm:pl-11 sm:pr-24 py-2.5 sm:py-3.5 text-xs sm:text-sm bg-surface rounded-xl sm:rounded-2xl border border-outline-variant/60 shadow-xs sm:shadow-md focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-on-surface placeholder:text-on-surface-variant/60"
-            />
-            <button
-              type="submit"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-xs font-extrabold transition-colors cursor-pointer"
-            >
-              Cari
-            </button>
-          </form>
         </div>
       </section>
 
@@ -571,7 +587,7 @@ export default function HomeDashboardClient() {
                 Eksplorasi persebaran ratusan jadwal kajian di peta lengkap dengan navigasi jalan.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2.5 sm:mt-4 group-hover:underline">
+            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2.5 sm:mt-4">
               <span>Buka Peta</span>
               <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
                 arrow_forward
@@ -600,7 +616,7 @@ export default function HomeDashboardClient() {
                 Temukan masjid sunnah di sekitar Anda dengan info fasilitas, rute, dan jadwal rutin.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-teal-600 dark:text-teal-400 mt-2.5 sm:mt-4 group-hover:underline">
+            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-teal-600 dark:text-teal-400 mt-2.5 sm:mt-4">
               <span>Cari Masjid</span>
               <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
                 arrow_forward
@@ -636,7 +652,7 @@ export default function HomeDashboardClient() {
                 Tonton siaran langsung majelis ilmu dari berbagai channel dakwah sunnah terpercaya.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-red-600 dark:text-red-400 mt-2.5 sm:mt-4 group-hover:underline">
+            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-red-600 dark:text-red-400 mt-2.5 sm:mt-4">
               <span>Tonton Siaran</span>
               <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
                 arrow_forward
@@ -666,7 +682,7 @@ export default function HomeDashboardClient() {
                 Buku saku, leaderboard, info relawan, bantuan &amp; pengaturan tema aplikasi.
               </p>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-2.5 sm:mt-4 group-hover:underline">
+            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-2.5 sm:mt-4">
               <span>Buka Menu</span>
               <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
                 arrow_forward
@@ -692,7 +708,7 @@ export default function HomeDashboardClient() {
               </div>
               <Link
                 href="/live"
-                className="text-[11px] sm:text-xs font-bold text-red-600 dark:text-red-400 hover:underline inline-flex items-center gap-1 shrink-0"
+                className="text-[11px] sm:text-xs font-bold text-red-600 dark:text-red-400 hover:opacity-80 transition-opacity inline-flex items-center gap-1 shrink-0"
               >
                 <span>Lihat Semua ({activeLiveStreams.length})</span>
                 <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
@@ -818,7 +834,7 @@ export default function HomeDashboardClient() {
             <p className="text-xs sm:text-sm font-bold">Tidak ada kajian aktif untuk kategori ini saat ini.</p>
             <Link
               href="/peta"
-              className="inline-block text-xs font-bold text-emerald-600 hover:underline"
+              className="inline-block text-xs font-bold text-emerald-600 hover:opacity-80 transition-opacity"
             >
               Lihat Seluruh Jadwal di Peta Kajian →
             </Link>
@@ -911,7 +927,7 @@ export default function HomeDashboardClient() {
 
                     <Link
                       href={`/peta?session=${session.id}`}
-                      className="inline-flex items-center gap-0.5 text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline shrink-0"
+                      className="inline-flex items-center gap-0.5 text-[11px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:opacity-80 transition-opacity shrink-0"
                     >
                       <span>Lihat di Peta</span>
                       <span className="material-symbols-outlined text-[13px] sm:text-[14px]">arrow_forward</span>
@@ -951,7 +967,7 @@ export default function HomeDashboardClient() {
             </div>
             <Link
               href="/masjid"
-              className="text-[11px] sm:text-xs font-bold text-teal-600 dark:text-teal-400 hover:underline inline-flex items-center gap-1 self-start sm:self-auto"
+              className="text-[11px] sm:text-xs font-bold text-teal-600 dark:text-teal-400 hover:opacity-80 transition-opacity inline-flex items-center gap-1 self-start sm:self-auto"
             >
               <span>Lihat Semua 13.000+ Masjid</span>
               <span className="material-symbols-outlined text-[14px]">arrow_forward</span>

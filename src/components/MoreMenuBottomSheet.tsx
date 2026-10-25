@@ -270,6 +270,35 @@ export default function MoreMenuBottomSheet({
                   chevron_right
                 </span>
               </Link>
+
+              {/* Kalender Hijriyah & Jadwal Puasa Sunnah */}
+              <Link
+                href="/kalender"
+                onClick={onClose}
+                className="flex items-center justify-between p-3 rounded-2xl bg-surface hover:bg-surface-container-low border border-outline-variant/40 transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-[18px]">calendar_month</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-on-surface group-hover:text-emerald-600 transition-colors truncate">
+                        Kalender Hijriyah &amp; Puasa
+                      </h4>
+                      <span className="px-1.5 py-0.2 rounded bg-amber-600/10 text-amber-700 dark:text-amber-300 text-[9px] font-bold">
+                        Sunnah
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant truncate">
+                      Penanggalan Islam &amp; jadwal puasa sunnah terpadu
+                    </p>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-[16px] text-outline group-hover:translate-x-0.5 transition-transform shrink-0">
+                  chevron_right
+                </span>
+              </Link>
             </div>
 
             {/* 4. MENU NAVIGASI UTAMA */}

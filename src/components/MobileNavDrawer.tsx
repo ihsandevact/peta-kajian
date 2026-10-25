@@ -65,6 +65,7 @@ export default function MobileNavDrawer({
     ? [
         { id: 'nav-home', href: '/', label: 'Beranda', icon: 'home', desc: 'Ringkasan & info terkini' },
         { id: 'nav-sholat', href: '/sholat', label: 'Jadwal Sholat & Kiblat', icon: 'explore', desc: 'Waktu sholat & kompas kiblat' },
+        { id: 'nav-kalender', href: '/kalender', label: 'Kalender Hijriyah & Puasa', icon: 'calendar_month', desc: 'Penanggalan Islam & puasa sunnah' },
         { id: 'nav-dzikir', href: '/dzikir', label: 'Dzikir Pagi & Petang', icon: 'wb_twilight', desc: 'Dzikir sunnah & tasbih digital' },
         { id: 'nav-doa', href: '/doa', label: 'Doa Harian Sunnah', icon: 'menu_book', desc: 'Hisnul Muslim & dalil shahih' },
         { id: 'nav-map', href: '/peta', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
@@ -86,6 +87,7 @@ export default function MobileNavDrawer({
     : [
         { id: 'nav-home', href: '/', label: 'Beranda', icon: 'home', desc: 'Ringkasan & info terkini' },
         { id: 'nav-sholat', href: '/sholat', label: 'Jadwal Sholat & Kiblat', icon: 'explore', desc: 'Waktu sholat & kompas kiblat' },
+        { id: 'nav-kalender', href: '/kalender', label: 'Kalender Hijriyah & Puasa', icon: 'calendar_month', desc: 'Penanggalan Islam & puasa sunnah' },
         { id: 'nav-dzikir', href: '/dzikir', label: 'Dzikir Pagi & Petang', icon: 'wb_twilight', desc: 'Dzikir sunnah & tasbih digital' },
         { id: 'nav-doa', href: '/doa', label: 'Doa Harian Sunnah', icon: 'menu_book', desc: 'Hisnul Muslim & dalil shahih' },
         { id: 'nav-map', href: '/peta', label: 'Peta Kajian', icon: 'map', desc: 'Jelajahi peta persebaran kajian' },
