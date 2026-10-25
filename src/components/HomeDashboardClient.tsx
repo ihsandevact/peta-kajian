@@ -692,6 +692,112 @@ export default function HomeDashboardClient() {
         </div>
       </section>
 
+
+      {/* 3.5 QUICK ACCESS: AMALAN & IBADAH HARIAN */}
+      <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
+        <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs">
+          <div className="flex items-center justify-between mb-2.5 px-1">
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[17px] sm:text-[19px] text-emerald-600 dark:text-emerald-400">
+                auto_awesome
+              </span>
+              <h2 className="text-xs sm:text-sm font-extrabold text-on-surface uppercase tracking-wider">
+                Amalan &amp; Ibadah Harian
+              </h2>
+            </div>
+            <span className="text-[10px] text-on-surface-variant font-medium hidden sm:inline">
+              Akses cepat sarana ibadah harian sesuai sunnah
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 sm:gap-3">
+            {/* 1. Dzikir Pagi & Petang */}
+            <Link
+              href="/dzikir"
+              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-emerald-500/40 transition-all text-center sm:text-left group cursor-pointer"
+            >
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">wb_twilight</span>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-emerald-600 transition-colors truncate">
+                  Dzikir
+                </h3>
+                <p className="text-[9px] sm:text-[11px] text-on-surface-variant truncate hidden sm:block">
+                  Pagi, Petang &amp; Tasbih
+                </p>
+                <p className="text-[9px] text-on-surface-variant truncate sm:hidden">
+                  Pagi &amp; Petang
+                </p>
+              </div>
+            </Link>
+
+            {/* 2. Doa Harian Hisnul Muslim */}
+            <Link
+              href="/doa"
+              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-teal-500/40 transition-all text-center sm:text-left group cursor-pointer"
+            >
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-teal-500/15 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">menu_book</span>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-teal-600 transition-colors truncate">
+                  Doa Harian
+                </h3>
+                <p className="text-[9px] sm:text-[11px] text-on-surface-variant truncate hidden sm:block">
+                  Hisnul Muslim &amp; Dalil
+                </p>
+                <p className="text-[9px] text-on-surface-variant truncate sm:hidden">
+                  Hisnul Muslim
+                </p>
+              </div>
+            </Link>
+
+            {/* 3. Arah Kiblat & Sholat */}
+            <Link
+              href="/sholat"
+              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-blue-500/40 transition-all text-center sm:text-left group cursor-pointer"
+            >
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">explore</span>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-blue-600 transition-colors truncate">
+                  Arah Kiblat
+                </h3>
+                <p className="text-[9px] sm:text-[11px] text-on-surface-variant truncate hidden sm:block">
+                  Kompas &amp; Jadwal Sholat
+                </p>
+                <p className="text-[9px] text-on-surface-variant truncate sm:hidden">
+                  Kompas &amp; Sholat
+                </p>
+              </div>
+            </Link>
+
+            {/* 4. Kalender Hijriyah & Puasa */}
+            <Link
+              href="/kalender"
+              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-3 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-amber-500/40 transition-all text-center sm:text-left group cursor-pointer"
+            >
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">calendar_month</span>
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-amber-600 transition-colors truncate">
+                  Kalender
+                </h3>
+                <p className="text-[9px] sm:text-[11px] text-on-surface-variant truncate hidden sm:block">
+                  Hijriyah &amp; Puasa Sunnah
+                </p>
+                <p className="text-[9px] text-on-surface-variant truncate sm:hidden">
+                  Puasa Sunnah
+                </p>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* 4. SEKSI SEDANG LIVE STREAMING (JIKA ADA SIARAN AKTIF) */}
       {activeLiveStreams.length > 0 && (
         <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-6 sm:pb-8 w-full">
