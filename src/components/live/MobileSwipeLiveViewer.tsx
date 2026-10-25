@@ -46,13 +46,20 @@ function MobileSwipeLiveViewer({
 }: MobileSwipeLiveViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   // Deteksi khusus iOS (Apple WebKit memblokir unmuted autoplay)
-  const [isIOS, setIsIOS] = useState(false);
-  useEffect(() => {
-    setIsIOS(checkIsIOS());
-  }, []);
+  const [isIOS, setIsIOS] = useState(() => (typeof window !== 'undefined' ? checkIsIOS() : false));
+  // Di iOS default = true (muted agar autoplay diizinkan Safari WebKit).
+  // Di Android & non-iOS default = false (langsung bersuara seketika).
+  const [isMuted, setIsMuted] = useState(() => (typeof window !== 'undefined' ? checkIsIOS() : false));
 
-  // Di mobile default = true (muted agar autoplay berjalan instan tanpa diblokir Safari & WebKit).
-  const [isMuted, setIsMuted] = useState(true);
+  useEffect(() => {
+    const isApple = checkIsIOS();
+    setIsIOS(isApple);
+    if (isApple) {
+      setIsMuted(true);
+    } else {
+      setIsMuted(false);
+    }
+  }, []);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [autoplayFailed, setAutoplayFailed] = useState(false);
@@ -214,22 +221,22 @@ function MobileSwipeLiveViewer({
   }, [isPaused, isPlaying, sendIframeCommand]);
 
   // Handler cerdas ketukan area video ala TikTok / Reels:
-  // - Jika belum berputar / dijeda / autoplay tertahan browser: LANGSUNG playVideo & unMute
-  // - Jika sudah berputar lancar: bertindak sebagai toggle play / pause
+  // - Jika video masih hening (misal di iOS): ketukan langsung menyalakan suara (unMute)
+  // - Jika belum berputar / dijeda / autoplay tertahan browser: LANGSUNG playVideo
+  // - Jika sudah berputar bersuara: bertindak sebagai toggle play / pause
   const handleVideoAreaTap = useCallback(() => {
-    if (!isPlaying || isPaused || autoplayFailed) {
+    if (isMuted) {
+      handleUnmute();
+    } else if (!isPlaying || isPaused || autoplayFailed) {
       isUserPausedRef.current = false;
       sendIframeCommand('playVideo');
       setIsPaused(false);
       setIsPlaying(true);
       setAutoplayFailed(false);
-      if (isMuted) {
-        handleUnmute();
-      }
     } else {
       togglePlayPause();
     }
-  }, [isPlaying, isPaused, autoplayFailed, isMuted, handleUnmute, togglePlayPause, sendIframeCommand]);
+  }, [isMuted, isPlaying, isPaused, autoplayFailed, handleUnmute, togglePlayPause, sendIframeCommand]);
 
   // Handshake berkala & adaptif kickstart autoplay di YouTube iframe (hemat baterai saat stabil)
   useEffect(() => {
@@ -249,6 +256,10 @@ function MobileSwipeLiveViewer({
           // Lakukan kickstart playVideo hingga 6 kali dalam 3 detik pertama jika belum terdeteksi playing
           if (!isUserPausedRef.current && !isPlaying && autoplayAttemptsRef.current < 6) {
             sendIframeCommand('playVideo');
+            if (!isMuted) {
+              sendIframeCommand('unMute');
+              sendIframeCommand('setVolume', [100]);
+            }
             autoplayAttemptsRef.current += 1;
           }
         }
@@ -256,9 +267,9 @@ function MobileSwipeLiveViewer({
     }, pollInterval);
 
     return () => clearInterval(interval);
-  }, [isOpen, currentIndex, isPlaying, sendIframeCommand]);
+  }, [isOpen, currentIndex, isPlaying, isMuted, sendIframeCommand]);
 
-  // Sinkronisasi status player YouTube (playing/paused/cued/onReady) secara real-time
+  // Sinkronisasi status player YouTube (playing/paused/cued/onReady/onAutoplayBlocked) secara real-time
   useEffect(() => {
     if (!isOpen) return;
 
@@ -273,10 +284,21 @@ function MobileSwipeLiveViewer({
           }
         }
 
+        // Tangani event onAutoplayBlocked jika browser Android memblokir pemutaran unmuted
+        if (data?.event === 'onAutoplayBlocked') {
+          sendIframeCommand('mute');
+          sendIframeCommand('playVideo');
+          setIsMuted(true);
+        }
+
         // Tangani event onReady langsung dari YouTube widget -> segera picu playVideo
         if (data?.event === 'onReady') {
           if (!isUserPausedRef.current) {
             sendIframeCommand('playVideo');
+            if (!isMuted) {
+              sendIframeCommand('unMute');
+              sendIframeCommand('setVolume', [100]);
+            }
           }
         }
 
@@ -451,6 +473,10 @@ function MobileSwipeLiveViewer({
     if (diff < -threshold && currentIndex < items.length - 1) {
       // Geser ke atas -> Next Video
       isUserPausedRef.current = false;
+      // Khusus di iOS: swipe bertindak sebagai user gesture resmi untuk mengaktifkan suara di video berikutnya
+      if (isIOS && isMuted) {
+        setIsMuted(false);
+      }
       setCurrentIndex((prev) => prev + 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
@@ -461,6 +487,9 @@ function MobileSwipeLiveViewer({
     } else if (diff > threshold && currentIndex > 0) {
       // Geser ke bawah -> Previous Video
       isUserPausedRef.current = false;
+      if (isIOS && isMuted) {
+        setIsMuted(false);
+      }
       setCurrentIndex((prev) => prev - 1);
       setIsTitleExpanded(false);
       setIsPaused(false);
@@ -593,7 +622,7 @@ function MobileSwipeLiveViewer({
             <iframe
               key={currentVideoId}
               ref={activeIframeRef}
-              src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&controls=0&rel=0&modestbranding=1&origin=${typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : ''}`}
+              src={`https://www.youtube.com/embed/${currentVideoId}?autoplay=1&mute=${isMuted ? 1 : 0}&enablejsapi=1&playsinline=1&controls=0&rel=0&modestbranding=1&origin=${typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : ''}`}
               title={currentTitle}
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
@@ -606,6 +635,10 @@ function MobileSwipeLiveViewer({
                     '*'
                   );
                   sendIframeCommand('playVideo');
+                  if (!isMuted) {
+                    sendIframeCommand('unMute');
+                    sendIframeCommand('setVolume', [100]);
+                  }
                 } catch {}
               }}
             />

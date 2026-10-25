@@ -188,6 +188,14 @@ export default function MobileBottomNav({
           href="/live"
           onClick={() => {
             setOptimisticIndex(3);
+            // Audio context gesture unlock bridge
+            try {
+              const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+              if (AudioCtx) {
+                const ctx = new AudioCtx();
+                ctx.resume().then(() => ctx.close());
+              }
+            } catch {}
             if (isLiveActive && typeof window !== 'undefined') {
               window.dispatchEvent(new CustomEvent('peta-kajian:switch-to-swipe'));
             }
