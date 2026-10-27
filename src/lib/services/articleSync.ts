@@ -100,6 +100,118 @@ export function sanitizeArticleHtml(rawHtml: string): {
 }
 
 /**
+ * Mengambil artikel dari WordPress REST API (/wp-json/wp/v2/posts?_embed)
+ * Metode ini mengembalikan gambar fitur (featured image / thumbnail) asli, penulis, tag, dan konten lengkap.
+ */
+export async function fetchWordPressPosts(source: ArticleSource, perPage = 15): Promise<IslamicArticle[]> {
+  const wpApiUrl = `${source.websiteUrl}/wp-json/wp/v2/posts?_embed&per_page=${perPage}`;
+  const response = await fetch(wpApiUrl, {
+    headers: {
+      'User-Agent':
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+      Accept: 'application/json, text/plain, */*',
+    },
+    signal: AbortSignal.timeout(15000),
+    next: { revalidate: 0 },
+  });
+
+  if (!response.ok) {
+    throw new Error(`WP-JSON HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  const posts = await response.json();
+  if (!Array.isArray(posts)) {
+    throw new Error('WP-JSON invalid response: expected array');
+  }
+
+  return posts.map((post: any) => {
+    // Bersihkan judul dari entity HTML
+    const title = cheerio.load(post.title?.rendered || '').text().trim();
+    const link = post.link?.trim() || '';
+    const publishedAt = post.date_gmt ? new Date(post.date_gmt + 'Z').toISOString() : new Date().toISOString();
+
+    // Ekstraksi Featured Image / Thumbnail resolusi tinggi
+    const featuredMedia =
+      post._embedded?.['wp:featuredmedia']?.[0]?.source_url ||
+      post._embedded?.['wp:featuredmedia']?.[0]?.media_details?.sizes?.large?.source_url ||
+      post._embedded?.['wp:featuredmedia']?.[0]?.media_details?.sizes?.medium_large?.source_url ||
+      post.yoast_head_json?.og_image?.[0]?.url ||
+      post.jetpack_featured_media_url ||
+      undefined;
+
+    // Bersihkan konten naskah lengkap & ringkasan
+    const rawContent = post.content?.rendered || post.excerpt?.rendered || '';
+    const { cleanHtml, summary, firstImageUrl, readTimeMinutes } = sanitizeArticleHtml(rawContent);
+
+    const finalImageUrl = featuredMedia || firstImageUrl;
+
+    // Penulis
+    const authorName =
+      post._embedded?.['author']?.[0]?.name?.trim() ||
+      source.defaultAuthor;
+
+    // Kategori & Tag dari terms
+    const rawTerms: string[] = [];
+    if (Array.isArray(post._embedded?.['wp:term'])) {
+      post._embedded['wp:term'].flat().forEach((term: any) => {
+        if (term?.name && !rawTerms.includes(term.name)) {
+          rawTerms.push(term.name);
+        }
+      });
+    }
+
+    // Klasifikasi kategori utama
+    let category = 'umum';
+    const catLower = rawTerms.join(' ').toLowerCase();
+    if (catLower.includes('aqidah') || catLower.includes('tauhid') || catLower.includes('iman')) {
+      category = 'aqidah';
+    } else if (catLower.includes('sholat') || catLower.includes('puasa') || catLower.includes('ibadah') || catLower.includes('fiqih')) {
+      category = 'ibadah';
+    } else if (catLower.includes('akhlak') || catLower.includes('hati') || catLower.includes('adab')) {
+      category = 'akhlak';
+    } else if (catLower.includes('jual beli') || catLower.includes('muamalah') || catLower.includes('hukum')) {
+      category = 'muamalah';
+    } else if (catLower.includes('keluarga') || catLower.includes('wanita') || catLower.includes('anak')) {
+      category = 'keluarga';
+    }
+
+    const slug = generateArticleSlug(title, source.slug, link);
+
+    return {
+      id: `wp-${Buffer.from(link).toString('base64url').slice(0, 16)}`,
+      title,
+      slug,
+      summary: summary || title,
+      contentHtml: cleanHtml || `<p>${summary}</p>`,
+      canonicalUrl: link,
+      sourceId: source.id,
+      sourceName: source.name,
+      sourceUrl: source.websiteUrl,
+      authorName,
+      category,
+      tags: rawTerms.slice(0, 5),
+      imageUrl: finalImageUrl,
+      publishedAt,
+      readTimeMinutes,
+    };
+  });
+}
+
+/**
+ * Mengambil artikel dari satu sumber dengan prioritas WordPress REST API (lengkap dg gambar),
+ * dan fallback ke RSS Feed jika WP-JSON tidak merespons.
+ */
+export async function syncSourceArticles(source: ArticleSource): Promise<IslamicArticle[]> {
+  try {
+    return await fetchWordPressPosts(source, 15);
+  } catch (wpErr: unknown) {
+    const errorMsg = wpErr instanceof Error ? wpErr.message : String(wpErr);
+    console.warn(`[articleSync] WP-JSON gagal untuk ${source.name} (${errorMsg}), mencoba fallback RSS...`);
+    return await parseRssFeed(source);
+  }
+}
+
+/**
  * Melakukan parsing RSS Feed dari satu URL portal WordPress
  */
 export async function parseRssFeed(source: ArticleSource): Promise<IslamicArticle[]> {
@@ -227,7 +339,7 @@ export async function syncAllArticleFeeds(): Promise<SyncArticlesReport> {
 
   for (const source of ARTICLE_SOURCES) {
     try {
-      const articles = await parseRssFeed(source);
+      const articles = await syncSourceArticles(source);
       report.totalParsed += articles.length;
 
       let insertedCount = 0;

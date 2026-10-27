@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -10,6 +10,7 @@ import {
 } from '@/data/initialArticles';
 import ThemeToggle from '@/components/ThemeToggle';
 import { createClient } from '@/utils/supabase/client';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 interface DbArticleRow {
   id: string;
@@ -157,17 +158,66 @@ function CatalogArticleCard({
   );
 }
 
+/**
+ * Skeleton Loader Kartu Artikel (Identik dengan layout CatalogArticleCard)
+ */
+function CatalogArticleCardSkeleton() {
+  return (
+    <div className="p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface border border-outline-variant/60 shadow-2xs space-y-3 min-h-[175px] flex flex-col justify-between animate-pulse">
+      <div className="space-y-3">
+        {/* Header Kartu: Badge & Actions Placeholder */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="h-4 w-24 rounded-full bg-surface-container-high" />
+            <div className="h-3 w-16 rounded-md bg-surface-container" />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-surface-container" />
+            <div className="w-7 h-7 rounded-lg bg-surface-container" />
+          </div>
+        </div>
+
+        {/* Tengah: Teks di kiri, Thumbnail di kanan */}
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="h-4 rounded-md bg-surface-container-high w-full" />
+            <div className="h-4 rounded-md bg-surface-container-high w-4/5" />
+            <div className="h-3 rounded-md bg-surface-container w-full pt-1" />
+            <div className="h-3 rounded-md bg-surface-container w-2/3" />
+          </div>
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl sm:rounded-2xl bg-surface-container-high shrink-0" />
+        </div>
+      </div>
+
+      {/* Footer Kartu */}
+      <div className="border-t border-outline-variant/30 pt-2.5 flex items-center justify-between gap-2">
+        <div className="h-3 w-28 rounded-md bg-surface-container" />
+        <div className="h-3 w-12 rounded-md bg-surface-container-high" />
+      </div>
+    </div>
+  );
+}
+
 export default function ArtikelIndexPage() {
   const router = useRouter();
+  const PAGE_SIZE = 12;
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebouncedValue(searchQuery, 350);
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Articles state (diisi murni dari database Supabase)
+  // Articles & Pagination state
   const [articles, setArticles] = useState<IslamicArticle[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [page, setPage] = useState<number>(0);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [loadingInitial, setLoadingInitial] = useState<boolean>(true);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
+
+  // Sentinel ref for infinite scroll
+  const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Bookmarks state (syncs with localStorage)
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
@@ -197,18 +247,54 @@ export default function ArtikelIndexPage() {
     });
   }, []);
 
-  // Ambil artikel terbaru dari Supabase
-  useEffect(() => {
-    async function fetchDbArticles() {
+  // Fungsi pengambilan artikel dengan paginasi dan filter server-side
+  const fetchArticles = useCallback(
+    async (pageToFetch: number, isInitial = false) => {
       try {
-        setLoading(true);
+        if (isInitial) {
+          setLoadingInitial(true);
+        } else {
+          setLoadingMore(true);
+        }
+
         const supabase = createClient();
-        const { data, error } = await supabase
+        let query = supabase
           .from('articles')
-          .select('*')
-          .eq('is_published', true)
-          .order('published_at', { ascending: false })
-          .limit(40);
+          .select('*', { count: 'exact' })
+          .eq('is_published', true);
+
+        // 1. Filter Bookmark
+        if (selectedCategory === 'saved') {
+          if (bookmarkedIds.size === 0) {
+            setArticles([]);
+            setTotalCount(0);
+            setHasMore(false);
+            setLoadingInitial(false);
+            setLoadingMore(false);
+            return;
+          }
+          query = query.in('id', Array.from(bookmarkedIds));
+        } else if (selectedCategory !== 'all') {
+          query = query.eq('category', selectedCategory);
+        }
+
+        // 2. Filter Portal Sumber
+        if (selectedSource !== 'all') {
+          query = query.or(`source_slug.eq.${selectedSource},source_name.ilike.%${selectedSource}%`);
+        }
+
+        // 3. Search Query
+        const q = debouncedSearch.trim();
+        if (q) {
+          query = query.or(`title.ilike.%${q}%,summary.ilike.%${q}%,author_name.ilike.%${q}%`);
+        }
+
+        const from = pageToFetch * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        query = query.order('published_at', { ascending: false }).range(from, to);
+
+        const { data, count, error } = await query;
 
         if (!error && data) {
           const typedData = data as unknown as (DbArticleRow & { source_slug?: string | null })[];
@@ -231,20 +317,71 @@ export default function ArtikelIndexPage() {
             isFeatured: d.is_featured || false,
           }));
 
-          setArticles(mapped);
-        } else if (error) {
-          console.warn('[ArtikelPage] Gagal memuat artikel dari Supabase:', error);
-          setArticles([]);
+          if (isInitial) {
+            setArticles(mapped);
+          } else {
+            setArticles((prev) => {
+              const existingIds = new Set(prev.map((p) => p.id));
+              const fresh = mapped.filter((m) => !existingIds.has(m.id));
+              return [...prev, ...fresh];
+            });
+          }
+
+          setTotalCount(count ?? 0);
+          setPage(pageToFetch);
+          const reachedEnd = mapped.length < PAGE_SIZE || (from + mapped.length) >= (count ?? 0);
+          setHasMore(!reachedEnd);
+        } else {
+          if (isInitial) {
+            setArticles([]);
+            setTotalCount(0);
+          }
+          setHasMore(false);
         }
       } catch {
-        setArticles([]);
+        if (isInitial) {
+          setArticles([]);
+          setTotalCount(0);
+        }
+        setHasMore(false);
       } finally {
-        setLoading(false);
+        setLoadingInitial(false);
+        setLoadingMore(false);
       }
-    }
+    },
+    [selectedCategory, selectedSource, debouncedSearch, bookmarkedIds]
+  );
 
-    fetchDbArticles();
-  }, []);
+  // Reset dan muat ulang halaman pertama saat filter atau query pencarian berubah
+  useEffect(() => {
+    setPage(0);
+    setHasMore(true);
+    fetchArticles(0, true);
+  }, [fetchArticles]);
+
+  // Load more trigger
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore || loadingMore || loadingInitial) return;
+    fetchArticles(page + 1, false);
+  }, [hasMore, loadingMore, loadingInitial, page, fetchArticles]);
+
+  // IntersectionObserver untuk Infinite Scroll
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: '250px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMore]);
 
   // Toggle bookmark
   const toggleBookmark = useCallback(
@@ -273,37 +410,6 @@ export default function ArtikelIndexPage() {
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   }, []);
-
-  // Filter Articles
-  const filteredArticles = useMemo(() => {
-    return articles.filter((art) => {
-      // 1. Filter Bookmark
-      if (selectedCategory === 'saved') {
-        if (!bookmarkedIds.has(art.id)) return false;
-      } else if (selectedCategory !== 'all') {
-        if (art.category.toLowerCase() !== selectedCategory.toLowerCase()) return false;
-      }
-
-      // 2. Filter Sumber Portal
-      if (selectedSource !== 'all') {
-        if (art.sourceId !== selectedSource && !art.sourceName.toLowerCase().includes(selectedSource)) {
-          return false;
-        }
-      }
-
-      // 3. Search Query
-      if (!searchQuery.trim()) return true;
-
-      const q = searchQuery.toLowerCase();
-      const matchTitle = art.title.toLowerCase().includes(q);
-      const matchAuthor = art.authorName.toLowerCase().includes(q);
-      const matchSummary = art.summary.toLowerCase().includes(q);
-      const matchSource = art.sourceName.toLowerCase().includes(q);
-      const matchTags = art.tags.some((t) => t.toLowerCase().includes(q));
-
-      return matchTitle || matchAuthor || matchSummary || matchSource || matchTags;
-    });
-  }, [articles, selectedCategory, selectedSource, bookmarkedIds, searchQuery]);
 
   return (
     <div className="min-h-screen bg-background text-on-surface font-geist flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
@@ -470,36 +576,38 @@ export default function ArtikelIndexPage() {
         {/* Counter Info */}
         <div className="flex items-center justify-between text-[11px] text-on-surface-variant px-0.5">
           <span>
-            Menampilkan <strong className="text-on-surface">{loading ? '...' : filteredArticles.length}</strong> artikel &amp; faidah
+            {loadingInitial ? (
+              <span className="italic text-emerald-600 animate-pulse">Memuat data artikel...</span>
+            ) : totalCount !== null ? (
+              <>
+                Menampilkan <strong className="text-on-surface">{articles.length}</strong>
+                {totalCount > articles.length && (
+                  <> dari <strong className="text-on-surface">{totalCount}</strong></>
+                )}{' '}
+                artikel &amp; faidah
+              </>
+            ) : (
+              <>Menampilkan <strong className="text-on-surface">{articles.length}</strong> artikel &amp; faidah</>
+            )}
           </span>
-          {loading && <span className="italic text-emerald-600 animate-pulse">Memuat artikel...</span>}
+          {loadingMore && (
+            <span className="italic text-emerald-600 animate-pulse flex items-center gap-1.5 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+              <span>Memuat berikutnya...</span>
+            </span>
+          )}
         </div>
       </section>
 
-      {/* 4. DAFTAR KARTU ARTIKEL */}
+      {/* 4. DAFTAR KARTU ARTIKEL DENGAN INFINITE SCROLL */}
       <main className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 pt-2 pb-6 space-y-3.5 flex-1">
-        {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 animate-pulse">
-            {[1, 2, 3, 4].map((n) => (
-              <div
-                key={n}
-                className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface border border-outline-variant/40 space-y-3 min-h-[160px] flex flex-col justify-between"
-              >
-                <div className="space-y-2.5">
-                  <div className="h-4 w-28 bg-surface-container-high rounded-md" />
-                  <div className="flex gap-3">
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 bg-surface-container-high rounded-md w-full" />
-                      <div className="h-3 bg-surface-container rounded-md w-4/5" />
-                    </div>
-                    <div className="w-20 h-20 rounded-xl bg-surface-container-high shrink-0" />
-                  </div>
-                </div>
-                <div className="h-3 w-32 bg-surface-container rounded-md" />
-              </div>
+        {loadingInitial ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <CatalogArticleCardSkeleton key={n} />
             ))}
           </div>
-        ) : filteredArticles.length === 0 ? (
+        ) : articles.length === 0 ? (
           <div className="py-14 px-4 text-center flex flex-col items-center justify-center space-y-3 rounded-3xl bg-surface border border-outline-variant/40">
             <div className="w-16 h-16 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
               <span className="material-symbols-outlined text-[32px]">
@@ -510,19 +618,17 @@ export default function ArtikelIndexPage() {
               <h3 className="font-bold text-sm text-on-surface">
                 {selectedCategory === 'saved'
                   ? 'Belum ada artikel yang disimpan'
-                  : articles.length === 0
-                  ? 'Belum Ada Artikel yang Disinkronkan'
                   : 'Artikel tidak ditemukan'}
               </h3>
               <p className="text-xs text-on-surface-variant max-w-sm">
                 {selectedCategory === 'saved'
                   ? 'Tandai artikel dengan ikon bookmark untuk menyimpannya di daftar bacaan offline.'
-                  : articles.length === 0
-                  ? 'Data artikel di database kosong. Jalankan sinkronisasi RSS dari dashboard cron admin untuk memuat artikel terbaru.'
-                  : `Tidak ada artikel yang cocok dengan pencarian "${searchQuery}". Coba gunakan kata kunci lain.`}
+                  : debouncedSearch
+                  ? `Tidak ada artikel yang cocok dengan pencarian "${debouncedSearch}". Coba gunakan kata kunci lain.`
+                  : 'Data artikel di database kosong. Jalankan sinkronisasi dari dashboard cron admin untuk memuat artikel terbaru.'}
               </p>
             </div>
-            {searchQuery && (
+            {(searchQuery || selectedSource !== 'all' || selectedCategory !== 'all') && (
               <button
                 type="button"
                 onClick={() => {
@@ -537,17 +643,40 @@ export default function ArtikelIndexPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            {filteredArticles.map((article) => (
-              <CatalogArticleCard
-                key={article.id}
-                article={article}
-                isSaved={bookmarkedIds.has(article.id)}
-                onToggleBookmark={toggleBookmark}
-                onShare={handleShareWhatsApp}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+              {articles.map((article) => (
+                <CatalogArticleCard
+                  key={article.id}
+                  article={article}
+                  isSaved={bookmarkedIds.has(article.id)}
+                  onToggleBookmark={toggleBookmark}
+                  onShare={handleShareWhatsApp}
+                />
+              ))}
+
+              {/* Skeleton cards saat pengguna scroll ke bawah untuk memuat batch selanjutnya */}
+              {loadingMore && (
+                <>
+                  <CatalogArticleCardSkeleton />
+                  <CatalogArticleCardSkeleton />
+                </>
+              )}
+            </div>
+
+            {/* Sentinel invisible element untuk IntersectionObserver */}
+            <div ref={sentinelRef} className="h-4 w-full pointer-events-none" />
+
+            {/* Indikator Akhir Halaman */}
+            {!hasMore && articles.length > 0 && (
+              <div className="py-6 text-center text-xs text-on-surface-variant/70 border-t border-outline-variant/30 flex items-center justify-center gap-1.5">
+                <span className="material-symbols-outlined text-[16px] text-emerald-600 dark:text-emerald-400">
+                  check_circle
+                </span>
+                <span>Semua artikel telah dimuat ({totalCount ?? articles.length} artikel)</span>
+              </div>
+            )}
+          </>
         )}
       </main>
     </div>
