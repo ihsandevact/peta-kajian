@@ -100,7 +100,7 @@ export default function DzikirFocusCard({
         {/* Teks Bacaan Arab */}
         <div className="my-5 text-right" dir="rtl">
           <p
-            className={`font-serif text-on-surface selection:bg-emerald-500/25 ${arabicTextClass}`}
+            className={`font-serif text-on-surface selection:bg-emerald-500/25 whitespace-pre-line ${arabicTextClass}`}
           >
             {item.arabic}
           </p>
@@ -108,7 +108,7 @@ export default function DzikirFocusCard({
 
         {/* Transliterasi Latin (Opsional) */}
         {showLatin && item.transliteration && (
-          <div className="mb-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface-variant italic leading-relaxed">
+          <div className="mb-3 p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs text-on-surface-variant italic leading-relaxed whitespace-pre-line">
             {item.transliteration}
           </div>
         )}

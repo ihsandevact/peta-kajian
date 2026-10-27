@@ -27,23 +27,58 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Barangsiapa membacanya ketika pagi hari, maka ia dilindungi dari godaan jin hingga petang. Dan barangsiapa membacanya di petang hari, ia dilindungi hingga pagi hari.',
   },
 
-  // 2. Tiga Surat Perlindungan (Al-Ikhlas, Al-Falaq, An-Naas) - 3x
+  // 2. Surat Al-Ikhlas (Pagi & Petang) - 3x
   {
-    id: 'd-muawwidzat',
-    title: 'Surat Al-Ikhlas, Al-Falaq, & An-Naas',
+    id: 'd-al-ikhlas',
+    title: 'Surat Al-Ikhlas',
     time: 'both',
     targetCount: 3,
     arabic:
-      'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ هُوَ اللَّهُ أَحَدٌ ﴿١﴾ اللَّهُ الصَّمَدُ ﴿٢﴾ لَمْ يَلِدْ وَلَمْ يُولَدْ ﴿٣﴾ وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ ﴿٤﴾\n\nبِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ أَعُوذُ بِرَبِّ الْفَلَقِ ﴿١﴾ مِن شَرِّ مَا خَلَقَ ﴿٢﴾ وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ ﴿٣﴾ وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ ﴿٤﴾ وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ ﴿٥﴾\n\nبِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ أَعُوذُ بِرَبِّ النَّاسِ ﴿١﴾ مَلِكِ النَّاسِ ﴿٢﴾ إِلَٰهِ النَّاسِ ﴿٣﴾ مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ ﴿٤﴾ الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ ﴿٥﴾ مِنَ الْجِنَّةِ وَالنَّاسِ ﴿٦﴾',
+      'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ هُوَ اللَّهُ أَحَدٌ ﴿١﴾ اللَّهُ الصَّمَدُ ﴿٢﴾ لَمْ يَلِدْ وَلَمْ يُولَدْ ﴿٣﴾ وَلَمْ يَكُن لَّهُ كُفُوًا أَحَدٌ ﴿٤﴾',
     transliteration:
-      'Membaca Surat Al-Ikhlas, Surat Al-Falaq, dan Surat An-Naas masing-masing sebanyak 3 kali.',
+      'Bismillaahir-rahmaanir-rahiim.\nQul huwallaahu ahad (1). Allaahush-shamad (2). Lam yalid wa lam yuulad (3). Wa lam yakul lahuu kufuwan ahad (4).',
     translation:
-      'Katakanlah: "Dialah Allah, Yang Maha Esa..." (Al-Ikhlas).\nKatakanlah: "Aku berlindung kepada Tuhan Yang Menguasai subuh..." (Al-Falaq).\nKatakanlah: "Aku berlindung kepada Tuhan (yang memelihara dan menguasai) manusia..." (An-Naas).',
+      'Dengan nama Allah Yang Maha Pengasih lagi Maha Penyayang.\n1. Katakanlah (Muhammad), "Dialah Allah, Yang Maha Esa."\n2. Allah tempat meminta segala sesuatu.\n3. (Allah) tidak beranak dan tidak pula diperanakkan,\n4. dan tidak ada sesuatu yang setara dengan Dia.',
     narrator: 'HR. Abu Dawud no. 5082 & At-Tirmidzi no. 3575 (Hasan Shahih)',
-    faedah: 'Barangsiapa membacanya sebanyak 3 kali setiap pagi dan petang, maka akan mencukupkannya dari segala sesuatu (melindunginya dari segala keburukan).',
+    faedah:
+      'Dibaca 3 kali di waktu pagi dan petang. Rasulullah shallallahu \'alaihi wa sallam bersabda: "Maka ia akan mencukupkanmu dari segala sesuatu (melindungi dari segala keburukan).',
   },
 
-  // 3. Pagi: Ashbahna wa ashbahal mulku lillah - 1x
+  // 3. Surat Al-Falaq (Pagi & Petang) - 3x
+  {
+    id: 'd-al-falaq',
+    title: 'Surat Al-Falaq',
+    time: 'both',
+    targetCount: 3,
+    arabic:
+      'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ أَعُوذُ بِرَبِّ الْفَلَقِ ﴿١﴾ مِن شَرِّ مَا خَلَقَ ﴿٢﴾ وَمِن شَرِّ غَاسِقٍ إِذَا وَقَبَ ﴿٣﴾ وَمِن شَرِّ النَّفَّاثَاتِ فِي الْعُقَدِ ﴿٤﴾ وَمِن شَرِّ حَاسِدٍ إِذَا حَسَدَ ﴿٥﴾',
+    transliteration:
+      'Bismillaahir-rahmaanir-rahiim.\nQul a\'uudzu bi rabbil-falaq (1). Min syarri maa khalaq (2). Wa min syarri ghaasiqin idzaa waqab (3). Wa min syarrin-naffaatsaati fil \'uqad (4). Wa min syarri haasidin idzaa hasad (5).',
+    translation:
+      'Dengan nama Allah Yang Maha Pengasih lagi Maha Penyayang.\n1. Katakanlah, "Aku berlindung kepada Tuhan yang menguasai subuh (fajar),\n2. dari kejahatan (makhluk yang) Dia ciptakan,\n3. dan dari kejahatan malam apabila telah gelap gulita,\n4. dan dari kejahatan (perempuan-perempuan) penyihir yang meniup pada buhul-buhul (talinya),\n5. dan dari kejahatan orang yang dengki apabila dia dengki."',
+    narrator: 'HR. Abu Dawud no. 5082 & At-Tirmidzi no. 3575 (Hasan Shahih)',
+    faedah:
+      'Dibaca 3 kali di waktu pagi dan petang. Melindungi dari segala marabahaya, sihir, \'ain, serta kedengkian makhluk.',
+  },
+
+  // 4. Surat An-Naas (Pagi & Petang) - 3x
+  {
+    id: 'd-an-naas',
+    title: 'Surat An-Naas',
+    time: 'both',
+    targetCount: 3,
+    arabic:
+      'بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ\nقُلْ أَعُوذُ بِرَبِّ النَّاسِ ﴿١﴾ مَلِكِ النَّاسِ ﴿٢﴾ إِلَٰهِ النَّاسِ ﴿٣﴾ مِن شَرِّ الْوَسْوَاسِ الْخَنَّاسِ ﴿٤﴾ الَّذِي يُوَسْوِسُ فِي صُدُورِ النَّاسِ ﴿٥﴾ مِنَ الْجِنَّةِ وَالنَّاسِ ﴿٦﴾',
+    transliteration:
+      'Bismillaahir-rahmaanir-rahiim.\nQul a\'uudzu bi rabbin-naas (1). Malikin-naas (2). Ilaahin-naas (3). Min syarril-waswaasil-khannaas (4). Alladzii yuwaswisu fii shuduurin-naas (5). Minal jinnati wan-naas (6).',
+    translation:
+      'Dengan nama Allah Yang Maha Pengasih lagi Maha Penyayang.\n1. Katakanlah, "Aku berlindung kepada Tuhannya manusia,\n2. Raja manusia,\n3. Sembahan manusia,\n4. dari kejahatan (bisikan) setan yang bersembunyi,\n5. yang membisikkan (kejahatan) ke dalam dada manusia,\n6. dari (golongan) jin dan manusia."',
+    narrator: 'HR. Abu Dawud no. 5082 & At-Tirmidzi no. 3575 (Hasan Shahih)',
+    faedah:
+      'Dibaca 3 kali di waktu pagi dan petang sebagai pelindung utama dari bisikan dan godaan setan, jin, dan manusia.',
+  },
+
+  // 5. Pagi: Ashbahna wa ashbahal mulku lillah - 1x
   {
     id: 'd-ashbahna-mulku',
     title: 'Ashbahna wa Ashbahal Mulku Lillah',
@@ -59,7 +94,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Memohon perlindungan sepanjang hari dari kemalasan, keburukan usia tua, serta siksa kubur dan neraka.',
   },
 
-  // 3. Petang: Amsayna wa amsal mulku lillah - 1x
+  // 5. Petang: Amsayna wa amsal mulku lillah - 1x
   {
     id: 'd-amsayna-mulku',
     title: 'Amsayna wa Amsal Mulku Lillah',
@@ -75,7 +110,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Memohon perlindungan sepanjang malam dari kemalasan, keburukan usia tua, serta siksa kubur dan neraka.',
   },
 
-  // 4. Sayyidul Istighfar (Pagi & Petang) - 1x
+  // 6. Sayyidul Istighfar (Pagi & Petang) - 1x
   {
     id: 'd-sayyidul-istighfar',
     title: 'Sayyidul Istighfar (Penghulu Istighfar)',
@@ -91,7 +126,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Barangsiapa membacanya di petang hari dengan yakin lalu meninggal malam itu, maka ia termasuk penghuni surga. Demikian pula jika dibaca di pagi hari lalu meninggal di hari itu.',
   },
 
-  // 5. Pagi: Allahumma bika ashbahna - 1x
+  // 7. Pagi: Allahumma bika ashbahna - 1x
   {
     id: 'd-bika-ashbahna',
     title: 'Allahumma Bika Ashbahna',
@@ -106,7 +141,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. At-Tirmidzi no. 3391 (Shahih)',
   },
 
-  // 5. Petang: Allahumma bika amsayna - 1x
+  // 7. Petang: Allahumma bika amsayna - 1x
   {
     id: 'd-bika-amsayna',
     title: 'Allahumma Bika Amsayna',
@@ -121,7 +156,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. At-Tirmidzi no. 3391 (Shahih)',
   },
 
-  // 6. Doa Afiyat Badan, Pendengaran, Penglihatan - 3x
+  // 8. Doa Afiyat Badan, Pendengaran, Penglihatan - 3x
   {
     id: 'd-afiyat',
     title: 'Doa Kesehatan & Perlindungan Kekufuran',
@@ -136,7 +171,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. Abu Dawud no. 5090 & Ahmad (5/42) (Hasan)',
   },
 
-  // 7. Doa Perlindungan Dunia & Akhirat - 1x
+  // 9. Doa Perlindungan Dunia & Akhirat - 1x
   {
     id: 'd-afwa-wal-afiyah',
     title: 'Doa Memohon Ampunan & Penjagaan Segala Arah',
@@ -152,7 +187,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Doa yang senantiasa dipanjatkan oleh Rasulullah shallallahu \'alaihi wa sallam setiap pagi dan petang tanpa pernah ditinggalkan.',
   },
 
-  // 8. Perlindungan dari Gangguan Setan & Syirik - 1x
+  // 10. Perlindungan dari Gangguan Setan & Syirik - 1x
   {
     id: 'd-alimal-ghaib',
     title: 'Doa Perlindungan dari Keburukan Diri & Setan',
@@ -167,7 +202,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. At-Tirmidzi no. 3392 & Abu Dawud no. 5067 (Shahih)',
   },
 
-  // 9. Bismillahilladzi laa yadhurru - 3x
+  // 11. Bismillahilladzi laa yadhurru - 3x
   {
     id: 'd-bismillahilladzi',
     title: 'Bismillahilladzi Laa Yadhurru',
@@ -183,7 +218,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Barangsiapa membacanya 3 kali pada pagi hari dan 3 kali pada petang hari, maka tidak ada sesuatu bahaya pun yang dapat mencelakakannya.',
   },
 
-  // 10. Radheetu billahi rabba - 3x
+  // 12. Radheetu billahi rabba - 3x
   {
     id: 'd-radheetu-billah',
     title: 'Radheetu Billahi Rabba',
@@ -199,7 +234,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Barangsiapa membacanya sebanyak 3 kali setiap pagi dan petang, maka Allah pasti akan meridhai orang tersebut pada hari kiamat.',
   },
 
-  // 11. Yaa Hayyu Yaa Qayyoom - 1x
+  // 13. Yaa Hayyu Yaa Qayyoom - 1x
   {
     id: 'd-yaa-hayyu',
     title: 'Yaa Hayyu Yaa Qayyoom',
@@ -214,7 +249,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. Al-Hakim (1/545) & An-Nasa\'i (Shahih)',
   },
 
-  // 12. Pagi: Ashbahna 'ala fithratil Islam - 1x
+  // 14. Pagi: Ashbahna 'ala fithratil Islam - 1x
   {
     id: 'd-fithratil-islam-pagi',
     title: 'Ashbahna \'ala Fithratil Islam',
@@ -229,7 +264,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. Ahmad (3/406) (Shahih)',
   },
 
-  // 12. Petang: Amsayna 'ala fithratil Islam - 1x
+  // 14. Petang: Amsayna 'ala fithratil Islam - 1x
   {
     id: 'd-fithratil-islam-petang',
     title: 'Amsayna \'ala Fithratil Islam',
@@ -244,7 +279,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     narrator: 'HR. Ahmad (3/406) (Shahih)',
   },
 
-  // 13. Petang Khusus: Perlindungan Racun / Sengatan Hewan - 3x
+  // 15. Petang Khusus: Perlindungan Racun / Sengatan Hewan - 3x
   {
     id: 'd-auudzu-bikalimatillah',
     title: 'A\'uudzu bi Kalimaatillaahit-Taammaat (Khusus Petang)',
@@ -260,7 +295,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Barangsiapa membacanya 3 kali pada petang hari, niscaya tidak akan ada racun atau sengatan hewan berbisa yang dapat memudharatkannya pada malam itu.',
   },
 
-  // 14. Tasbih Penghapus Dosa - 100x
+  // 16. Tasbih Penghapus Dosa - 100x
   {
     id: 'd-subhanallah-wa-bihamdihi-100',
     title: 'Subhanallahi wa Bihamdih (100x)',
@@ -274,7 +309,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Barangsiapa membacanya 100 kali dalam sehari, maka dosa-dosanya akan diampuni meskipun sebanyak buih di lautan. Dan tiada seorang pun yang membawa pahala lebih baik pada hari kiamat melainkan orang yang membaca serupa atau lebih banyak.',
   },
 
-  // 15. Tahlil Tauhid - 10x atau 100x (Diset 10x untuk kemudahan)
+  // 17. Tahlil Tauhid - 10x atau 100x (Diset 10x untuk kemudahan)
   {
     id: 'd-tahlil-10',
     title: 'Laa Ilaaha Illallah Wahdahu Laa Syarika Lah (10x)',
@@ -290,7 +325,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Membacanya 10 kali bagaikan memerdekakan empat orang budak dari keturunan Ismail.',
   },
 
-  // 16. Istighfar Harian - 100x
+  // 18. Istighfar Harian - 100x
   {
     id: 'd-astaghfirullah-100',
     title: 'Istighfar (100x)',
@@ -304,7 +339,7 @@ export const DZIKIR_ITEMS: DzikirItem[] = [
     faedah: 'Nabi shallallahu \'alaihi wa sallam beristighfar dan bertaubat kepada Allah dalam sehari tidak kurang dari 100 kali.',
   },
 
-  // 17. Pagi Khusus: Doa Memohon Ilmu, Rezeki & Amal Diterima - 1x
+  // 19. Pagi Khusus: Doa Memohon Ilmu, Rezeki & Amal Diterima - 1x
   {
     id: 'd-ilman-naafia',
     title: 'Doa Ilmu yang Bermanfaat & Rezeki Halal (Khusus Pagi)',
