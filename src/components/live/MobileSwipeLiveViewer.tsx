@@ -63,6 +63,7 @@ function MobileSwipeLiveViewer({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [autoplayFailed, setAutoplayFailed] = useState(false);
+  const [playbackError, setPlaybackError] = useState(false);
   const [isTitleExpanded, setIsTitleExpanded] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -196,6 +197,7 @@ function MobileSwipeLiveViewer({
     setIsPaused(false);
     setIsPlaying(false);
     setAutoplayFailed(false);
+    setPlaybackError(false);
     autoplayAttemptsRef.current = 0;
     isUserPausedRef.current = false;
   }, [currentIndex]);
@@ -317,6 +319,22 @@ function MobileSwipeLiveViewer({
             data = JSON.parse(data);
           } catch {
             return;
+          }
+        }
+
+        // Tangani event onError jika video disetel privat, dilarang di-embed, atau dihapus
+        const isErrorEvent =
+          data?.event === 'onError' ||
+          typeof data?.info?.errorCode !== 'undefined' ||
+          (data?.event === 'infoDelivery' && typeof data?.info?.errorCode !== 'undefined');
+
+        if (isErrorEvent) {
+          const rawCode = data?.data ?? data?.info?.errorCode ?? data?.info;
+          const errCode = Number(rawCode);
+          if (errCode === 100 || errCode === 101 || errCode === 150 || errCode === 2) {
+            setPlaybackError(true);
+            setIsPlaying(false);
+            setIsPaused(true);
           }
         }
 
@@ -714,6 +732,48 @@ function MobileSwipeLiveViewer({
                 } catch {}
               }}
             />
+
+            {/* Overlay jika Video Private / Dilarang Embed */}
+            {playbackError && (
+              <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-4 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950 text-center select-none space-y-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+                  <span className="material-symbols-outlined text-[22px]">lock</span>
+                </div>
+                <div className="space-y-0.5 max-w-[90%]">
+                  <p className="text-xs sm:text-sm font-bold text-white leading-tight">
+                    Rekaman Diatur Privat oleh Saluran
+                  </p>
+                  <p className="text-[10px] text-white/70 line-clamp-2 leading-relaxed">
+                    Saluran memprivat siaran ini untuk proses editing / rilis ulang rekaman resmi.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  {currentIndex < items.length - 1 && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        goToNext();
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">arrow_downward</span>
+                      <span>Kajian Berikutnya</span>
+                    </button>
+                  )}
+                  <a
+                    href={`https://www.youtube.com/watch?v=${currentVideoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                    <span>YouTube</span>
+                  </a>
+                </div>
+              </div>
+            )}
 
             {/* Tap to Unmute / Play-Pause Overlay Ala TikTok */}
             <div

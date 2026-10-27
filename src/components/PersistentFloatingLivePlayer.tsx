@@ -40,6 +40,11 @@ export default function PersistentFloatingLivePlayer() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [resumeTime, setResumeTime] = useState<number>(0);
   const [isPlayerMuted, setIsPlayerMuted] = useState(false);
+  const [playbackError, setPlaybackError] = useState<{
+    code: number;
+    message: string;
+    reason: 'private' | 'unembeddable' | 'not_found' | 'generic';
+  } | null>(null);
   const currentPlaybackTimeRef = useRef<number>(0);
   const playbackStartEpochRef = useRef<number>(Date.now());
   const lastStorageSyncRef = useRef<number>(Date.now());
@@ -414,6 +419,11 @@ export default function PersistentFloatingLivePlayer() {
     pipWindowRef.current = null;
   }, [activeStream?.videoId, setIsPipActive, maximizePlayer]);
 
+  // Reset error state saat video yang diputar berganti
+  useEffect(() => {
+    setPlaybackError(null);
+  }, [activeStream?.videoId]);
+
   // Sinkronisasi status & timestamp PiP dengan jendela pop-out / Document PiP
   useEffect(() => {
     let broadcast: BroadcastChannel | null = null;
@@ -444,6 +454,36 @@ export default function PersistentFloatingLivePlayer() {
         // Pantau update status pemutaran, mute, dan waktu langsung dari iframe YouTube (postMessage API)
         try {
           const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+
+          // Tangani event onError dari YouTube IFrame API (video private, unlisted, dilarang embed, atau not found)
+          const isErrorEvent =
+            data?.event === 'onError' ||
+            typeof data?.info?.errorCode !== 'undefined' ||
+            (data?.event === 'infoDelivery' && typeof data?.info?.errorCode !== 'undefined');
+
+          if (isErrorEvent) {
+            const rawCode = data?.data ?? data?.info?.errorCode ?? data?.info;
+            const errCode = Number(rawCode);
+            let errorReason: 'private' | 'unembeddable' | 'not_found' | 'generic' = 'generic';
+            let errorMsg = 'Video tidak dapat dimuat atau sedang tidak tersedia.';
+
+            if (errCode === 100) {
+              errorReason = 'private';
+              errorMsg = 'Saluran telah mengubah siaran ini menjadi privat (biasanya sedang proses editing untuk rilis ulang rekaman resmi).';
+            } else if (errCode === 101 || errCode === 150) {
+              errorReason = 'unembeddable';
+              errorMsg = 'Pemilik video membatasi pemutaran hanya di situs resmi YouTube.';
+            } else if (errCode === 2) {
+              errorReason = 'not_found';
+              errorMsg = 'Video tidak ditemukan atau telah dihapus oleh saluran.';
+            }
+
+            setPlaybackError({
+              code: errCode || 100,
+              message: errorMsg,
+              reason: errorReason,
+            });
+          }
 
           // Tangani event onReady dari YouTube widget -> segera picu playVideo
           if (data?.event === 'onReady') {
@@ -1118,7 +1158,48 @@ export default function PersistentFloatingLivePlayer() {
 
           {/* Frame Video YouTube 16:9 */}
           <div className="relative aspect-video w-full bg-black">
-            {isPipActive ? (
+            {playbackError ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-3 sm:p-4 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950 text-center select-none space-y-2 z-20">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+                  <span className="material-symbols-outlined text-[20px] sm:text-[22px]">
+                    {playbackError.reason === 'private' ? 'lock' : 'videocam_off'}
+                  </span>
+                </div>
+
+                <div className="space-y-0.5 max-w-[90%]">
+                  <p className="text-xs sm:text-sm font-extrabold text-white leading-tight">
+                    {playbackError.reason === 'private'
+                      ? 'Rekaman Diatur Privat oleh Saluran'
+                      : playbackError.reason === 'unembeddable'
+                      ? 'Pemutaran Dibatasi di Luar YouTube'
+                      : 'Video Tidak Dapat Diputar'}
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-white/70 line-clamp-2 leading-relaxed">
+                    {playbackError.message}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <a
+                    href={`https://www.youtube.com/watch?v=${activeStream.videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[13px] sm:text-[14px]">open_in_new</span>
+                    <span>Buka di YouTube</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleClosePlayer}
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            ) : isPipActive ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-neutral-950 text-center gap-2.5 select-none">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center animate-pulse">
                   <span className="material-symbols-outlined text-[24px]">picture_in_picture_alt</span>

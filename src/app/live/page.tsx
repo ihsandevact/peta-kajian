@@ -82,6 +82,11 @@ export default function LiveStreamingPage() {
 
   const modalIframeRef = useRef<HTMLIFrameElement>(null);
   const [isModalMuted, setIsModalMuted] = useState(true);
+  const [modalError, setModalError] = useState(false);
+
+  useEffect(() => {
+    setModalError(false);
+  }, [selectedVideo?.videoId]);
 
   // Helper picu playVideo & unMute pada Modal Player
   const sendModalPlay = useCallback(() => {
@@ -125,6 +130,21 @@ export default function LiveStreamingPage() {
     const handleYtMessage = (e: MessageEvent) => {
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+
+        // Tangani event onError jika video disetel privat atau embedding dilarang
+        const isErrorEvent =
+          data?.event === 'onError' ||
+          typeof data?.info?.errorCode !== 'undefined' ||
+          (data?.event === 'infoDelivery' && typeof data?.info?.errorCode !== 'undefined');
+
+        if (isErrorEvent) {
+          const rawCode = data?.data ?? data?.info?.errorCode ?? data?.info;
+          const errCode = Number(rawCode);
+          if (errCode === 100 || errCode === 101 || errCode === 150 || errCode === 2) {
+            setModalError(true);
+          }
+        }
+
         if (data?.event === 'onReady') {
           sendModalPlay();
           // Coba unmute otomatis karena pengguna baru saja mengklik tombol 'Tonton' (gesture aktif)
@@ -1871,27 +1891,61 @@ export default function LiveStreamingPage() {
 
             {/* Embed Video Iframe */}
             <div className="relative aspect-video w-full bg-black">
-              <iframe
-                ref={modalIframeRef}
-                src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&rel=0`}
-                title={selectedVideo.title}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-                referrerPolicy="strict-origin-when-cross-origin"
-                className="w-full h-full border-0"
-                onLoad={() => {
-                  try {
-                    modalIframeRef.current?.contentWindow?.postMessage(
-                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-                      '*'
-                    );
-                    setTimeout(() => {
-                      sendModalPlay();
-                      sendModalUnmute();
-                    }, 400);
-                  } catch {}
-                }}
-              />
+              {modalError ? (
+                <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-neutral-900 to-neutral-950 text-center select-none space-y-2.5">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+                    <span className="material-symbols-outlined text-[22px]">lock</span>
+                  </div>
+                  <div className="space-y-1 max-w-[90%]">
+                    <p className="text-sm font-extrabold text-white leading-tight">
+                      Rekaman Diatur Privat oleh Saluran
+                    </p>
+                    <p className="text-xs text-white/70 line-clamp-2 leading-relaxed">
+                      Saluran memprivat siaran ini untuk proses editing / rilis ulang rekaman resmi.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <a
+                      href={`https://www.youtube.com/watch?v=${selectedVideo.videoId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                      <span>Buka di YouTube</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVideo(null)}
+                      className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <iframe
+                  ref={modalIframeRef}
+                  src={`https://www.youtube.com/embed/${selectedVideo.videoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&rel=0`}
+                  title={selectedVideo.title}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  className="w-full h-full border-0"
+                  onLoad={() => {
+                    try {
+                      modalIframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                        '*'
+                      );
+                      setTimeout(() => {
+                        sendModalPlay();
+                        sendModalUnmute();
+                      }, 400);
+                    } catch {}
+                  }}
+                />
+              )}
 
               {/* Overlay Ringan Sekali Sentuh/Klik untuk Mengaktifkan Suara jika dibatasi Browser */}
               {isModalMuted && (

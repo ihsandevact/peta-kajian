@@ -482,7 +482,7 @@ export async function checkChannelLiveViaApi(
 
     // 2. Periksa status live, upcoming, dan rekaman siaran berakhir pada video terbaru
     const videosRes = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=snippet,liveStreamingDetails&id=${videoIds.join(',')}&key=${apiKey}`,
+      `https://www.googleapis.com/youtube/v3/videos?part=snippet,liveStreamingDetails,status&id=${videoIds.join(',')}&key=${apiKey}`,
       { cache: 'no-store', signal: AbortSignal.timeout(6000) }
     );
 
@@ -505,6 +505,16 @@ export async function checkChannelLiveViaApi(
     const maxFutureMs = nowMs + 48 * 60 * 60 * 1000; // Siaran 48 jam ke depan
 
     for (const vid of videoItems) {
+      // Periksa status privasi: Jangan proses video yang disetel private atau dilarang di-embed
+      const vidStatus = vid.status;
+      if (vidStatus) {
+        const isPublic = vidStatus.privacyStatus === 'public';
+        const isEmbeddable = vidStatus.embeddable !== false;
+        if (!isPublic || !isEmbeddable) {
+          continue;
+        }
+      }
+
       const snippet = vid.snippet;
       const liveDetails = vid.liveStreamingDetails;
       const liveBroadcastContent = snippet?.liveBroadcastContent; // 'live' | 'upcoming' | 'none'
@@ -958,6 +968,42 @@ export async function fetchAdminYoutubeChannels(): Promise<YoutubeChannel[]> {
 }
 
 /**
+ * Memvalidasi ketersediaan publik rekaman video siaran langsung.
+ * Menyaring video yang telah disetel Private (403), Deleted (404), atau tidak dapat diputar.
+ */
+export async function filterPlayableEndedStreams(streams: EndedStreamItem[]): Promise<EndedStreamItem[]> {
+  if (!streams || streams.length === 0) return [];
+
+  // Jalankan validasi konkruen cepat via YouTube oEmbed (ringan, tanpa kuota API)
+  const validationResults = await Promise.allSettled(
+    streams.map(async (item) => {
+      if (!item.videoId) return { item, isPlayable: false };
+      try {
+        const res = await fetch(
+          `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${item.videoId}&format=json`,
+          {
+            headers: { 'User-Agent': YOUTUBE_FETCH_HEADERS['User-Agent'] },
+            signal: AbortSignal.timeout(3500),
+          }
+        );
+        // Status 403 = Private / dilarang embed; 404 = Video dihapus; 400 = ID tidak valid
+        if (res.status === 403 || res.status === 404 || res.status === 400) {
+          return { item, isPlayable: false };
+        }
+        return { item, isPlayable: res.status === 200 };
+      } catch {
+        // Toleransi network timeout: tetap pertahankan agar tidak terhapus tidak sengaja
+        return { item, isPlayable: true };
+      }
+    })
+  );
+
+  return validationResults
+    .filter((r) => r.status === 'fulfilled' && r.value.isPlayable)
+    .map((r) => (r as PromiseFulfilledResult<{ item: EndedStreamItem; isPlayable: boolean }>).value.item);
+}
+
+/**
  * Sinkronisasi seluruh channel YouTube aktif secara otomatis:
  * - Mendeteksi apakah ada yang live
  * - Membuat row `study_sessions` baru jika siaran live baru dimulai
@@ -1109,7 +1155,8 @@ export async function syncAllYoutubeChannels(): Promise<{
           } else {
             const upcomingClean = (check.upcomingStreams || []).filter((u) => u.videoId !== check.videoId);
             const endedClean = (check.endedStreams || []).filter((e) => e.videoId !== check.videoId);
-            const mergedEnded = endedClean.length > 0 ? endedClean : (channel.ended_streams || []);
+            const mergedEndedRaw = endedClean.length > 0 ? endedClean : (channel.ended_streams || []);
+            const mergedEnded = await filterPlayableEndedStreams(mergedEndedRaw);
 
             // Sesi sudah ada sebelumnya di database
             await supabaseServer
@@ -1184,7 +1231,8 @@ export async function syncAllYoutubeChannels(): Promise<{
                 if (e?.videoId && !mergedEndedMap.has(e.videoId)) mergedEndedMap.set(e.videoId, e);
               });
             }
-            const finalEndedStreams = Array.from(mergedEndedMap.values()).slice(0, 8);
+            const candidateEndedStreams = Array.from(mergedEndedMap.values()).slice(0, 8);
+            const finalEndedStreams = await filterPlayableEndedStreams(candidateEndedStreams);
 
             await supabaseServer
               .from('youtube_channels')
@@ -1223,13 +1271,14 @@ export async function syncAllYoutubeChannels(): Promise<{
                 if (e?.videoId && !mergedEndedMap.has(e.videoId)) mergedEndedMap.set(e.videoId, e);
               });
             }
-            const finalEndedStreams = Array.from(mergedEndedMap.values()).slice(0, 8);
+            const candidateEndedStreams = Array.from(mergedEndedMap.values()).slice(0, 8);
+            const finalEndedStreams = await filterPlayableEndedStreams(candidateEndedStreams);
 
             await supabaseServer
               .from('youtube_channels')
               .update({
                 upcoming_streams: upcomings,
-                ended_streams: finalEndedStreams.length > 0 ? finalEndedStreams : (channel.ended_streams || []),
+                ended_streams: finalEndedStreams,
                 last_checked_at: nowIso,
                 updated_at: nowIso,
               })
