@@ -7,7 +7,7 @@ export function HomeKajianCardSkeleton({ className = '' }: { className?: string 
   return (
     <div
       aria-hidden="true"
-      className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface shadow-xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
+      className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-outline-variant/40 bg-surface-container-low shadow-2xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
     >
       <div className="space-y-2 animate-pulse">
         {/* Baris Badges Tanggal & Jarak */}
@@ -51,7 +51,7 @@ export function HomeMosqueCardSkeleton({ className = '' }: { className?: string 
   return (
     <div
       aria-hidden="true"
-      className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-outline-variant/50 bg-surface shadow-xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
+      className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-outline-variant/40 bg-surface-container-low shadow-2xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
     >
       <div className="space-y-2 animate-pulse">
         {/* Ikon Kubah Masjid & Badge Jarak */}

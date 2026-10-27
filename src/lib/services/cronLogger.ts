@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/utils/supabase/admin';
 
-export type CronJobName = 'youtube-tracker' | 'push-reminders' | 'telegram-scraper';
+export type CronJobName = 'youtube-tracker' | 'push-reminders' | 'telegram-scraper' | 'rss-article-sync';
 export type CronStatus = 'success' | 'error';
 
 export interface SystemCronLog {
@@ -72,6 +72,12 @@ export async function fetchCronSummaries(client?: any): Promise<CronJobSummary[]
       title: 'Telegram Channel Scraper',
       schedule: '2x Sehari (08:00 & 20:00 WIB)',
       icon: 'rss_feed',
+    },
+    {
+      name: 'rss-article-sync',
+      title: 'Sindikasi Artikel Islam (RSS)',
+      schedule: 'Setiap 6 Jam',
+      icon: 'article',
     },
   ];
 

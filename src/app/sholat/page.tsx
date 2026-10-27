@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   INDONESIAN_CITIES,
@@ -432,6 +433,30 @@ function SholatContent() {
             </div>
           </div>
         )}
+
+        {/* BANNER PROMOSI PANDUAN SIFAT SHOLAT NABI */}
+        <div className="p-4 rounded-2xl sm:rounded-3xl bg-linear-to-r from-indigo-900/10 via-indigo-600/10 to-indigo-500/5 border border-indigo-500/25 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left mt-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[22px]">accessibility_new</span>
+            </div>
+            <div className="space-y-0.5">
+              <h4 className="text-xs sm:text-sm font-bold text-on-surface">
+                Panduan Sifat Sholat Nabi ﷺ Sesuai Sunnah
+              </h4>
+              <p className="text-[11px] text-on-surface-variant">
+                Pelajari rukun, wajib, tata cara thuma&apos;ninah, dan bacaan sholat dari takbir hingga salam.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/sifat-sholat"
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-xs shrink-0 flex items-center gap-1 cursor-pointer"
+          >
+            <span>Buka Panduan</span>
+            <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+          </Link>
+        </div>
       </main>
 
       {/* 5. MODAL PEMILIH KOTA MANUAL */}

@@ -233,7 +233,7 @@ export default function MoreMenuBottomSheet({
                       </span>
                     </div>
                     <p className="text-[10px] text-on-surface-variant truncate">
-                      Kumpulan doa sehari-hari dari Al-Qur'an &amp; As-Sunnah
+                      Kumpulan doa sehari-hari dari Al-Qur&apos;an &amp; As-Sunnah
                     </p>
                   </div>
                 </div>
@@ -242,9 +242,67 @@ export default function MoreMenuBottomSheet({
                 </span>
               </Link>
 
-              {/* Jadwal Sholat & Arah Kiblat */}
+              {/* Panduan Sholat Nabi Sesuai Sunnah */}
               <Link
-                href="/sholat"
+                href="/sifat-sholat"
+                onClick={onClose}
+                className="flex items-center justify-between p-3 rounded-2xl bg-surface hover:bg-surface-container-low border border-outline-variant/40 transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-[18px]">accessibility_new</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-on-surface group-hover:text-indigo-600 transition-colors truncate">
+                        Panduan Sholat Nabi ﷺ
+                      </h4>
+                      <span className="px-1.5 py-0.2 rounded bg-indigo-600/10 text-indigo-700 dark:text-indigo-300 text-[9px] font-bold">
+                        Sunnah
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant truncate">
+                      Panduan tata cara &amp; bacaan sholat dari takbir hingga salam
+                    </p>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-[16px] text-outline group-hover:translate-x-0.5 transition-transform shrink-0">
+                  chevron_right
+                </span>
+              </Link>
+
+              {/* Jadwal Sholat Kemenag */}
+              <Link
+                href="/sholat?tab=jadwal"
+                onClick={onClose}
+                className="flex items-center justify-between p-3 rounded-2xl bg-surface hover:bg-surface-container-low border border-outline-variant/40 transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-sky-500/15 text-sky-700 dark:text-sky-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-[18px]">schedule</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-on-surface group-hover:text-sky-600 transition-colors truncate">
+                        Jadwal Waktu Sholat
+                      </h4>
+                      <span className="px-1.5 py-0.2 rounded bg-sky-600/10 text-sky-700 dark:text-sky-300 text-[9px] font-bold">
+                        Kemenag RI
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant truncate">
+                      Waktu sholat 5 waktu &amp; hitung mundur adzan
+                    </p>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-[16px] text-outline group-hover:translate-x-0.5 transition-transform shrink-0">
+                  chevron_right
+                </span>
+              </Link>
+
+              {/* Kompas Arah Kiblat */}
+              <Link
+                href="/sholat?tab=kiblat"
                 onClick={onClose}
                 className="flex items-center justify-between p-3 rounded-2xl bg-surface hover:bg-surface-container-low border border-outline-variant/40 transition-colors group"
               >
@@ -254,15 +312,15 @@ export default function MoreMenuBottomSheet({
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h4 className="text-xs font-bold text-on-surface group-hover:text-emerald-600 transition-colors truncate">
-                        Jadwal Sholat &amp; Kiblat
+                      <h4 className="text-xs font-bold text-on-surface group-hover:text-blue-600 transition-colors truncate">
+                        Kompas Arah Kiblat
                       </h4>
                       <span className="px-1.5 py-0.2 rounded bg-blue-600/10 text-blue-700 dark:text-blue-300 text-[9px] font-bold">
-                        Kemenag
+                        Akurat
                       </span>
                     </div>
                     <p className="text-[10px] text-on-surface-variant truncate">
-                      Waktu sholat 5 waktu &amp; kompas kiblat interaktif
+                      Penunjuk arah Ka&apos;bah dengan sensor kompas GPS
                     </p>
                   </div>
                 </div>
@@ -306,6 +364,35 @@ export default function MoreMenuBottomSheet({
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-outline px-1">
                 Fitur Penuntut Ilmu
               </span>
+
+              {/* Artikel & Faidah Islam */}
+              <Link
+                href="/artikel"
+                onClick={onClose}
+                className="flex items-center justify-between p-3 rounded-2xl bg-surface hover:bg-surface-container-low border border-outline-variant/40 transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-xl bg-teal-500/15 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                    <span className="material-symbols-outlined text-[18px]">article</span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="text-xs font-bold text-on-surface group-hover:text-emerald-600 transition-colors truncate">
+                        Artikel &amp; Faidah Islam
+                      </h4>
+                      <span className="px-1.5 py-0.2 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[9px] font-bold">
+                        Sunnah
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-on-surface-variant truncate">
+                      Bacaan dakwah dari Muslim.or.id, Rumaysho, &amp; portal sunnah
+                    </p>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-[16px] text-outline group-hover:translate-x-0.5 transition-transform shrink-0">
+                  chevron_right
+                </span>
+              </Link>
 
               {/* Buku Saku */}
               <Link
