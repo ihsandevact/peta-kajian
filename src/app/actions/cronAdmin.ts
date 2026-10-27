@@ -63,6 +63,10 @@ export async function triggerCronJob(jobName: CronJobName) {
     const result = await response.json();
 
     revalidatePath('/admin/cron');
+    if (jobName === 'rss-article-sync') {
+      revalidatePath('/artikel');
+      revalidatePath('/');
+    }
 
     if (!response.ok || result.success === false) {
       return {

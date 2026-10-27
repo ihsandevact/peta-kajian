@@ -18,7 +18,7 @@ import { type StudySession } from '@/lib/services/kajian';
 import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
 import { HomeKajianCardSkeleton } from '@/components/HomeDashboardSkeleton';
 import DailyHadithCard from '@/components/DailyHadithCard';
-import { INITIAL_ARTICLES, type IslamicArticle } from '@/data/initialArticles';
+import type { IslamicArticle } from '@/data/initialArticles';
 
 // Dynamic lazy imports for heavy interactive overlays
 const MoreMenuBottomSheet = dynamic(() => import('@/components/MoreMenuBottomSheet'), { ssr: false });
@@ -240,8 +240,8 @@ export default function HomeDashboardClient() {
     }
   };
 
-  // Artikel Islam Terkini (fallback INITIAL_ARTICLES)
-  const [featuredArticles, setFeaturedArticles] = useState(() => INITIAL_ARTICLES.slice(0, 5));
+  // Artikel Islam Terkini (diambil murni dari database Supabase)
+  const [featuredArticles, setFeaturedArticles] = useState<IslamicArticle[]>([]);
 
   useEffect(() => {
     async function loadLatestArticles() {
@@ -249,33 +249,37 @@ export default function HomeDashboardClient() {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('articles')
-          .select('id, title, slug, summary, source_name, author_name, read_time_minutes, published_at, image_url')
+          .select('*')
           .eq('is_published', true)
           .order('published_at', { ascending: false })
           .limit(5);
 
-        if (!error && data && data.length >= 3) {
+        if (!error && data && data.length > 0) {
+          const typedData = data as unknown as Array<{
+            id: string;
+            title: string;
+            slug: string;
+            summary: string | null;
+            source_slug?: string | null;
+            source_name: string | null;
+            source_url: string | null;
+            author_name: string | null;
+            read_time_minutes: number | null;
+            published_at: string | null;
+            image_url: string | null;
+          }>;
+
           setFeaturedArticles(
-            (data as Array<{
-              id: string;
-              title: string;
-              slug: string;
-              summary: string | null;
-              source_name: string | null;
-              author_name: string | null;
-              read_time_minutes: number | null;
-              published_at: string | null;
-              image_url: string | null;
-            }>).map((d) => ({
+            typedData.map((d) => ({
               id: d.id,
               title: d.title,
               slug: d.slug,
               summary: d.summary || '',
               contentHtml: '',
               canonicalUrl: '',
-              sourceId: '',
+              sourceId: d.source_slug || 'portal',
               sourceName: d.source_name || 'Portal Sunnah',
-              sourceUrl: '',
+              sourceUrl: d.source_url || '',
               authorName: d.author_name || 'Asatidzah Ahlus Sunnah',
               category: 'umum',
               tags: [],
@@ -284,8 +288,15 @@ export default function HomeDashboardClient() {
               readTimeMinutes: d.read_time_minutes || 5,
             }))
           );
+        } else if (error) {
+          console.warn('[HomeDashboard] Gagal memuat artikel:', error);
+          setFeaturedArticles([]);
+        } else {
+          setFeaturedArticles([]);
         }
-      } catch {}
+      } catch {
+        setFeaturedArticles([]);
+      }
     }
     loadLatestArticles();
   }, []);
@@ -897,40 +908,42 @@ export default function HomeDashboardClient() {
         </div>
       </section>
 
-      {/* 3.6 SEKSI BACAAN ARTIKEL ISLAM */}
-      <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
-        <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs space-y-3 sm:space-y-4">
-          <div className="flex items-center justify-between gap-2 px-1">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="material-symbols-outlined text-[17px] sm:text-[20px] text-emerald-600 dark:text-emerald-400">
-                auto_stories
-              </span>
-              <h2 className="text-xs sm:text-sm font-extrabold text-on-surface uppercase tracking-wider">
-                Artikel Islam
-              </h2>
+      {/* 3.6 SEKSI BACAAN ARTIKEL ISLAM (hanya tampil jika ada artikel di database) */}
+      {featuredArticles.length > 0 && (
+        <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
+          <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs space-y-3 sm:space-y-4">
+            <div className="flex items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="material-symbols-outlined text-[17px] sm:text-[20px] text-emerald-600 dark:text-emerald-400">
+                  auto_stories
+                </span>
+                <h2 className="text-xs sm:text-sm font-extrabold text-on-surface uppercase tracking-wider">
+                  Artikel Islam
+                </h2>
+              </div>
+
+              <Link
+                href="/artikel"
+                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 shrink-0"
+              >
+                <span>Lihat Semua</span>
+                <span className="material-symbols-outlined text-sm">chevron_right</span>
+              </Link>
             </div>
 
-            <Link
-              href="/artikel"
-              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 shrink-0"
-            >
-              <span>Lihat Semua</span>
-              <span className="material-symbols-outlined text-sm">chevron_right</span>
-            </Link>
+            {/* Horizontal Slider di Mobile (Scroll Snap) & 3-Kolom Grid di Desktop */}
+            <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-3 gap-3 sm:gap-4 no-scrollbar">
+              {featuredArticles.map((art, idx) => (
+                <HomeArticleCard
+                  key={art.id}
+                  art={art}
+                  className={idx >= 3 ? 'sm:hidden' : ''}
+                />
+              ))}
+            </div>
           </div>
-
-          {/* Horizontal Slider di Mobile (Scroll Snap) & 3-Kolom Grid di Desktop */}
-          <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-3 gap-3 sm:gap-4 no-scrollbar">
-            {featuredArticles.map((art, idx) => (
-              <HomeArticleCard
-                key={art.id}
-                art={art}
-                className={idx >= 3 ? 'sm:hidden' : ''}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* 4. SEKSI SEDANG LIVE STREAMING (JIKA ADA SIARAN AKTIF) */}
       {activeLiveStreams.length > 0 && (

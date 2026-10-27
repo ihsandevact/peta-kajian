@@ -36,11 +36,12 @@ async function handleRssSyncCron(req: NextRequest) {
   try {
     const syncReport = await syncAllArticleFeeds();
     const durationMs = Date.now() - startTime;
+    const isSuccess = syncReport.totalInserted > 0 || (syncReport.totalParsed === 0 && syncReport.errors.length === 0);
 
     // Catat log ke tabel system_cron_logs
     await recordCronLog({
       job_name: 'rss-article-sync',
-      status: 'success',
+      status: isSuccess ? 'success' : 'error',
       duration_ms: durationMs,
       summary: {
         totalSources: syncReport.totalSources,
@@ -48,10 +49,11 @@ async function handleRssSyncCron(req: NextRequest) {
         totalInserted: syncReport.totalInserted,
         errorsCount: syncReport.errors.length,
       },
+      error_message: isSuccess ? null : syncReport.errors.slice(0, 3).join(' | '),
     });
 
     return NextResponse.json({
-      success: true,
+      success: isSuccess,
       timestamp: new Date().toISOString(),
       durationMs,
       report: syncReport,

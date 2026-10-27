@@ -150,6 +150,13 @@ export default function AdminCronMonitoringPage() {
             Telegram Scraper
           </span>
         );
+      case 'rss-article-sync':
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+            <span className="material-symbols-outlined text-[14px]">article</span>
+            Sindikasi Artikel
+          </span>
+        );
       default:
         return <span>{jobName}</span>;
     }
@@ -220,8 +227,8 @@ export default function AdminCronMonitoringPage() {
           </div>
         </div>
 
-        {/* 3 Kartu Status Utama */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 4 Kartu Status Utama */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {summaries.map((job) => {
             const hasRun = Boolean(job.latestLog);
             const isSuccess = job.latestLog?.status === 'success';
@@ -310,6 +317,15 @@ export default function AdminCronMonitoringPage() {
                       </div>
                     )}
 
+                    {job.jobName === 'rss-article-sync' && (
+                      <div className="flex items-center justify-between text-on-surface-variant pt-1 border-t border-surface-container-high/40">
+                        <span className="text-outline">Artikel Tersimpan:</span>
+                        <span className="font-bold text-emerald-600">
+                          {job.latestLog?.summary?.totalInserted ?? 0} Artikel
+                        </span>
+                      </div>
+                    )}
+
                     {isError && job.latestLog?.error_message && (
                       <p className="text-[11px] text-red-600 font-medium truncate pt-1 border-t border-red-200">
                         Error: {job.latestLog.error_message}
@@ -361,6 +377,15 @@ export default function AdminCronMonitoringPage() {
                       <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
                     </Link>
                   )}
+                  {job.jobName === 'rss-article-sync' && (
+                    <Link
+                      href="/artikel"
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline"
+                    >
+                      <span>Lihat Artikel di Portal</span>
+                      <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                    </Link>
+                  )}
                 </div>
               </div>
             );
@@ -389,6 +414,7 @@ export default function AdminCronMonitoringPage() {
                 <option value="youtube-tracker">YouTube Tracker</option>
                 <option value="push-reminders">Push Reminders</option>
                 <option value="telegram-scraper">Telegram Scraper</option>
+                <option value="rss-article-sync">Sindikasi Artikel (RSS)</option>
               </select>
 
               <select
@@ -480,6 +506,21 @@ export default function AdminCronMonitoringPage() {
                                   <span>Channels: <strong>{log.summary?.totalChannels ?? '-'}</strong></span>
                                   <span>•</span>
                                   <span className="text-emerald-600 font-bold">Tersimpan: {log.summary?.totalSaved ?? 0}</span>
+                                </>
+                              )}
+                              {log.job_name === 'rss-article-sync' && (
+                                <>
+                                  <span>Portal: <strong>{log.summary?.totalSources ?? '-'}</strong></span>
+                                  <span>•</span>
+                                  <span>Parsed: <strong>{log.summary?.totalParsed ?? 0}</strong></span>
+                                  <span>•</span>
+                                  <span className="text-emerald-600 font-bold">Tersimpan: {log.summary?.totalInserted ?? 0}</span>
+                                  {Boolean(log.summary?.errorsCount) && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-red-600 font-bold">Error: {log.summary?.errorsCount}</span>
+                                    </>
+                                  )}
                                 </>
                               )}
                               {log.summary?.message && (

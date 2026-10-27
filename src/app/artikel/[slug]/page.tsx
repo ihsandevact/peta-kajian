@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { INITIAL_ARTICLES, type IslamicArticle } from '@/data/initialArticles';
+import type { IslamicArticle } from '@/data/initialArticles';
 import { createClient } from '@/utils/supabase/server';
 import ArticleReaderClient from './ArticleReaderClient';
+
+export const dynamic = 'force-dynamic';
 
 interface ArticleDetailPageProps {
   params: Promise<{ slug: string }>;
@@ -16,6 +18,7 @@ interface DbArticleRow {
   content_html: string | null;
   canonical_url: string;
   source_id: string | null;
+  source_slug?: string | null;
   source_name: string | null;
   source_url: string | null;
   author_name: string | null;
@@ -45,7 +48,7 @@ async function getArticleBySlug(slug: string): Promise<IslamicArticle | null> {
         summary: data.summary || '',
         contentHtml: data.content_html || '',
         canonicalUrl: data.canonical_url,
-        sourceId: data.source_id || 'portal',
+        sourceId: data.source_slug || data.source_id || 'portal',
         sourceName: data.source_name || 'Portal Sunnah',
         sourceUrl: data.source_url || data.canonical_url,
         authorName: data.author_name || 'Asatidzah Ahlus Sunnah',
@@ -57,12 +60,11 @@ async function getArticleBySlug(slug: string): Promise<IslamicArticle | null> {
         isFeatured: data.is_featured || false,
       };
     }
-  } catch {
-    // Supabase unavailable or table empty
+  } catch (err) {
+    console.warn(`[getArticleBySlug] Error fetching slug "${slug}":`, err);
   }
 
-  // Fallback ke INITIAL_ARTICLES
-  return INITIAL_ARTICLES.find((a) => a.slug === slug) || null;
+  return null;
 }
 
 async function getRelatedArticles(currentArticle: IslamicArticle): Promise<IslamicArticle[]> {
@@ -85,7 +87,7 @@ async function getRelatedArticles(currentArticle: IslamicArticle): Promise<Islam
         summary: d.summary || '',
         contentHtml: d.content_html || '',
         canonicalUrl: d.canonical_url,
-        sourceId: d.source_id || 'portal',
+        sourceId: d.source_slug || d.source_id || 'portal',
         sourceName: d.source_name || 'Portal Sunnah',
         sourceUrl: d.source_url || d.canonical_url,
         authorName: d.author_name || 'Asatidzah Ahlus Sunnah',
@@ -97,11 +99,11 @@ async function getRelatedArticles(currentArticle: IslamicArticle): Promise<Islam
         isFeatured: d.is_featured || false,
       }));
     }
-  } catch {
-    // Fallback
+  } catch (err) {
+    console.warn('[getRelatedArticles] Error fetching related articles:', err);
   }
 
-  return INITIAL_ARTICLES.filter((a) => a.id !== currentArticle.id).slice(0, 2);
+  return [];
 }
 
 export async function generateMetadata({ params }: ArticleDetailPageProps): Promise<Metadata> {

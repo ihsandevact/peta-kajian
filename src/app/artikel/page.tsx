@@ -4,7 +4,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  INITIAL_ARTICLES,
   ARTICLE_SOURCES,
   ARTICLE_CATEGORIES,
   type IslamicArticle,
@@ -166,9 +165,9 @@ export default function ArtikelIndexPage() {
   const [selectedSource, setSelectedSource] = useState<string>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  // Articles state (fallback ke INITIAL_ARTICLES, diisi dari Supabase jika ada)
-  const [articles, setArticles] = useState<IslamicArticle[]>(INITIAL_ARTICLES);
-  const [loading, setLoading] = useState<boolean>(false);
+  // Articles state (diisi murni dari database Supabase)
+  const [articles, setArticles] = useState<IslamicArticle[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   // Bookmarks state (syncs with localStorage)
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
@@ -198,7 +197,7 @@ export default function ArtikelIndexPage() {
     });
   }, []);
 
-  // Coba ambil artikel terbaru dari Supabase
+  // Ambil artikel terbaru dari Supabase
   useEffect(() => {
     async function fetchDbArticles() {
       try {
@@ -211,16 +210,16 @@ export default function ArtikelIndexPage() {
           .order('published_at', { ascending: false })
           .limit(40);
 
-        if (!error && data && data.length > 0) {
-          const typedData = data as unknown as DbArticleRow[];
-          const mapped: IslamicArticle[] = typedData.map((d: DbArticleRow) => ({
+        if (!error && data) {
+          const typedData = data as unknown as (DbArticleRow & { source_slug?: string | null })[];
+          const mapped: IslamicArticle[] = typedData.map((d) => ({
             id: d.id,
             title: d.title,
             slug: d.slug,
             summary: d.summary || '',
             contentHtml: d.content_html || '',
             canonicalUrl: d.canonical_url,
-            sourceId: d.source_id || 'portal',
+            sourceId: d.source_slug || d.source_id || 'portal',
             sourceName: d.source_name || 'Portal Sunnah',
             sourceUrl: d.source_url || d.canonical_url,
             authorName: d.author_name || 'Asatidzah Ahlus Sunnah',
@@ -232,13 +231,13 @@ export default function ArtikelIndexPage() {
             isFeatured: d.is_featured || false,
           }));
 
-          // Gabungkan dengan INITIAL_ARTICLES agar tetap kaya konten
-          const existingIds = new Set(mapped.map((m) => m.canonicalUrl));
-          const uniqueInitial = INITIAL_ARTICLES.filter((init) => !existingIds.has(init.canonicalUrl));
-          setArticles([...mapped, ...uniqueInitial]);
+          setArticles(mapped);
+        } else if (error) {
+          console.warn('[ArtikelPage] Gagal memuat artikel dari Supabase:', error);
+          setArticles([]);
         }
       } catch {
-        // Fallback tetap menggunakan INITIAL_ARTICLES
+        setArticles([]);
       } finally {
         setLoading(false);
       }
@@ -471,15 +470,36 @@ export default function ArtikelIndexPage() {
         {/* Counter Info */}
         <div className="flex items-center justify-between text-[11px] text-on-surface-variant px-0.5">
           <span>
-            Menampilkan <strong className="text-on-surface">{filteredArticles.length}</strong> artikel &amp; faidah
+            Menampilkan <strong className="text-on-surface">{loading ? '...' : filteredArticles.length}</strong> artikel &amp; faidah
           </span>
-          {loading && <span className="italic text-emerald-600 animate-pulse">Memperbarui data...</span>}
+          {loading && <span className="italic text-emerald-600 animate-pulse">Memuat artikel...</span>}
         </div>
       </section>
 
       {/* 4. DAFTAR KARTU ARTIKEL */}
       <main className="w-full max-w-5xl mx-auto px-3.5 sm:px-6 pt-2 pb-6 space-y-3.5 flex-1">
-        {filteredArticles.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4 animate-pulse">
+            {[1, 2, 3, 4].map((n) => (
+              <div
+                key={n}
+                className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface border border-outline-variant/40 space-y-3 min-h-[160px] flex flex-col justify-between"
+              >
+                <div className="space-y-2.5">
+                  <div className="h-4 w-28 bg-surface-container-high rounded-md" />
+                  <div className="flex gap-3">
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-surface-container-high rounded-md w-full" />
+                      <div className="h-3 bg-surface-container rounded-md w-4/5" />
+                    </div>
+                    <div className="w-20 h-20 rounded-xl bg-surface-container-high shrink-0" />
+                  </div>
+                </div>
+                <div className="h-3 w-32 bg-surface-container rounded-md" />
+              </div>
+            ))}
+          </div>
+        ) : filteredArticles.length === 0 ? (
           <div className="py-14 px-4 text-center flex flex-col items-center justify-center space-y-3 rounded-3xl bg-surface border border-outline-variant/40">
             <div className="w-16 h-16 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
               <span className="material-symbols-outlined text-[32px]">
@@ -490,11 +510,15 @@ export default function ArtikelIndexPage() {
               <h3 className="font-bold text-sm text-on-surface">
                 {selectedCategory === 'saved'
                   ? 'Belum ada artikel yang disimpan'
+                  : articles.length === 0
+                  ? 'Belum Ada Artikel yang Disinkronkan'
                   : 'Artikel tidak ditemukan'}
               </h3>
               <p className="text-xs text-on-surface-variant max-w-sm">
                 {selectedCategory === 'saved'
                   ? 'Tandai artikel dengan ikon bookmark untuk menyimpannya di daftar bacaan offline.'
+                  : articles.length === 0
+                  ? 'Data artikel di database kosong. Jalankan sinkronisasi RSS dari dashboard cron admin untuk memuat artikel terbaru.'
                   : `Tidak ada artikel yang cocok dengan pencarian "${searchQuery}". Coba gunakan kata kunci lain.`}
               </p>
             </div>

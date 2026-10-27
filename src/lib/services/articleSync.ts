@@ -19,9 +19,9 @@ export interface SyncArticlesReport {
 }
 
 /**
- * Membuat slug ramah URL dari judul artikel
+ * Membuat slug ramah URL dari judul artikel secara deterministik berdasarkan URL aslinya
  */
-export function generateArticleSlug(title: string, sourceSlug: string): string {
+export function generateArticleSlug(title: string, sourceSlug: string, canonicalUrl?: string): string {
   const cleanTitle = title
     .toLowerCase()
     .normalize('NFD')
@@ -30,10 +30,13 @@ export function generateArticleSlug(title: string, sourceSlug: string): string {
     .trim()
     .replace(/\s+/g, '-')           // Ganti spasi dengan strip
     .replace(/-+/g, '-')            // Hapus strip berulang
-    .slice(0, 80);
+    .slice(0, 75);
 
-  const shortHash = Math.random().toString(36).substring(2, 6);
-  return `${cleanTitle}-${sourceSlug}-${shortHash}`.replace(/--+/g, '-');
+  const urlHash = canonicalUrl
+    ? Buffer.from(canonicalUrl).toString('base64url').slice(0, 6).toLowerCase().replace(/[^a-z0-9]/g, 'x')
+    : Math.random().toString(36).substring(2, 6);
+
+  return `${cleanTitle}-${sourceSlug}-${urlHash}`.replace(/--+/g, '-');
 }
 
 /**
@@ -105,9 +108,11 @@ export async function parseRssFeed(source: ArticleSource): Promise<IslamicArticl
   try {
     const response = await fetch(source.rssFeedUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; PetaKajianBot/1.0; +https://petakajian.id)',
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8',
       },
+      signal: AbortSignal.timeout(15000),
       next: { revalidate: 0 },
     });
 
@@ -174,7 +179,7 @@ export async function parseRssFeed(source: ArticleSource): Promise<IslamicArticl
         category = 'keluarga';
       }
 
-      const slug = generateArticleSlug(title, source.slug);
+      const slug = generateArticleSlug(title, source.slug, link);
 
       articles.push({
         id: `rss-${Buffer.from(link).toString('base64url').slice(0, 16)}`,
@@ -237,6 +242,9 @@ export async function syncAllArticleFeeds(): Promise<SyncArticlesReport> {
                 summary: art.summary,
                 content_html: art.contentHtml,
                 canonical_url: art.canonicalUrl,
+                source_slug: art.sourceId,
+                source_name: art.sourceName,
+                source_url: art.sourceUrl,
                 author_name: art.authorName,
                 category: art.category,
                 tags: art.tags,
@@ -251,13 +259,19 @@ export async function syncAllArticleFeeds(): Promise<SyncArticlesReport> {
 
             if (!error) {
               insertedCount++;
+            } else {
+              console.error(`[articleSync] Upsert error pada "${art.title.slice(0, 30)}":`, error);
+              report.errors.push(`${source.name} [${art.title.slice(0, 30)}]: ${error.message}`);
             }
-          } catch {
-            // Lanjutkan jika ada satu artikel yang error
+          } catch (itemErr: unknown) {
+            const msg = itemErr instanceof Error ? itemErr.message : String(itemErr);
+            console.error(`[articleSync] Exception pada "${art.title.slice(0, 30)}":`, msg);
+            report.errors.push(`${source.name} [${art.title.slice(0, 30)}]: ${msg}`);
           }
         }
       } else {
-        insertedCount = articles.length;
+        console.warn('[articleSync] Supabase client tidak tersedia, sinkronisasi dibatalkan');
+        report.errors.push('Supabase admin client tidak tersedia.');
       }
 
       report.totalInserted += insertedCount;
