@@ -16,7 +16,7 @@ import { useLivePlayer } from '@/context/LivePlayerContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import { type StudySession } from '@/lib/services/kajian';
 import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
-import { HomeKajianCardSkeleton } from '@/components/HomeDashboardSkeleton';
+import { HomeKajianCardSkeleton, HomeArticleCardSkeleton } from '@/components/HomeDashboardSkeleton';
 import DailyHadithCard from '@/components/DailyHadithCard';
 import type { IslamicArticle } from '@/data/initialArticles';
 
@@ -242,6 +242,7 @@ export default function HomeDashboardClient() {
 
   // Artikel Islam Terkini (diambil murni dari database Supabase)
   const [featuredArticles, setFeaturedArticles] = useState<IslamicArticle[]>([]);
+  const [isArticlesLoading, setIsArticlesLoading] = useState(true);
 
   useEffect(() => {
     async function loadLatestArticles() {
@@ -298,7 +299,7 @@ export default function HomeDashboardClient() {
         setFeaturedArticles([]);
       }
     }
-    loadLatestArticles();
+    loadLatestArticles().finally(() => setIsArticlesLoading(false));
   }, []);
 
   // 1. Data Kajian (TanStack Query)
@@ -909,7 +910,7 @@ export default function HomeDashboardClient() {
       </section>
 
       {/* 3.6 SEKSI BACAAN ARTIKEL ISLAM (hanya tampil jika ada artikel di database) */}
-      {featuredArticles.length > 0 && (
+      {(isArticlesLoading || featuredArticles.length > 0) && (
         <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
           <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs space-y-3 sm:space-y-4">
             <div className="flex items-center justify-between gap-2 px-1">
@@ -933,7 +934,11 @@ export default function HomeDashboardClient() {
 
             {/* Horizontal Slider di Mobile (Scroll Snap) & 3-Kolom Grid di Desktop */}
             <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-3 gap-3 sm:gap-4 no-scrollbar">
-              {featuredArticles.map((art, idx) => (
+              {isArticlesLoading
+                ? Array.from({ length: 3 }).map((_, idx) => (
+                    <HomeArticleCardSkeleton key={idx} />
+                  ))
+                : featuredArticles.map((art, idx) => (
                 <HomeArticleCard
                   key={art.id}
                   art={art}

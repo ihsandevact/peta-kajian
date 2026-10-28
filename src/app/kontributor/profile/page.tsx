@@ -24,6 +24,7 @@ import {
   type StudyNote,
 } from '@/utils/studyNotes';
 import { useLivePlayer } from '@/context/LivePlayerContext';
+import { useConfirm } from '@/context/ConfirmDialogContext';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -31,6 +32,7 @@ const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), 
 
 export default function ContributorProfilePage() {
   const router = useRouter();
+  const confirmDialog = useConfirm();
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [roleInfo, setRoleInfo] = useState<UserRoleInfo | null>(null);
@@ -91,7 +93,15 @@ export default function ContributorProfilePage() {
 
   const handleDeleteStudyNote = async (noteId: string) => {
     if (!user?.id) return;
-    if (!confirm('Apakah Anda yakin ingin menghapus catatan faidah ini?')) return;
+    const confirmed = await confirmDialog({
+      title: 'Hapus Catatan Faidah?',
+      description: 'Apakah Anda yakin ingin menghapus catatan faidah ini? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+      icon: 'delete',
+    });
+    if (!confirmed) return;
     setDeletingNoteId(noteId);
     const ok = await deleteStudyNote(user.id, noteId);
     setDeletingNoteId(null);
@@ -238,7 +248,14 @@ export default function ContributorProfilePage() {
   };
 
   const handleDelete = async (sessionId: string, title: string) => {
-    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus kajian "${title}"?`);
+    const confirmDelete = await confirmDialog({
+      title: 'Hapus Jadwal Kajian?',
+      description: `Apakah Anda yakin ingin menghapus kajian "${title}"? Data yang dihapus tidak dapat dikembalikan.`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+      icon: 'delete',
+    });
     if (!confirmDelete) return;
 
     setDeletingId(sessionId);

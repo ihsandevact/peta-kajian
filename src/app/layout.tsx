@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ConfirmDialogProvider } from "@/context/ConfirmDialogContext";
 import { BottomNavProvider } from "@/context/BottomNavContext";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import NavigationHistoryTracker from "@/components/navigation/NavigationHistoryTracker";
@@ -66,7 +67,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <QueryProvider>
           <ThemeProvider>
-            <PWASplashScreen />
+            <ConfirmDialogProvider>
+              <PWASplashScreen />
             <LivePlayerProvider>
               <BottomNavProvider>
                 <NavigationHistoryTracker />
@@ -78,6 +80,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <PWAInstallPrompt />
               </BottomNavProvider>
             </LivePlayerProvider>
+            </ConfirmDialogProvider>
           </ThemeProvider>
         </QueryProvider>
       </body>

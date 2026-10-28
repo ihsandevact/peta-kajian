@@ -129,7 +129,7 @@ export default function DzikirListView({
             )}
 
             {/* Tombol Ulangi jika sedang berjalan */}
-            {count > 0 && !isCompleted && (
+            {count > 0 && (
               <div className="mt-3 pt-2 border-t border-outline-variant/20 flex justify-end">
                 <button
                   type="button"
