@@ -51,6 +51,30 @@ export default function DynamicBackButton({
     if (prevPath.startsWith('/kontributor/dashboard')) {
       return { desktop: 'Kembali ke Dasbor', mobile: 'Dasbor' };
     }
+    if (prevPath.startsWith('/artikel')) {
+      return { desktop: 'Kembali ke Artikel', mobile: 'Artikel' };
+    }
+    if (prevPath.startsWith('/doa')) {
+      return { desktop: 'Kembali ke Doa Harian', mobile: 'Doa' };
+    }
+    if (prevPath.startsWith('/dzikir')) {
+      return { desktop: 'Kembali ke Dzikir', mobile: 'Dzikir' };
+    }
+    if (prevPath.startsWith('/kalender')) {
+      return { desktop: 'Kembali ke Kalender Hijriyah', mobile: 'Kalender' };
+    }
+    if (prevPath.startsWith('/sholat')) {
+      return { desktop: 'Kembali ke Jadwal Sholat', mobile: 'Sholat' };
+    }
+    if (prevPath.startsWith('/sifat-sholat')) {
+      return { desktop: 'Kembali ke Sifat Sholat', mobile: 'Sifat Sholat' };
+    }
+    if (prevPath.startsWith('/faq')) {
+      return { desktop: 'Kembali ke Pusat Bantuan', mobile: 'FAQ' };
+    }
+    if (prevPath.startsWith('/admin')) {
+      return { desktop: 'Kembali ke Dashboard Admin', mobile: 'Admin' };
+    }
     return { desktop: `Kembali ke ${defaultLabel}`, mobile: defaultLabel };
   };
 

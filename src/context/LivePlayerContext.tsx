@@ -19,6 +19,8 @@ export interface ActiveStudySession {
   sessionId?: string;
 }
 
+export type StudyLayoutMode = 'free' | 'focus';
+
 export interface StoredLivePlayerSession {
   activeStream: ActiveLiveStream;
   isOpen: boolean;
@@ -27,6 +29,7 @@ export interface StoredLivePlayerSession {
   studySession?: ActiveStudySession | null;
   isStudyNotesOpen?: boolean;
   isStudyNotesMinimized?: boolean;
+  studyLayoutMode?: StudyLayoutMode;
   updatedAt: number;
 }
 
@@ -45,6 +48,7 @@ function saveSessionToStorage(partial: Partial<StoredLivePlayerSession>) {
       studySession: partial.studySession !== undefined ? partial.studySession : (existing.studySession ?? null),
       isStudyNotesOpen: partial.isStudyNotesOpen ?? existing.isStudyNotesOpen ?? false,
       isStudyNotesMinimized: partial.isStudyNotesMinimized ?? existing.isStudyNotesMinimized ?? false,
+      studyLayoutMode: partial.studyLayoutMode ?? existing.studyLayoutMode ?? 'free',
       updatedAt: Date.now(),
     };
     if (updated.activeStream) {
@@ -78,11 +82,14 @@ interface LivePlayerContextType {
   collapseModal: () => void;
   setIsPipActive: (active: boolean) => void;
   updateStoredPlaybackTime: (time: number) => void;
-  // Floating Study Sticky Notes
+  // Floating Study Sticky Notes & Focus Mode
   studySession: ActiveStudySession | null;
   isStudyModeOpen: boolean;
   isStudyNotesOpen: boolean;
   isStudyNotesMinimized: boolean;
+  studyLayoutMode: StudyLayoutMode;
+  setStudyLayoutMode: (mode: StudyLayoutMode) => void;
+  toggleStudyLayoutMode: () => void;
   openStudyMode: (session: ActiveStudySession) => void;
   closeStudyMode: () => void;
   closeStudyNotes: () => void;
@@ -104,6 +111,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   const [studySession, setStudySession] = useState<ActiveStudySession | null>(null);
   const [isStudyNotesOpen, setIsStudyNotesOpen] = useState(false);
   const [isStudyNotesMinimized, setIsStudyNotesMinimized] = useState(false);
+  const [studyLayoutMode, setStudyLayoutModeState] = useState<StudyLayoutMode>('free');
 
   // Pulihkan sesi player saat halaman dimuat (misal setelah return dari login Google OAuth)
   useEffect(() => {
@@ -130,6 +138,9 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
         setStudySession(data.studySession);
         setIsStudyNotesOpen(data.isStudyNotesOpen ?? false);
         setIsStudyNotesMinimized(data.isStudyNotesMinimized ?? false);
+      }
+      if (data.studyLayoutMode === 'focus' || data.studyLayoutMode === 'free') {
+        setStudyLayoutModeState(data.studyLayoutMode);
       }
     } catch {
       clearSessionFromStorage();
@@ -200,8 +211,27 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     saveSessionToStorage({ currentTime: Math.floor(time) });
   }, []);
 
+  const setStudyLayoutMode = useCallback((mode: StudyLayoutMode) => {
+    setStudyLayoutModeState(mode);
+    if (mode === 'focus') {
+      // Pastikan video tidak dalam mode modal penuh agar menjadi mini player melayang di atas catatan fullscreen
+      setIsModalExpanded(false);
+    }
+    saveSessionToStorage({ studyLayoutMode: mode });
+  }, []);
+
+  const toggleStudyLayoutMode = useCallback(() => {
+    setStudyLayoutModeState((prev) => {
+      const next: StudyLayoutMode = prev === 'focus' ? 'free' : 'focus';
+      if (next === 'focus') {
+        setIsModalExpanded(false);
+      }
+      saveSessionToStorage({ studyLayoutMode: next });
+      return next;
+    });
+  }, []);
+
   const openStudyMode = useCallback((session: ActiveStudySession) => {
-    // Jika fitur catatan di mobile dinonaktifkan sementara, di layar mobile cukup putar videonya saja
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     if (!FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES && isMobile) {
       playStream({
@@ -216,6 +246,8 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     setStudySession(session);
     setIsStudyNotesOpen(true);
     setIsStudyNotesMinimized(false);
+    setIsModalExpanded(false);
+    setIsMinimized(false);
 
     const streamData: ActiveLiveStream = {
       videoId: session.videoId,
@@ -238,6 +270,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       isStudyNotesOpen: true,
       isStudyNotesMinimized: false,
       isOpen: true,
+      isMinimized: false,
       activeStream: streamData,
     });
   }, [playStream]);
@@ -291,6 +324,9 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       isStudyModeOpen: isStudyNotesOpen,
       isStudyNotesOpen,
       isStudyNotesMinimized,
+      studyLayoutMode,
+      setStudyLayoutMode,
+      toggleStudyLayoutMode,
       openStudyMode,
       closeStudyMode,
       closeStudyNotes: closeStudyMode,
@@ -317,6 +353,9 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       studySession,
       isStudyNotesOpen,
       isStudyNotesMinimized,
+      studyLayoutMode,
+      setStudyLayoutMode,
+      toggleStudyLayoutMode,
       openStudyMode,
       closeStudyMode,
       toggleMinimizeStudyNotes,

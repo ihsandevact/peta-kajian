@@ -5,15 +5,21 @@ import { usePathname } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import StudyLoginModal from '@/components/StudyLoginModal';
+import StudySketchCanvas from '@/components/live/StudySketchCanvas';
 import {
   fetchStudyNoteByVideo,
   upsertStudyNote,
   formatNoteForWhatsApp,
   getLocalDraftNote,
   setLocalDraftNote,
+  getLocalSketchData,
+  setLocalSketchData,
+  decodeNoteWithSketch,
+  encodeNoteWithSketch,
   getPendingStudySession,
   clearPendingStudySession,
   type PendingStudySession,
+  type SketchStroke,
 } from '@/utils/studyNotes';
 import { FEATURE_FLAGS } from '@/config/features';
 
@@ -22,6 +28,8 @@ export default function FloatingStudyNotes() {
     studySession,
     isStudyNotesOpen,
     isStudyNotesMinimized,
+    studyLayoutMode,
+    toggleStudyLayoutMode,
     closeStudyNotes,
     toggleMinimizeStudyNotes,
     maximizeStudyNotes,
@@ -31,10 +39,22 @@ export default function FloatingStudyNotes() {
     activeStream,
     playStream,
     maximizePlayer,
+    minimizePlayer,
   } = useLivePlayer();
 
   const pathname = usePathname();
   const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
+
+  // Deteksi ukuran layar Mobile (< 768px)
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
+  useEffect(() => {
+    const checkViewport = () => {
+      setIsMobileViewport(window.innerWidth < 768);
+    };
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
 
   // Auth & Login Guard
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -42,12 +62,23 @@ export default function FloatingStudyNotes() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [pendingLoginSession, setPendingLoginSession] = useState<PendingStudySession | null>(null);
 
-  // Content & Sync State
+  // Content, Sketch & Sync State
   const [noteContent, setNoteContent] = useState('');
+  const [sketchStrokes, setSketchStrokes] = useState<SketchStroke[]>([]);
   const [syncStatus, setSyncStatus] = useState<'saved' | 'saving' | 'offline'>('saved');
   const [copiedToast, setCopiedToast] = useState(false);
 
-  // Engine Undo / Redo
+  // Ref terbaru agar auto-save selalu menggabungkan teks + coretan terkini
+  const noteContentRef = useRef<string>('');
+  const sketchStrokesRef = useRef<SketchStroke[]>([]);
+  useEffect(() => {
+    noteContentRef.current = noteContent;
+  }, [noteContent]);
+  useEffect(() => {
+    sketchStrokesRef.current = sketchStrokes;
+  }, [sketchStrokes]);
+
+  // Engine Undo / Redo Teks
   const historyRef = useRef<string[]>([]);
   const historyIndexRef = useRef<number>(-1);
   const [canUndo, setCanUndo] = useState(false);
@@ -55,11 +86,11 @@ export default function FloatingStudyNotes() {
   const isHistoryActionRef = useRef<boolean>(false);
   const lastHistorySaveTimeRef = useRef<number>(0);
 
-  // Floating Position & Size
+  // Floating Position & Size (Digunakan pada Desktop Mode Free)
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [notesWidth, setNotesWidth] = useState<number>(360);
-  const [notesHeight, setNotesHeight] = useState<number>(440);
+  const [notesWidth, setNotesWidth] = useState<number>(380);
+  const [notesHeight, setNotesHeight] = useState<number>(460);
   const [isResizing, setIsResizing] = useState<boolean>(false);
   const [activeCorner, setActiveCorner] = useState<'bottom-left' | 'bottom-right' | null>(null);
   const [zIndex, setZIndex] = useState(55);
@@ -70,6 +101,58 @@ export default function FloatingStudyNotes() {
 
   // Status apakah pemutar video sedang memutar video dari sesi catatan ini
   const isCurrentVideoPlaying = isPlayerOpen && activeStream?.videoId === studySession?.videoId;
+
+  // Apakah sedang dalam mode Mobile Split Atas-Bawah ala YouTube (Selalu aktif di mobile saat tidak diminimize)
+  const isMobileSplitMode = isMobileViewport && !isStudyNotesMinimized;
+
+  // Apakah sedang dalam Mode Fokus Desktop (Fullscreen Notes + Floating Mini Video di atasnya)
+  const isFocusFullscreen =
+    !isMobileViewport && !isStudyNotesMinimized && studyLayoutMode === 'focus';
+
+  // Kunci scroll halaman latar belakang saat Mode Fokus atau Mobile Split Mode aktif
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (isStudyNotesOpen && !isStudyNotesMinimized && (isFocusFullscreen || isMobileSplitMode)) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isStudyNotesOpen, isStudyNotesMinimized, isFocusFullscreen, isMobileSplitMode]);
+
+  // iOS Safari Visual Viewport Keyboard Tracking:
+  // Mencegah halaman ikut tergeser ke atas dan menyesuaikan tinggi area catatan di atas keyboard virtual
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isMobileViewport || !isStudyNotesOpen || isStudyNotesMinimized) {
+      setKeyboardOffset(0);
+      return;
+    }
+
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const handleVisualViewportChange = () => {
+      const offsetBottom = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+      setKeyboardOffset(offsetBottom > 40 ? offsetBottom : 0);
+
+      // Cegah iOS Safari menggeser posisi scroll body saat keyboard terbuka pada elemen fixed
+      if (vv.offsetTop > 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+
+    vv.addEventListener('resize', handleVisualViewportChange);
+    vv.addEventListener('scroll', handleVisualViewportChange);
+    handleVisualViewportChange();
+
+    return () => {
+      vv.removeEventListener('resize', handleVisualViewportChange);
+      vv.removeEventListener('scroll', handleVisualViewportChange);
+    };
+  }, [isMobileViewport, isStudyNotesOpen, isStudyNotesMinimized]);
 
   const handlePlayCurrentVideo = useCallback(() => {
     if (!studySession) return;
@@ -108,14 +191,14 @@ export default function FloatingStudyNotes() {
       const savedH = localStorage.getItem('peta_kajian_study_notes_height');
       if (savedW) {
         const valW = parseInt(savedW, 10);
-        if (!isNaN(valW) && valW >= 280 && valW <= 680) {
+        if (!isNaN(valW) && valW >= 280 && valW <= 760) {
           const maxAllowed = typeof window !== 'undefined' ? Math.min(valW, window.innerWidth - 24) : valW;
           setNotesWidth(Math.max(280, maxAllowed));
         }
       }
       if (savedH) {
         const valH = parseInt(savedH, 10);
-        if (!isNaN(valH) && valH >= 240 && valH <= 720) {
+        if (!isNaN(valH) && valH >= 240 && valH <= 780) {
           const maxHAllowed = typeof window !== 'undefined' ? Math.min(valH, window.innerHeight - 100) : valH;
           setNotesHeight(Math.max(240, maxHAllowed));
         }
@@ -209,12 +292,16 @@ export default function FloatingStudyNotes() {
     setCanRedo(false);
   }, []);
 
-  // Simpan Perubahan ke Supabase dan localStorage (Auto-save)
+  // Simpan Perubahan Teks & Coretan ke Supabase dan localStorage (Auto-save)
   const triggerAutoSave = useCallback(
-    (val: string) => {
+    (textVal: string, strokesVal?: SketchStroke[]) => {
       if (!studySession || !currentUser) return;
+      const activeStrokes = strokesVal !== undefined ? strokesVal : sketchStrokesRef.current;
+      const combinedPayload = encodeNoteWithSketch(textVal, activeStrokes);
+
       setSyncStatus('saving');
-      setLocalDraftNote(studySession.videoId, val);
+      setLocalDraftNote(studySession.videoId, combinedPayload);
+      setLocalSketchData(studySession.videoId, activeStrokes);
 
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -228,7 +315,7 @@ export default function FloatingStudyNotes() {
           title: studySession.title,
           speaker_name: studySession.speakerName || null,
           channel_name: studySession.channelName || null,
-          content: val,
+          content: combinedPayload,
         });
 
         if (result) {
@@ -239,6 +326,16 @@ export default function FloatingStudyNotes() {
       }, 450);
     },
     [studySession, currentUser]
+  );
+
+  // Handler saat coretan (sketch) berubah
+  const handleChangeSketchStrokes = useCallback(
+    (nextStrokes: SketchStroke[]) => {
+      setSketchStrokes(nextStrokes);
+      sketchStrokesRef.current = nextStrokes;
+      triggerAutoSave(noteContentRef.current, nextStrokes);
+    },
+    [triggerAutoSave]
   );
 
   // Catat Snapshot Riwayat untuk Undo & Redo
@@ -256,15 +353,12 @@ export default function FloatingStudyNotes() {
       return;
     }
 
-    // Jika perubahan beruntun akibat mengetik (< 700ms) dan bukan klik tombol format langsung,
-    // perbarui slot histori saat ini agar undo tidak berjalan karakter-per-karakter
     if (!immediate && now - lastHistorySaveTimeRef.current < 700 && currentIdx > 0) {
       currentHist[currentIdx] = newVal;
       return;
     }
 
     lastHistorySaveTimeRef.current = now;
-    // Potong cabang masa depan jika ada perubahan baru setelah undo
     const branch = currentHist.slice(0, currentIdx + 1);
     branch.push(newVal);
     if (branch.length > 60) {
@@ -302,7 +396,7 @@ export default function FloatingStudyNotes() {
     }
   }, [triggerAutoSave]);
 
-  // 4. Muat Catatan Kajian Saat Sesi Dibuka
+  // 4. Muat Catatan Kajian & Coretan Saat Sesi Dibuka
   useEffect(() => {
     if (!isStudyNotesOpen || !studySession || !currentUser) {
       return;
@@ -312,21 +406,37 @@ export default function FloatingStudyNotes() {
 
     async function loadNote() {
       setSyncStatus('saving');
-      // 1. Cek draft lokal terlebih dahulu
-      const localDraft = getLocalDraftNote(studySession!.videoId);
-      if (localDraft) {
-        setNoteContent(localDraft);
-        initHistory(localDraft);
+      // 1. Cek draft lokal & sketsa lokal terlebih dahulu
+      const localDraftRaw = getLocalDraftNote(studySession!.videoId);
+      const localSketch = getLocalSketchData(studySession!.videoId);
+      if (localSketch.length > 0) {
+        setSketchStrokes(localSketch);
+      } else {
+        setSketchStrokes([]);
+      }
+
+      if (localDraftRaw) {
+        const { textContent, strokes } = decodeNoteWithSketch(localDraftRaw);
+        setNoteContent(textContent);
+        initHistory(textContent);
+        if (strokes && strokes.length > 0) {
+          setSketchStrokes(strokes);
+        }
       }
 
       // 2. Ambil dari cloud Supabase
       const cloudNote = await fetchStudyNoteByVideo(currentUser.id, studySession!.videoId);
       if (isMounted) {
         if (cloudNote?.content) {
-          setNoteContent(cloudNote.content);
-          initHistory(cloudNote.content);
+          const { textContent, strokes } = decodeNoteWithSketch(cloudNote.content);
+          setNoteContent(textContent);
+          initHistory(textContent);
+          if (strokes && strokes.length > 0) {
+            setSketchStrokes(strokes);
+            setLocalSketchData(studySession!.videoId, strokes);
+          }
           setSyncStatus('saved');
-        } else if (!localDraft) {
+        } else if (!localDraftRaw) {
           const defaultTemplate =
             `Tema: ${studySession!.title}\n` +
             (studySession!.speakerName ? `Pemateri: ${studySession!.speakerName}\n` : '') +
@@ -360,7 +470,7 @@ export default function FloatingStudyNotes() {
     triggerAutoSave(val);
   };
 
-  // 6. Clamp Posisi agar Sticky Note selalu berada di dalam batas layar
+  // 6. Clamp Posisi agar Sticky Note selalu berada di dalam batas layar (Mode Free)
   const clampPosition = useCallback(
     (x: number, y: number, customWidth?: number, customHeight?: number) => {
       if (typeof window === 'undefined') return { x, y };
@@ -384,7 +494,7 @@ export default function FloatingStudyNotes() {
     [isStudyNotesMinimized, notesWidth, notesHeight]
   );
 
-  // Default posisi awal yang cerdas (berdampingan di sebelah kiri floating video player pada desktop)
+  // Default posisi awal yang cerdas pada Desktop Mode Free
   useEffect(() => {
     if (isStudyNotesOpen && !position && typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 1024;
@@ -392,12 +502,10 @@ export default function FloatingStudyNotes() {
       const defaultH = Math.min(notesHeight, window.innerHeight - 100);
 
       if (isDesktop) {
-        // Letakkan di sebelah kiri area default player (player ~360px di kanan)
         const targetX = Math.max(16, window.innerWidth - defaultW - 390);
         const targetY = Math.max(16, window.innerHeight - defaultH - 24);
         setPosition(clampPosition(targetX, targetY, defaultW, defaultH));
       } else {
-        // Di mobile letakkan di paruh bawah
         const targetX = 12;
         const targetY = Math.max(12, window.innerHeight - defaultH - 80);
         setPosition(clampPosition(targetX, targetY, defaultW, defaultH));
@@ -405,8 +513,9 @@ export default function FloatingStudyNotes() {
     }
   }, [isStudyNotesOpen, position, notesWidth, notesHeight, clampPosition]);
 
-  // Handler Pointer Drag
+  // Handler Pointer Drag (Hanya aktif saat Minimized Pill atau Desktop Mode Free)
   const handlePointerDown = (e: React.PointerEvent) => {
+    if (!isStudyNotesMinimized && (isFocusFullscreen || isMobileSplitMode)) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -419,12 +528,10 @@ export default function FloatingStudyNotes() {
     };
 
     setIsDragging(true);
-    setZIndex(58); // Angkat z-index saat aktif
+    setZIndex(58);
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Abaikan
-    }
+    } catch {}
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
@@ -445,16 +552,15 @@ export default function FloatingStudyNotes() {
     dragStartRef.current = null;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // Abaikan
-    }
+    } catch {}
   };
 
-  // Handler Pointer Resize Bebas
+  // Handler Pointer Resize Bebas (Desktop Mode Free)
   const handleResizeDown = (
     e: React.PointerEvent,
     corner: 'bottom-left' | 'bottom-right'
   ) => {
+    if (isFocusFullscreen || isMobileSplitMode) return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
 
@@ -480,9 +586,7 @@ export default function FloatingStudyNotes() {
     setZIndex(58);
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Abaikan
-    }
+    } catch {}
   };
 
   const handleResizeMove = (e: React.PointerEvent) => {
@@ -494,14 +598,14 @@ export default function FloatingStudyNotes() {
     const deltaY = e.clientY - pointerY;
 
     const minW = 280;
-    const maxW = Math.min(680, window.innerWidth - 24);
+    const maxW = Math.min(760, window.innerWidth - 24);
     const minH = 240;
-    const maxH = Math.min(720, window.innerHeight - 100);
+    const maxH = Math.min(780, window.innerHeight - 80);
 
     let targetWidth = initialWidth;
     let targetHeight = Math.min(Math.max(initialHeight + deltaY, minH), maxH);
     let newX = initialLeft;
-    let newY = initialTop;
+    const newY = initialTop;
 
     if (corner === 'bottom-left') {
       targetWidth = Math.min(Math.max(initialWidth - deltaX, minW), maxW);
@@ -526,9 +630,7 @@ export default function FloatingStudyNotes() {
     resizeStartRef.current = null;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // Abaikan
-    }
+    } catch {}
   };
 
   // Re-clamp saat ukuran layar jendela diubah
@@ -554,7 +656,6 @@ export default function FloatingStudyNotes() {
       const selected = prev.substring(start, end);
 
       if (selected.length > 0) {
-        // Bungkus teks yang sedang diseleksi
         const insertStr = `${prefix}${selected}${suffix}`;
         const nextValue = prev.substring(0, start) + insertStr + prev.substring(end);
         setNoteContent(nextValue);
@@ -566,7 +667,6 @@ export default function FloatingStudyNotes() {
           textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
         }, 10);
       } else {
-        // Sisipkan teks / placeholder di posisi kursor
         const insertStr = `${prefix}${defaultPlaceholder}${suffix}`;
         const nextValue = prev.substring(0, start) + insertStr + prev.substring(end);
         setNoteContent(nextValue);
@@ -592,29 +692,12 @@ export default function FloatingStudyNotes() {
     wrapOrInsertText(`\n[${timeStr} WIB] `, '', '');
   };
 
-  const handleInsertPoint = () => {
-    wrapOrInsertText('\n• ', '', '');
-  };
-
-  const handleInsertNumbered = () => {
-    wrapOrInsertText('\n1. ', '', '');
-  };
-
-  const handleInsertHeading = () => {
-    wrapOrInsertText('\n### ', '', 'Judul Bab / Topik');
-  };
-
-  const handleInsertDalil = () => {
-    wrapOrInsertText('\n> 📖 "', '"\n', 'Tuliskan dalil / hadits di sini');
-  };
-
-  const handleInsertBold = () => {
-    wrapOrInsertText('**', '**', 'teks tebal');
-  };
-
-  const handleInsertItalic = () => {
-    wrapOrInsertText('*', '*', 'teks miring');
-  };
+  const handleInsertPoint = () => wrapOrInsertText('\n• ', '', '');
+  const handleInsertNumbered = () => wrapOrInsertText('\n1. ', '', '');
+  const handleInsertHeading = () => wrapOrInsertText('\n### ', '', 'Judul Bab / Topik');
+  const handleInsertDalil = () => wrapOrInsertText('\n> 📖 "', '"\n', 'Tuliskan dalil / hadits di sini');
+  const handleInsertBold = () => wrapOrInsertText('**', '**', 'teks tebal');
+  const handleInsertItalic = () => wrapOrInsertText('*', '*', 'teks miring');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -679,7 +762,8 @@ export default function FloatingStudyNotes() {
   const handleDownloadNote = () => {
     if (!studySession) return;
     const cleanTitle = studySession.title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 40);
-    const headerPrefix = `Catatan Faidah: ${studySession.title}\n` +
+    const headerPrefix =
+      `Catatan Faidah: ${studySession.title}\n` +
       (studySession.speakerName ? `Pemateri: ${studySession.speakerName}\n` : '') +
       `Tautan Rekaman: https://youtu.be/${studySession.videoId}\n` +
       `━━━━━━━━━━━━━━━━━━━━\n\n`;
@@ -711,6 +795,58 @@ export default function FloatingStudyNotes() {
   const wordCount = noteContent.trim() ? noteContent.trim().split(/\s+/).length : 0;
   const charCount = noteContent.length;
 
+  // Hitung posisi top untuk Mobile Split Mode (di bawah video 16:9 + bar kontrol 38px)
+  const isVideoDockedOnTopMobile =
+    isMobileSplitMode && isPlayerOpen && !isPlayerMinimized;
+
+  const containerStyle: React.CSSProperties = isStudyNotesMinimized
+    ? {
+        position: 'fixed',
+        zIndex: 62,
+        left: position ? `${position.x}px` : undefined,
+        top: position ? `${position.y}px` : undefined,
+        right: !position ? '16px' : undefined,
+        bottom: !position ? (isMobileViewport ? '80px' : '20px') : undefined,
+        width: 'auto',
+        height: 'auto',
+        maxWidth: 'calc(100vw - 24px)',
+        touchAction: 'none',
+      }
+    : isFocusFullscreen
+    ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: keyboardOffset > 0 ? `${keyboardOffset}px` : 0,
+        zIndex: 52, // Di bawah PersistentFloatingLivePlayer (z-[60]) agar video mini melayang di atasnya!
+        width: '100%',
+        height: keyboardOffset > 0 ? `calc(100dvh - ${keyboardOffset}px)` : '100dvh',
+      }
+    : isMobileSplitMode
+    ? {
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: keyboardOffset > 0 ? `${keyboardOffset}px` : 0,
+        top: isVideoDockedOnTopMobile ? '56.25vw' : '0px',
+        zIndex: 55,
+        width: '100%',
+      }
+    : {
+        position: 'fixed',
+        zIndex,
+        left: position ? `${position.x}px` : undefined,
+        top: position ? `${position.y}px` : undefined,
+        right: !position ? '390px' : undefined,
+        bottom: !position ? '20px' : undefined,
+        width: `${notesWidth}px`,
+        height: `${notesHeight}px`,
+        maxWidth: 'calc(100vw - 24px)',
+        maxHeight: 'calc(100vh - 40px)',
+        touchAction: 'none',
+      };
+
   return (
     <>
       {/* Modal Ajakan Login Khusus Mode Belajar */}
@@ -734,23 +870,15 @@ export default function FloatingStudyNotes() {
         />
       )}
 
-      {/* WADAH FLOATING STICKY NOTE */}
+      {/* WADAH UTAMA STUDY NOTES */}
       <div
         ref={containerRef}
-        onPointerDown={() => setZIndex(58)}
-        style={{
-          position: 'fixed',
-          zIndex,
-          left: position ? `${position.x}px` : undefined,
-          top: position ? `${position.y}px` : undefined,
-          right: !position ? '390px' : undefined,
-          bottom: !position ? '20px' : undefined,
-          width: isStudyNotesMinimized ? 'auto' : `${notesWidth}px`,
-          height: isStudyNotesMinimized ? 'auto' : `${notesHeight}px`,
-          maxWidth: 'calc(100vw - 24px)',
-          maxHeight: 'calc(100vh - 40px)',
-          touchAction: 'none',
+        onPointerDown={() => {
+          if (!isFocusFullscreen && !isMobileSplitMode) {
+            setZIndex(58);
+          }
         }}
+        style={containerStyle}
         className={`font-geist transition-shadow ${
           FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? '' : 'hidden md:block'
         }`}
@@ -768,7 +896,6 @@ export default function FloatingStudyNotes() {
             className="h-12 px-3.5 rounded-full bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border border-amber-500/40 dark:border-amber-500/50 hover:border-amber-500/80 shadow-2xl flex items-center gap-2.5 animate-in slide-in-from-bottom-2 duration-200 cursor-move hover:bg-surface-container-low transition-colors select-none"
             title="Klik dan tahan untuk menggeser catatan"
           >
-            {/* Ikon Catatan & Status Sync */}
             <div className="flex items-center gap-1.5 shrink-0">
               <span className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center">
                 <span className="material-symbols-outlined text-[17px]">edit_note</span>
@@ -785,7 +912,6 @@ export default function FloatingStudyNotes() {
               />
             </div>
 
-            {/* Judul Catatan */}
             <div className="min-w-0 max-w-[150px] sm:max-w-[200px]">
               <p className="text-[11px] font-bold text-on-surface truncate leading-tight">
                 📝 Catatan Faidah
@@ -795,7 +921,6 @@ export default function FloatingStudyNotes() {
               </p>
             </div>
 
-            {/* Aksi Pill */}
             <div
               className="flex items-center gap-1 shrink-0 ml-1"
               onPointerDown={(e) => e.stopPropagation()}
@@ -823,30 +948,46 @@ export default function FloatingStudyNotes() {
           </div>
         ) : (
           /* ========================================================
-             KONDISI B: EXPANDED FLOATING STICKY NOTE (Sticky Card Penuh)
+             KONDISI B: EXPANDED WORKSPACE (Mode Free, Mode Fokus Fullscreen, atau Mobile Split Atas-Bawah)
              ======================================================== */
-          <div className="relative w-full h-full rounded-2xl bg-surface-container-lowest/98 dark:bg-neutral-900/98 backdrop-blur-md border border-amber-500/35 dark:border-amber-500/40 shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-3 duration-250">
+          <div
+            className={`relative w-full h-full bg-surface-container-lowest/98 dark:bg-neutral-900/98 backdrop-blur-md overflow-hidden flex flex-col ${
+              isFocusFullscreen || isMobileSplitMode
+                ? 'rounded-none border-t border-amber-500/35'
+                : 'rounded-2xl border border-amber-500/35 dark:border-amber-500/40 shadow-2xl animate-in slide-in-from-bottom-3 duration-250'
+            }`}
+          >
             {/* Pita Aksen Sticky Note di Atas */}
             <div className="h-1 bg-gradient-to-r from-amber-400 via-amber-500 to-emerald-500 shrink-0" />
 
-            {/* 1. HEADER STICKY NOTE (Pegangan Drag) */}
+            {/* 1. HEADER BAR CATATAN & SWITCHER MODE */}
             <div
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              style={{ touchAction: 'none' }}
-              className="px-3 py-2 bg-amber-500/10 dark:bg-amber-500/15 hover:bg-amber-500/20 border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none shrink-0"
-              title="Klik dan tahan di sini untuk menggeser posisi catatan"
+              style={{
+                touchAction: isFocusFullscreen || isMobileSplitMode ? 'auto' : 'none',
+              }}
+              className={`px-3 py-2 bg-amber-500/10 dark:bg-amber-500/15 border-b border-surface-container-high/60 flex items-center justify-between gap-2 select-none shrink-0 ${
+                !isFocusFullscreen && !isMobileSplitMode
+                  ? 'hover:bg-amber-500/20 cursor-move transition-colors'
+                  : ''
+              }`}
+              title={
+                !isFocusFullscreen && !isMobileSplitMode
+                  ? 'Klik dan tahan di sini untuk menggeser posisi catatan'
+                  : undefined
+              }
             >
-              <div className="flex items-center gap-1.5 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
                 <span className="material-symbols-outlined text-[18px] text-amber-600 dark:text-amber-400 shrink-0">
                   edit_note
                 </span>
                 <div className="min-w-0 flex flex-col">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-bold text-on-surface truncate">
-                      Catatan Faidah
+                      {isFocusFullscreen ? 'Ruang Fokus Belajar' : 'Catatan Faidah'}
                     </span>
                     {/* Badge Sync Status */}
                     <span
@@ -874,27 +1015,60 @@ export default function FloatingStudyNotes() {
                         : 'Lokal'}
                     </span>
                   </div>
-                  <span className="text-[10px] text-outline truncate max-w-[180px] sm:max-w-[240px]">
+                  <span className="text-[10px] text-outline truncate max-w-[160px] sm:max-w-[360px]">
                     {studySession.title}
                   </span>
                 </div>
               </div>
 
-              {/* Kontrol Kanan */}
+              {/* Kontrol Kanan Header */}
               <div
-                className="flex items-center gap-1 shrink-0"
+                className="flex items-center gap-1 sm:gap-1.5 shrink-0"
                 onPointerDown={(e) => e.stopPropagation()}
               >
-                {/* SATU-SATUNYA TRIGGER: Buka/Putar Video di Floating Player jika sedang tidak aktif */}
-                {!isCurrentVideoPlaying && (
+                {/* Tombol Putar Video jika sedang tertutup / diminimize */}
+                {(!isCurrentVideoPlaying || isPlayerMinimized) ? (
                   <button
                     type="button"
                     onClick={handlePlayCurrentVideo}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold text-white bg-red-600 hover:bg-red-700 shadow-2xs transition-all cursor-pointer active:scale-95 shrink-0"
-                    title="Buka kembali video kajian di Floating Player"
+                    title="Tampilkan pemutar video kajian"
                   >
                     <span className="material-symbols-outlined text-[13px]">play_circle</span>
-                    <span>Putar Video</span>
+                    <span className="hidden xs:inline">Video</span>
+                  </button>
+                ) : isMobileSplitMode ? (
+                  <button
+                    type="button"
+                    onClick={minimizePlayer}
+                    className="w-6 h-6 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    title="Mode Audio Saja (Sembunyikan Video)"
+                    aria-label="Mode Audio Saja"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">headphones</span>
+                  </button>
+                ) : null}
+
+                {/* TOMBOL SWITCH MODE FOKUS vs MODE FREE (Hanya di Desktop, karena UI Mobile sudah fokus penuh) */}
+                {!isMobileViewport && (
+                  <button
+                    type="button"
+                    onClick={toggleStudyLayoutMode}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[10px] font-bold transition-all cursor-pointer active:scale-95 shrink-0 border ${
+                      isFocusFullscreen
+                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-xs'
+                        : 'bg-surface-container hover:bg-surface-container-high text-on-surface border-outline-variant/60'
+                    }`}
+                    title={
+                      isFocusFullscreen
+                        ? 'Kembali ke Mode Free (Jendela Melayang)'
+                        : 'Buka Mode Fokus (Catatan Fullscreen & Video Mini Melayang di Atasnya)'
+                    }
+                  >
+                    <span className="material-symbols-outlined text-[13px]">
+                      {isFocusFullscreen ? 'pip' : 'fullscreen'}
+                    </span>
+                    <span>{isFocusFullscreen ? 'Mode Free' : 'Mode Fokus'}</span>
                   </button>
                 )}
 
@@ -922,175 +1096,35 @@ export default function FloatingStudyNotes() {
               </div>
             </div>
 
-            {/* 2. TOOLBAR FORMAT CEPAT */}
-            <div
-              className="px-2.5 py-1.5 bg-surface-container-low/70 dark:bg-neutral-800/60 border-b border-surface-container-high/40 flex items-center justify-between gap-1 overflow-x-auto shrink-0 select-none no-scrollbar"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-1 shrink-0">
-                {/* Tombol Undo */}
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  disabled={!canUndo}
-                  className={`w-6 h-5 rounded-md flex items-center justify-center transition-colors ${
-                    canUndo
-                      ? 'hover:bg-surface-container text-on-surface cursor-pointer'
-                      : 'text-outline/30 cursor-not-allowed'
-                  }`}
-                  title="Urungkan (Ctrl+Z)"
-                  aria-label="Undo"
-                >
-                  <span className="material-symbols-outlined text-[14px]">undo</span>
-                </button>
-
-                {/* Tombol Redo */}
-                <button
-                  type="button"
-                  onClick={handleRedo}
-                  disabled={!canRedo}
-                  className={`w-6 h-5 rounded-md flex items-center justify-center transition-colors ${
-                    canRedo
-                      ? 'hover:bg-surface-container text-on-surface cursor-pointer'
-                      : 'text-outline/30 cursor-not-allowed'
-                  }`}
-                  title="Ulangi (Ctrl+Y)"
-                  aria-label="Redo"
-                >
-                  <span className="material-symbols-outlined text-[14px]">redo</span>
-                </button>
-
-                {/* Garis Pemisah */}
-                <div className="w-[1px] h-3.5 bg-surface-container-high/80 mx-0.5 shrink-0" />
-
-                {/* Bold */}
-                <button
-                  type="button"
-                  onClick={handleInsertBold}
-                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                  title="Teks Tebal (Ctrl+B)"
-                >
-                  B
-                </button>
-
-                {/* Italic */}
-                <button
-                  type="button"
-                  onClick={handleInsertItalic}
-                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-serif italic font-bold flex items-center justify-center transition-colors cursor-pointer"
-                  title="Teks Miring (Ctrl+I)"
-                >
-                  I
-                </button>
-
-                {/* Heading (Sub-judul) */}
-                <button
-                  type="button"
-                  onClick={handleInsertHeading}
-                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                  title="Sub-judul Bab (###)"
-                >
-                  H
-                </button>
-
-                {/* Nomor Urut (1.) */}
-                <button
-                  type="button"
-                  onClick={handleInsertNumbered}
-                  className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-bold transition-colors cursor-pointer"
-                  title="Daftar Nomor (1.)"
-                >
-                  1.
-                </button>
-
-                {/* Bullet Poin */}
-                <button
-                  type="button"
-                  onClick={handleInsertPoint}
-                  className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold transition-colors cursor-pointer"
-                  title="Sisipkan Poin Faidah (•)"
-                >
-                  • Poin
-                </button>
-
-                {/* Kutipan Dalil */}
-                <button
-                  type="button"
-                  onClick={handleInsertDalil}
-                  className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-semibold flex items-center gap-0.5 transition-colors cursor-pointer"
-                  title="Sisipkan Kutipan Dalil"
-                >
-                  <span>📖 Dalil</span>
-                </button>
-
-                {/* Stempel Waktu */}
-                <button
-                  type="button"
-                  onClick={handleInsertTimestamp}
-                  className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Sisipkan Stempel Waktu Saat Ini"
-                >
-                  <span className="material-symbols-outlined text-[12px]">schedule</span>
-                  <span>+ Waktu</span>
-                </button>
-              </div>
-
-              {/* Aksi Ekspor */}
-              <div className="flex items-center gap-0.5 shrink-0 pl-1 border-l border-surface-container-high/60">
-                <button
-                  type="button"
-                  onClick={handleShareWhatsApp}
-                  className="w-6 h-5 rounded-md text-emerald-600 hover:bg-emerald-500/15 flex items-center justify-center transition-colors cursor-pointer"
-                  title="Bagikan ke WhatsApp"
-                >
-                  <span className="material-symbols-outlined text-[14px]">share</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleCopyWhatsApp}
-                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-                  title="Salin Catatan"
-                >
-                  <span className="material-symbols-outlined text-[14px]">
-                    {copiedToast ? 'check' : 'content_copy'}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadNote}
-                  className="w-6 h-5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-                  title="Unduh (.txt)"
-                >
-                  <span className="material-symbols-outlined text-[14px]">download</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 3. AREA EDITOR TEKS CATATAN */}
-            <div
-              className="flex-1 relative min-h-0 p-2.5 flex flex-col bg-amber-50/20 dark:bg-neutral-900/30"
-              onPointerDown={(e) => e.stopPropagation()}
-            >
-              <textarea
-                ref={textareaRef}
-                value={noteContent}
-                onChange={handleContentChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Tuliskan faidah penting, ayat, hadits, atau amalan di sini... (Mendukung Markdown)"
-                className="w-full h-full resize-none border-0 bg-transparent text-base md:text-xs text-on-surface placeholder:text-outline/50 focus:outline-hidden leading-relaxed font-sans"
-                spellCheck={false}
-              />
-
-              {/* Toast Indikator Berhasil Disalin */}
-              {copiedToast && (
-                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold shadow-lg animate-in fade-in duration-150 flex items-center gap-1 pointer-events-none">
-                  <span className="material-symbols-outlined text-[13px]">check</span>
-                  Catatan disalin!
-                </div>
-              )}
-            </div>
+            {/* 2. RUANG KERJA TERPADU (TEKS + CORETAN / STABILO MENYATU DALAM 1 LEMBAR KERTAS) */}
+            <StudySketchCanvas
+              videoId={studySession.videoId}
+              title={studySession.title}
+              speakerName={studySession.speakerName}
+              noteContent={noteContent}
+              textareaRef={textareaRef}
+              onChangeText={handleContentChange}
+              onKeyDownText={handleKeyDown}
+              canUndoText={canUndo}
+              canRedoText={canRedo}
+              onUndoText={handleUndo}
+              onRedoText={handleRedo}
+              onInsertBold={handleInsertBold}
+              onInsertItalic={handleInsertItalic}
+              onInsertHeading={handleInsertHeading}
+              onInsertNumbered={handleInsertNumbered}
+              onInsertPoint={handleInsertPoint}
+              onInsertDalil={handleInsertDalil}
+              onInsertTimestamp={handleInsertTimestamp}
+              onShareWhatsApp={handleShareWhatsApp}
+              onCopyWhatsApp={handleCopyWhatsApp}
+              onDownloadTxt={handleDownloadNote}
+              copiedToast={copiedToast}
+              isMobileViewport={isMobileViewport}
+              isFocusFullscreen={isFocusFullscreen}
+              strokes={sketchStrokes}
+              onChangeStrokes={handleChangeSketchStrokes}
+            />
 
             {/* 4. FOOTER INFO & RESIZE HANDLES */}
             <div
@@ -1098,51 +1132,68 @@ export default function FloatingStudyNotes() {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerCancel={handlePointerUp}
-              style={{ touchAction: 'none' }}
-              className="px-3 py-1.5 bg-surface-container-low/90 dark:bg-neutral-800/80 border-t border-surface-container-high/60 flex items-center justify-between text-[9px] text-outline select-none shrink-0 cursor-move relative"
+              style={{
+                touchAction: isFocusFullscreen || isMobileSplitMode ? 'auto' : 'none',
+              }}
+              className={`px-3 py-1.5 bg-surface-container-low/90 dark:bg-neutral-800/80 border-t border-surface-container-high/60 flex items-center justify-between text-[9px] text-outline select-none shrink-0 relative ${
+                !isFocusFullscreen && !isMobileSplitMode ? 'cursor-move' : ''
+              }`}
             >
-              {/* Gagang Resize Sudut Kiri-Bawah */}
-              <div
-                onPointerDown={(e) => handleResizeDown(e, 'bottom-left')}
-                onPointerMove={handleResizeMove}
-                onPointerUp={handleResizeUp}
-                onPointerCancel={handleResizeUp}
-                style={{ touchAction: 'none' }}
-                className="absolute bottom-0 left-0 w-5 h-5 z-20 flex items-end justify-start p-1 cursor-nesw-resize text-outline/40 hover:text-amber-500 transition-colors group/bl"
-                title="Tarik untuk mengubah ukuran catatan"
-              >
-                <svg className="w-2 h-2 text-outline/40 group-hover/bl:text-amber-500 transition-colors" viewBox="0 0 10 10" fill="currentColor">
-                  <circle cx="2" cy="8" r="1.2" />
-                  <circle cx="2" cy="4" r="1.2" />
-                  <circle cx="6" cy="8" r="1.2" />
-                </svg>
+              {/* Gagang Resize Sudut Kiri-Bawah (Hanya tampil pada Desktop Mode Free) */}
+              {!isFocusFullscreen && !isMobileSplitMode && (
+                <div
+                  onPointerDown={(e) => handleResizeDown(e, 'bottom-left')}
+                  onPointerMove={handleResizeMove}
+                  onPointerUp={handleResizeUp}
+                  onPointerCancel={handleResizeUp}
+                  style={{ touchAction: 'none' }}
+                  className="absolute bottom-0 left-0 w-5 h-5 z-20 flex items-end justify-start p-1 cursor-nesw-resize text-outline/40 hover:text-amber-500 transition-colors group/bl"
+                  title="Tarik untuk mengubah ukuran catatan"
+                >
+                  <svg className="w-2 h-2 text-outline/40 group-hover/bl:text-amber-500 transition-colors" viewBox="0 0 10 10" fill="currentColor">
+                    <circle cx="2" cy="8" r="1.2" />
+                    <circle cx="2" cy="4" r="1.2" />
+                    <circle cx="6" cy="8" r="1.2" />
+                  </svg>
+                </div>
+              )}
+
+              <div className={!isFocusFullscreen && !isMobileSplitMode ? 'pl-3' : ''}>
+                <span>
+                  {wordCount} kata • {charCount} karakter
+                  {sketchStrokes.length > 0 ? ` • ${sketchStrokes.length} coretan` : ''}
+                </span>
               </div>
 
-              <div className="pl-3">
-                <span>{wordCount} kata • {charCount} karakter</span>
-              </div>
-
-              <div className="flex items-center gap-1 pr-3">
+              <div className={`flex items-center gap-1 ${!isFocusFullscreen && !isMobileSplitMode ? 'pr-3' : ''}`}>
                 <span className="material-symbols-outlined text-[11px] text-emerald-600">cloud_done</span>
-                <span>Tersimpan di Cloud</span>
+                <span>
+                  {isFocusFullscreen
+                    ? 'Mode Fokus Aktif (Video Melayang di Atas)'
+                    : isMobileSplitMode
+                    ? 'Tersimpan Otomatis'
+                    : 'Tersimpan di Cloud'}
+                </span>
               </div>
 
-              {/* Gagang Resize Sudut Kanan-Bawah */}
-              <div
-                onPointerDown={(e) => handleResizeDown(e, 'bottom-right')}
-                onPointerMove={handleResizeMove}
-                onPointerUp={handleResizeUp}
-                onPointerCancel={handleResizeUp}
-                style={{ touchAction: 'none' }}
-                className="absolute bottom-0 right-0 w-5 h-5 z-20 flex items-end justify-end p-1 cursor-nwse-resize text-outline/40 hover:text-amber-500 transition-colors group/br"
-                title="Tarik untuk mengubah ukuran catatan"
-              >
-                <svg className="w-2 h-2 text-outline/40 group-hover/br:text-amber-500 transition-colors" viewBox="0 0 10 10" fill="currentColor">
-                  <circle cx="8" cy="8" r="1.2" />
-                  <circle cx="8" cy="4" r="1.2" />
-                  <circle cx="4" cy="8" r="1.2" />
-                </svg>
-              </div>
+              {/* Gagang Resize Sudut Kanan-Bawah (Hanya tampil pada Desktop Mode Free) */}
+              {!isFocusFullscreen && !isMobileSplitMode && (
+                <div
+                  onPointerDown={(e) => handleResizeDown(e, 'bottom-right')}
+                  onPointerMove={handleResizeMove}
+                  onPointerUp={handleResizeUp}
+                  onPointerCancel={handleResizeUp}
+                  style={{ touchAction: 'none' }}
+                  className="absolute bottom-0 right-0 w-5 h-5 z-20 flex items-end justify-end p-1 cursor-nwse-resize text-outline/40 hover:text-amber-500 transition-colors group/br"
+                  title="Tarik untuk mengubah ukuran catatan"
+                >
+                  <svg className="w-2 h-2 text-outline/40 group-hover/br:text-amber-500 transition-colors" viewBox="0 0 10 10" fill="currentColor">
+                    <circle cx="8" cy="8" r="1.2" />
+                    <circle cx="8" cy="4" r="1.2" />
+                    <circle cx="4" cy="8" r="1.2" />
+                  </svg>
+                </div>
+              )}
             </div>
           </div>
         )}

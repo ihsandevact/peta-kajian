@@ -1,5 +1,18 @@
 import { createClient } from '@/utils/supabase/client';
 
+export interface SketchPoint {
+  x: number;
+  y: number;
+}
+
+export interface SketchStroke {
+  id: string;
+  tool: 'pen' | 'highlighter' | 'eraser';
+  color: string;
+  size: number;
+  points: SketchPoint[];
+}
+
 export interface StudyNote {
   id?: string;
   user_id: string;
@@ -14,7 +27,89 @@ export interface StudyNote {
 }
 
 const LOCAL_BACKUP_PREFIX = 'peta_kajian_note_draft_';
+const LOCAL_SKETCH_PREFIX = 'peta_kajian_note_sketch_';
 const PENDING_STUDY_SESSION_KEY = 'peta_kajian_pending_study_session';
+const SKETCH_METADATA_REGEX = /\n*<!--PK_SKETCH_DATA:([\s\S]*?)-->\s*$/;
+
+/**
+ * Pisahkan teks catatan murni dengan metadata coretan (sketch) yang disematkan
+ */
+export function decodeNoteWithSketch(rawContent: string): {
+  textContent: string;
+  strokes: SketchStroke[] | null;
+} {
+  if (!rawContent) {
+    return { textContent: '', strokes: null };
+  }
+  const match = rawContent.match(SKETCH_METADATA_REGEX);
+  if (!match) {
+    return { textContent: rawContent, strokes: null };
+  }
+  const cleanText = rawContent.replace(SKETCH_METADATA_REGEX, '');
+  try {
+    const parsed = JSON.parse(match[1]);
+    if (Array.isArray(parsed)) {
+      return { textContent: cleanText, strokes: parsed };
+    }
+  } catch {
+    // Abaikan jika gagal parse
+  }
+  return { textContent: cleanText, strokes: null };
+}
+
+/**
+ * Gabungkan teks catatan dengan metadata coretan untuk disimpan ke database
+ */
+export function encodeNoteWithSketch(textContent: string, strokes: SketchStroke[]): string {
+  const cleanText = textContent.replace(SKETCH_METADATA_REGEX, '');
+  if (!strokes || strokes.length === 0) {
+    return cleanText;
+  }
+  try {
+    return `${cleanText}\n\n<!--PK_SKETCH_DATA:${JSON.stringify(strokes)}-->`;
+  } catch {
+    return cleanText;
+  }
+}
+
+/**
+ * Bersihkan metadata coretan dari teks catatan untuk tampilan UI / WhatsApp
+ */
+export function stripSketchMetadata(rawContent: string): string {
+  if (!rawContent) return '';
+  return rawContent.replace(SKETCH_METADATA_REGEX, '');
+}
+
+/**
+ * Simpan data coretan (sketch) ke localStorage
+ */
+export function setLocalSketchData(videoId: string, strokes: SketchStroke[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!strokes || strokes.length === 0) {
+      localStorage.removeItem(`${LOCAL_SKETCH_PREFIX}${videoId}`);
+    } else {
+      localStorage.setItem(`${LOCAL_SKETCH_PREFIX}${videoId}`, JSON.stringify(strokes));
+    }
+  } catch (err) {
+    console.warn('Gagal menyimpan data coretan lokal:', err);
+  }
+}
+
+/**
+ * Ambil data coretan (sketch) dari localStorage
+ */
+export function getLocalSketchData(videoId: string): SketchStroke[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(`${LOCAL_SKETCH_PREFIX}${videoId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Simpan draft ke localStorage sebagai proteksi instan jika koneksi bermasalah
@@ -120,7 +215,17 @@ export async function fetchUserStudyNotes(userId: string): Promise<StudyNote[]> 
       return [];
     }
 
-    return (data as StudyNote[]) || [];
+    const notes = (data as StudyNote[]) || [];
+    return notes.map((n) => {
+      const { textContent, strokes } = decodeNoteWithSketch(n.content);
+      if (strokes && strokes.length > 0 && n.video_id) {
+        setLocalSketchData(n.video_id, strokes);
+      }
+      return {
+        ...n,
+        content: textContent,
+      };
+    });
   } catch (err) {
     console.warn('Unexpected error fetchUserStudyNotes:', err);
     return [];
@@ -264,6 +369,7 @@ export function formatNoteForWhatsApp(note: {
   const speakerLine = note.speaker_name ? `🎙️ *Pemateri:* ${note.speaker_name}\n` : '';
   const channelLine = note.channel_name ? `📺 *Kanal/Sumber:* ${note.channel_name}\n` : '';
   const videoLine = note.video_id ? `🔗 *Tautan Rekaman:* https://youtu.be/${note.video_id}\n` : '';
+  const cleanContent = stripSketchMetadata(note.content).trim();
 
   return (
     `📝 *CATATAN FAIDAH KAJIAN*\n` +
@@ -274,7 +380,7 @@ export function formatNoteForWhatsApp(note: {
     videoLine +
     `📅 *Tanggal:* ${dateStr}\n` +
     `${divider}\n\n` +
-    `${note.content.trim()}\n\n` +
+    `${cleanContent}\n\n` +
     `${divider}\n` +
     `_Dicatat melalui Mode Belajar — Peta Kajian Sunnah_`
   );

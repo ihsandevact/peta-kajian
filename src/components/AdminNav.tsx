@@ -88,7 +88,16 @@ export default function AdminNav({ userEmail }: { userEmail?: string }) {
             <Link
               href="/"
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
-              title="Buka Peta"
+              title="Buka Beranda"
+            >
+              <span className="material-symbols-outlined text-[16px]">home</span>
+              <span>Beranda</span>
+            </Link>
+
+            <Link
+              href="/peta"
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container rounded-full transition-colors"
+              title="Buka Peta Kajian"
             >
               <span className="material-symbols-outlined text-[16px]">map</span>
               <span>Peta</span>

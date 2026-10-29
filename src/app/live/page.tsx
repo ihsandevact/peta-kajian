@@ -19,6 +19,7 @@ import EndedStreamSkeleton from '@/components/live/EndedStreamSkeleton';
 import { type PendingStudySession } from '@/utils/studyNotes';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useBottomNav } from '@/context/BottomNavContext';
+import DynamicBackButton from '@/components/navigation/DynamicBackButton';
 import type { SwipeFeedItem } from '@/components/live/MobileSwipeLiveViewer';
 
 const StudyLoginModal = dynamic(() => import('@/components/StudyLoginModal'), {
@@ -31,7 +32,7 @@ const MobileSwipeLiveViewer = dynamic(
 );
 
 export default function LiveStreamingPage() {
-  const { playStream, openStudyMode, closePlayer, isOpen: isLivePlayerOpen } = useLivePlayer();
+  const { playStream, openStudyMode, closePlayer, isOpen: isLivePlayerOpen, isStudyNotesOpen } = useLivePlayer();
   const { setIsDarkTheme } = useBottomNav();
   const {
     channels,
@@ -189,6 +190,7 @@ export default function LiveStreamingPage() {
       });
       return;
     }
+    setMobileViewMode('list');
     openStudyMode(sessionData);
   };
 
@@ -476,13 +478,20 @@ export default function LiveStreamingPage() {
     };
   }, [enterSwipeMode]);
 
-  // Safeguard: Jika pengguna berada di Mode Swipe pada mobile sementara Mini Player terbuka, otomatis tutup Mini Player
+  // Safeguard: Jika Mode Belajar aktif di mobile, beralih ke mode list agar tampilan Split Atas-Bawah tidak bentrok dengan Swipe Feed
+  useEffect(() => {
+    if (isStudyNotesOpen && mobileViewMode === 'swipe') {
+      setMobileViewMode('list');
+    }
+  }, [isStudyNotesOpen, mobileViewMode]);
+
+  // Safeguard: Jika pengguna berada di Mode Swipe pada mobile sementara Mini Player terbuka (tanpa Mode Belajar), otomatis tutup Mini Player
   useEffect(() => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
-    if (isMobile && mobileViewMode === 'swipe' && isLivePlayerOpen) {
+    if (isMobile && mobileViewMode === 'swipe' && isLivePlayerOpen && !isStudyNotesOpen) {
       closePlayer();
     }
-  }, [mobileViewMode, isLivePlayerOpen, closePlayer]);
+  }, [mobileViewMode, isLivePlayerOpen, isStudyNotesOpen, closePlayer]);
 
   // Handler terpadu untuk menonton siaran (Mobile: Buka di posisi Mode Swipe & tutup Mini Player, Desktop: Modal Player)
   const handleWatchVideo = useCallback(
@@ -605,6 +614,7 @@ export default function LiveStreamingPage() {
             isOpen={true}
             onSwitchToList={handleSwitchToList}
             onPlayMiniPlayer={handlePlayMiniPlayerFromSwipe}
+            onOpenStudyMode={handleOpenStudyNotes}
           />
         </div>
       )}
@@ -620,16 +630,9 @@ export default function LiveStreamingPage() {
         <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
             
-            {/* Sisi Kiri: Tombol Back ke Peta & Logo */}
+            {/* Sisi Kiri: Tombol Back Dinamis & Logo */}
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <Link
-                href="/"
-                className="flex items-center gap-1.5 p-2 sm:px-3 sm:py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface transition-colors shrink-0"
-                title="Kembali ke Peta Kajian"
-              >
-                <span className="material-symbols-outlined text-[18px]">arrow_back</span>
-                <span className="hidden sm:inline">Peta Kajian</span>
-              </Link>
+              <DynamicBackButton className="bg-surface-container hover:bg-surface-container-high text-on-surface rounded-xl px-3 py-1.5" />
 
               <div className="h-5 w-px bg-surface-container-high hidden sm:block shrink-0" />
 
@@ -672,6 +675,15 @@ export default function LiveStreamingPage() {
                   <span>Belum Ada Siaran Aktif</span>
                 </div>
               )}
+
+              <Link
+                href="/peta"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
+                title="Buka Peta Kajian"
+              >
+                <span className="material-symbols-outlined text-[16px]">map</span>
+                <span>Peta Kajian</span>
+              </Link>
 
               {/* Tombol Refresh */}
               <button
@@ -1089,7 +1101,7 @@ export default function LiveStreamingPage() {
                       </button>
                     )}
                     <Link
-                      href="/"
+                      href="/peta"
                       className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-primary text-on-primary text-xs font-semibold hover:bg-primary/90 transition-all shadow-xs"
                     >
                       <span className="material-symbols-outlined text-[16px]">map</span>
@@ -1145,7 +1157,7 @@ export default function LiveStreamingPage() {
                           </button>
                         )}
                         <Link
-                          href="/"
+                          href="/peta"
                           className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-all shadow-xs"
                         >
                           <span className="material-symbols-outlined text-[16px]">map</span>
@@ -1435,7 +1447,7 @@ export default function LiveStreamingPage() {
                           </button>
                         )}
                         <Link
-                          href="/"
+                          href="/peta"
                           className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-all shadow-xs"
                         >
                           <span className="material-symbols-outlined text-[16px]">map</span>
@@ -1852,6 +1864,9 @@ export default function LiveStreamingPage() {
           <p>© {new Date().getFullYear()} Peta Kajian — Pelacak Kajian & Siaran Langsung Kajian Islam</p>
           <div className="flex items-center gap-4">
             <Link href="/" className="hover:text-on-surface transition-colors">
+              Beranda
+            </Link>
+            <Link href="/peta" className="hover:text-on-surface transition-colors">
               Peta Kajian
             </Link>
             <Link href="/faq" className="hover:text-on-surface transition-colors">

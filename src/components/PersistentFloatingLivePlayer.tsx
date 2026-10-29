@@ -26,11 +26,35 @@ export default function PersistentFloatingLivePlayer() {
     openStudyMode,
     isStudyModeOpen,
     isStudyNotesOpen,
+    isStudyNotesMinimized,
+    studyLayoutMode,
+    toggleStudyLayoutMode,
     toggleMinimizeStudyNotes,
   } = useLivePlayer();
 
   const pathname = usePathname();
   const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
+
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
+  useEffect(() => {
+    const checkViewport = () => setIsMobileViewport(window.innerWidth < 768);
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
+
+  const isMobileDockedTop =
+    isMobileViewport &&
+    isStudyNotesOpen &&
+    !isStudyNotesMinimized &&
+    !isMinimized &&
+    !isModalExpanded;
+
+  const isFocusOverlayMode =
+    !isMobileViewport &&
+    isStudyNotesOpen &&
+    !isStudyNotesMinimized &&
+    studyLayoutMode === 'focus';
 
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -108,14 +132,16 @@ export default function PersistentFloatingLivePlayer() {
   const clampPosition = useCallback(
     (x: number, y: number, customWidth?: number) => {
       if (typeof window === 'undefined') return { x, y };
-      const rect = containerRef.current?.getBoundingClientRect();
-      const width = customWidth || (isMinimized ? 280 : playerWidth) || rect?.width || 360;
-      const height = isMinimized ? 48 : width * (9 / 16) + 90;
-
-      const padding = 12;
-      // Beri ruang ekstra 72px di mobile agar tidak menutupi bottom navigation bar jika digeser ke bawah
       const isMobile = window.innerWidth < 768;
-      const bottomPadding = isMobile ? 72 : 16;
+      const rect = containerRef.current?.getBoundingClientRect();
+      const defaultW = isMobile && isFocusOverlayMode ? Math.min(playerWidth, 210) : playerWidth;
+      const width = customWidth || (isMinimized ? 260 : defaultW) || rect?.width || 360;
+      const chromeHeight = isMobile && isFocusOverlayMode ? 32 : 90;
+      const height = isMinimized ? 48 : width * (9 / 16) + chromeHeight;
+
+      const padding = 8;
+      // Beri ruang ekstra 72px di mobile jika bukan Mode Fokus
+      const bottomPadding = isMobile && !isFocusOverlayMode ? 72 : 12;
 
       const minX = padding;
       const maxX = Math.max(padding, window.innerWidth - width - padding);
@@ -127,7 +153,7 @@ export default function PersistentFloatingLivePlayer() {
         y: Math.min(Math.max(y, minY), maxY),
       };
     },
-    [isMinimized, playerWidth]
+    [isMinimized, playerWidth, isFocusOverlayMode]
   );
 
   // Tutup modal (kembali ke mini player) saat tombol ESC ditekan
@@ -144,8 +170,8 @@ export default function PersistentFloatingLivePlayer() {
 
   // Handler Pointer Drag
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Abaikan jika sedang dalam mode modal layar penuh
-    if (isModalExpanded) return;
+    // Abaikan jika sedang dalam mode modal layar penuh atau docked di atas layar mobile
+    if (isModalExpanded || isMobileDockedTop) return;
 
     // Hanya proses sentuhan atau klik tombol utama mouse
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -839,25 +865,42 @@ export default function PersistentFloatingLivePlayer() {
         style={
           isModalExpanded
             ? undefined
+            : isMobileDockedTop
+            ? {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                width: '100%',
+                zIndex: 56,
+              }
             : {
-                width: isMinimized ? undefined : `${playerWidth}px`,
+                width: isMinimized
+                  ? undefined
+                  : `${isMobileViewport && isFocusOverlayMode ? Math.min(playerWidth, 210) : playerWidth}px`,
+                zIndex: isFocusOverlayMode || isMinimized ? 60 : 50,
                 ...(position ? {
                   position: 'fixed',
                   left: `${position.x}px`,
                   top: `${position.y}px`,
                   right: 'auto',
                   bottom: 'auto',
-                  zIndex: 50,
                 } : {}),
               }
         }
         className={
           isModalExpanded
             ? "fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-            : `fixed z-50 max-w-[calc(100vw-24px)] ${
+            : isMobileDockedTop
+            ? "fixed top-0 left-0 right-0 z-[56] w-full bg-black shadow-md"
+            : `fixed ${isFocusOverlayMode || isMinimized ? 'z-[60]' : 'z-50'} max-w-[calc(100vw-16px)] ${
                 isResizing ? 'transition-none select-none' : 'transition-shadow duration-200'
               } ${
-                !position ? 'bottom-[72px] md:bottom-4 right-3 sm:right-4' : ''
+                !position
+                  ? isFocusOverlayMode && isMobileViewport
+                    ? 'bottom-10 right-3'
+                    : 'bottom-[72px] md:bottom-4 right-3 sm:right-4'
+                  : ''
               } ${isDragging || isResizing ? 'shadow-2xl scale-[1.01]' : ''}`
         }
       >
@@ -1021,7 +1064,13 @@ export default function PersistentFloatingLivePlayer() {
               ? "absolute bottom-0 right-0 w-[240px] h-[135px] opacity-0 pointer-events-none -z-50 overflow-hidden"
               : isModalExpanded
               ? "bg-surface-container-lowest rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col border border-surface-container-high animate-in zoom-in-95 duration-200 max-h-[92vh]"
-              : "relative w-full rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border border-surface-container-high/80 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300"
+              : isMobileDockedTop
+              ? "relative w-full bg-surface-container-lowest dark:bg-neutral-900 overflow-hidden flex flex-col"
+              : `relative w-full rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border ${
+                  isFocusOverlayMode
+                    ? 'border-indigo-500/50 ring-2 ring-indigo-500/20'
+                    : 'border-surface-container-high/80 dark:border-neutral-800'
+                } shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300`
           }
         >
           {isModalExpanded ? (
@@ -1062,7 +1111,7 @@ export default function PersistentFloatingLivePlayer() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : isMobileDockedTop ? null : (
             <>
               {/* HUD Dimensi Realtime saat Resize */}
               {isResizing && (
@@ -1081,7 +1130,9 @@ export default function PersistentFloatingLivePlayer() {
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 style={{ touchAction: 'none' }}
-                className="px-3.5 py-2.5 bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none relative"
+                className={`${
+                  isFocusOverlayMode && isMobileViewport ? 'px-2.5 py-1.5' : 'px-3.5 py-2.5'
+                } bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-1.5 cursor-move transition-colors select-none relative`}
                 title="Klik dan tahan di sini untuk menggeser posisi video"
               >
                 {/* Gagang Resize Sudut Kiri-Atas (Top-Left) */}
@@ -1343,7 +1394,7 @@ export default function PersistentFloatingLivePlayer() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : isMobileDockedTop || (isFocusOverlayMode && isMobileViewport) ? null : (
             /* Footer Info Judul & Tombol Audio Floating Biasa */
             <div 
               onPointerDown={handlePointerDown}

@@ -135,6 +135,22 @@ export default function AdminLayoutShell({ children }: AdminLayoutShellProps) {
               <Link
                 href="/"
                 className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all group"
+                title="Buka Beranda Utama"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[19px] text-outline group-hover:text-primary">
+                    home
+                  </span>
+                  <span>Beranda Utama</span>
+                </div>
+                <span className="material-symbols-outlined text-[14px] text-outline opacity-70 group-hover:translate-x-0.5 transition-transform">
+                  arrow_forward
+                </span>
+              </Link>
+
+              <Link
+                href="/peta"
+                className="flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all group"
                 title="Buka Peta Publik di Tab Saat Ini"
               >
                 <div className="flex items-center gap-3">

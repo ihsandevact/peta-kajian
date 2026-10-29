@@ -85,7 +85,13 @@ export default function MosqueDetailClient({ venue, sessions }: MosqueDetailClie
             href="/"
             className="text-xs font-semibold text-on-surface-variant hover:text-emerald-600 px-3 py-1.5 rounded-xl hover:bg-surface-container transition-colors"
           >
-            Peta Beranda
+            Beranda
+          </Link>
+          <Link
+            href="/peta"
+            className="text-xs font-semibold text-on-surface-variant hover:text-emerald-600 px-3 py-1.5 rounded-xl hover:bg-surface-container transition-colors"
+          >
+            Peta Kajian
           </Link>
         </div>
       </header>
@@ -279,7 +285,7 @@ export default function MosqueDetailClient({ venue, sessions }: MosqueDetailClie
                           </div>
 
                           <Link
-                            href="/"
+                            href={`/peta?session=${session.id}`}
                             className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 hover:underline"
                           >
                             <span>Lihat di Peta Utama</span>

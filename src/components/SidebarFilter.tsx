@@ -539,7 +539,7 @@ export default function SidebarFilter({
               </p>
               <div className="mt-2">
                 <Link
-                  href="/login?next=/?tab=tersimpan"
+                  href="/login?next=/peta?tab=tersimpan"
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-600 dark:bg-amber-500 text-white text-[11px] font-semibold hover:opacity-90 transition-all shadow-2xs active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[14px]">login</span>

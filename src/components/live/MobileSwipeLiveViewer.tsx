@@ -25,6 +25,12 @@ export interface MobileSwipeLiveViewerProps {
     channelName: string;
     speakerName?: string;
   }) => void;
+  onOpenStudyMode?: (stream: {
+    videoId: string;
+    title: string;
+    channelName: string;
+    speakerName?: string;
+  }) => void;
 }
 
 // Helper deteksi perangkat iOS (iPhone / iPad / iPod)
@@ -43,6 +49,7 @@ function MobileSwipeLiveViewer({
   onClose,
   onSwitchToList,
   onPlayMiniPlayer,
+  onOpenStudyMode,
 }: MobileSwipeLiveViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   // Deteksi khusus iOS (Apple WebKit memblokir unmuted autoplay)
@@ -830,6 +837,25 @@ function MobileSwipeLiveViewer({
               {isMuted ? 'volume_off' : 'volume_up'}
             </span>
           </button>
+
+          {/* Tombol Mode Belajar & Catat Faidah */}
+          {onOpenStudyMode && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenStudyMode({
+                  videoId: currentVideoId,
+                  title: currentTitle,
+                  channelName: currentItem.channelName,
+                  speakerName: currentSpeaker,
+                });
+              }}
+              className="w-11 h-11 rounded-full bg-emerald-600/85 hover:bg-emerald-600 border border-emerald-400/50 text-white flex flex-col items-center justify-center transition-all cursor-pointer shadow-xl backdrop-blur-md active:scale-90"
+              title="Mode Belajar: Catat & Coret-Coret Faidah Kajian"
+            >
+              <span className="material-symbols-outlined text-[20px]">edit_note</span>
+            </button>
+          )}
 
           {/* Tombol Mini Player (Putar di Pojok & Kembali ke Halaman Jelajah) */}
           <button

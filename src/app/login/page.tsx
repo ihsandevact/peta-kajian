@@ -4,6 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import DynamicBackButton from '@/components/navigation/DynamicBackButton';
 
 function LoginForm() {
   const [loading, setLoading] = useState(false);
@@ -119,14 +120,8 @@ function LoginForm() {
         </p>
 
         {/* Back Link */}
-        <div className="pt-4 mt-6 border-t border-surface-container-high/50">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-1 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors"
-          >
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-            <span>Kembali ke Peta Kajian</span>
-          </Link>
+        <div className="pt-4 mt-6 border-t border-surface-container-high/50 flex justify-center">
+          <DynamicBackButton fallbackHref={next && next.startsWith('/') && !next.startsWith('//') ? next : '/'} />
         </div>
       </div>
     </div>

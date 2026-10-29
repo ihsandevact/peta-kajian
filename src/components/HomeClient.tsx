@@ -806,11 +806,11 @@ export default function HomeClient() {
 
         <div className={`flex flex-col gap-6 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
           {/* Logo Area */}
-          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center' : 'px-1'}`}>
+          <Link href="/" className={`flex items-center gap-3 group ${isSidebarCollapsed ? 'justify-center' : 'px-1'}`} title="Kembali ke Beranda">
             <img
               src="/logo.png?v=3"
               alt="Peta Kajian Logo"
-              className={`${isSidebarCollapsed ? 'w-11 h-11' : 'w-12 h-12'} object-contain shrink-0 transition-all drop-shadow-xs`}
+              className={`${isSidebarCollapsed ? 'w-11 h-11' : 'w-12 h-12'} object-contain shrink-0 transition-all drop-shadow-xs group-hover:scale-105`}
             />
             {!isSidebarCollapsed && (
               <div className="flex flex-col overflow-hidden whitespace-nowrap">
@@ -818,10 +818,22 @@ export default function HomeClient() {
                 <span className="text-[11px] font-medium text-outline">Seluruh Indonesia</span>
               </div>
             )}
-          </div>
+          </Link>
           
           {/* Navigation Links */}
           <nav className="flex flex-col gap-1.5">
+            <Link
+              href="/"
+              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
+            >
+              <span className="material-symbols-outlined text-[20px]">home</span>
+              {!isSidebarCollapsed && <span>Beranda</span>}
+              {isSidebarCollapsed && (
+                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
+                  Beranda
+                </span>
+              )}
+            </Link>
             <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary-container text-on-primary`}>
               <span className="material-symbols-outlined text-[20px]">map</span>
               {!isSidebarCollapsed && <span>Jelajah Peta</span>}
