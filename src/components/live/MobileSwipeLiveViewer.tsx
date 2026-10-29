@@ -42,6 +42,21 @@ const checkIsIOS = () => {
   return isIosDevice || isIPadOS;
 };
 
+// Helper format detik menjadi MM:SS atau HH:MM:SS
+function formatVideoTime(rawSeconds: number): string {
+  if (!Number.isFinite(rawSeconds) || rawSeconds < 0) return '00:00';
+  const totalSec = Math.floor(rawSeconds);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  if (hours > 0) {
+    return `${hours}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
 function MobileSwipeLiveViewer({
   items,
   initialIndex,
@@ -73,6 +88,20 @@ function MobileSwipeLiveViewer({
   const [playbackError, setPlaybackError] = useState(false);
   const [isTitleExpanded, setIsTitleExpanded] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // State Timeline & Scrubber Interaktif (Gaya TikTok / YouTube Shorts)
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(0);
+  const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
+  const [scrubTime, setScrubTime] = useState<number>(0);
+  const isScrubbingRef = useRef<boolean>(false);
+  const [skipFeedback, setSkipFeedback] = useState<'backward' | 'forward' | null>(null);
+  const lastTapRef = useRef<{ time: number; side: 'left' | 'right' | 'center' }>({
+    time: 0,
+    side: 'center',
+  });
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Ref untuk melacak upaya kickstart autoplay berkala
   const autoplayAttemptsRef = useRef(0);
@@ -205,9 +234,51 @@ function MobileSwipeLiveViewer({
     setIsPlaying(false);
     setAutoplayFailed(false);
     setPlaybackError(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsScrubbing(false);
+    setScrubTime(0);
+    isScrubbingRef.current = false;
     autoplayAttemptsRef.current = 0;
     isUserPausedRef.current = false;
   }, [currentIndex]);
+
+  // Fungsi Seek ke detik tertentu pada video YouTube
+  const handleSeekTo = useCallback(
+    (targetSeconds: number) => {
+      const clamped = Math.max(
+        0,
+        duration > 0 ? Math.min(duration, targetSeconds) : targetSeconds
+      );
+      setCurrentTime(clamped);
+      setScrubTime(clamped);
+      sendIframeCommand('seekTo', [clamped, true]);
+
+      if (isPaused || !isPlaying) {
+        isUserPausedRef.current = false;
+        sendIframeCommand('playVideo');
+        setIsPaused(false);
+        setIsPlaying(true);
+      }
+    },
+    [duration, isPaused, isPlaying, sendIframeCommand]
+  );
+
+  // Fungsi Lompat Cepat -10 detik / +10 detik dengan indikator visual ala YouTube Shorts
+  const handleSkipSeconds = useCallback(
+    (deltaSeconds: number) => {
+      const baseTime = isScrubbingRef.current ? scrubTime : currentTime;
+      handleSeekTo(baseTime + deltaSeconds);
+      if (skipFeedbackTimerRef.current) {
+        clearTimeout(skipFeedbackTimerRef.current);
+      }
+      setSkipFeedback(deltaSeconds < 0 ? 'backward' : 'forward');
+      skipFeedbackTimerRef.current = setTimeout(() => {
+        setSkipFeedback(null);
+      }, 650);
+    },
+    [currentTime, scrubTime, handleSeekTo]
+  );
 
   // Deteksi jika autoplay tertahan browser khusus di iOS (misal saat Low Power Mode aktif di iPhone)
   useEffect(() => {
@@ -265,23 +336,74 @@ function MobileSwipeLiveViewer({
     }
   }, [isPaused, isPlaying, sendIframeCommand]);
 
-  // Handler cerdas ketukan area video ala TikTok / Reels:
-  // - Jika video masih hening (misal di iOS): ketukan langsung menyalakan suara (unMute)
-  // - Jika belum berputar / dijeda / autoplay tertahan browser (khusus iOS): LANGSUNG playVideo
-  // - Jika sudah berputar bersuara: bertindak sebagai toggle play / pause
-  const handleVideoAreaTap = useCallback(() => {
-    if (isMuted) {
-      handleUnmute();
-    } else if (!isPlaying || isPaused || (isIOS && autoplayFailed)) {
-      isUserPausedRef.current = false;
-      sendIframeCommand('playVideo');
-      setIsPaused(false);
-      setIsPlaying(true);
-      setAutoplayFailed(false);
-    } else {
-      togglePlayPause();
-    }
-  }, [isMuted, isPlaying, isPaused, isIOS, autoplayFailed, handleUnmute, togglePlayPause, sendIframeCommand]);
+  // Handler cerdas ketukan area video ala TikTok / YouTube Shorts:
+  // - Double-tap sisi kiri (<38% lebar): mundur 10 detik (-10d)
+  // - Double-tap sisi kanan (>62% lebar): maju 10 detik (+10d)
+  // - Single-tap: nyalakan suara jika masih mute, atau toggle Play / Pause
+  const handleVideoAreaTap = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      if (isMuted) {
+        handleUnmute();
+        return;
+      }
+
+      if (!isPlaying || isPaused || (isIOS && autoplayFailed)) {
+        isUserPausedRef.current = false;
+        sendIframeCommand('playVideo');
+        setIsPaused(false);
+        setIsPlaying(true);
+        setAutoplayFailed(false);
+        return;
+      }
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relX = e.clientX - rect.left;
+      const ratioX = rect.width > 0 ? relX / rect.width : 0.5;
+      const tapSide: 'left' | 'right' | 'center' =
+        ratioX < 0.38 ? 'left' : ratioX > 0.62 ? 'right' : 'center';
+
+      const now = Date.now();
+      const isDoubleTap =
+        tapSide !== 'center' &&
+        lastTapRef.current.side === tapSide &&
+        now - lastTapRef.current.time < 280;
+
+      if (isDoubleTap) {
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        lastTapRef.current = { time: 0, side: 'center' };
+        handleSkipSeconds(tapSide === 'left' ? -10 : 10);
+        return;
+      }
+
+      lastTapRef.current = { time: now, side: tapSide };
+
+      if (tapSide === 'center') {
+        togglePlayPause();
+      } else {
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+        }
+        singleTapTimerRef.current = setTimeout(() => {
+          togglePlayPause();
+          singleTapTimerRef.current = null;
+        }, 230);
+      }
+    },
+    [
+      isMuted,
+      isPlaying,
+      isPaused,
+      isIOS,
+      autoplayFailed,
+      handleUnmute,
+      togglePlayPause,
+      handleSkipSeconds,
+      sendIframeCommand,
+    ]
+  );
 
   // Handshake berkala & adaptif kickstart autoplay di YouTube iframe (hemat baterai saat stabil)
   useEffect(() => {
@@ -390,6 +512,22 @@ function MobileSwipeLiveViewer({
 
           if (typeof info.muted === 'boolean') {
             setIsMuted(info.muted);
+          }
+
+          if (
+            typeof info.currentTime === 'number' &&
+            !Number.isNaN(info.currentTime) &&
+            !isScrubbingRef.current
+          ) {
+            setCurrentTime(info.currentTime);
+          }
+
+          if (
+            typeof info.duration === 'number' &&
+            !Number.isNaN(info.duration) &&
+            info.duration > 0
+          ) {
+            setDuration(info.duration);
           }
         }
       } catch {}
@@ -510,7 +648,12 @@ function MobileSwipeLiveViewer({
   // Touch event handlers for vertical swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('a')) {
+    if (
+      target.closest('button') ||
+      target.closest('a') ||
+      target.closest('input') ||
+      target.closest('[data-no-swipe="true"]')
+    ) {
       return;
     }
     touchStartY.current = e.touches[0].clientY;
@@ -637,6 +780,9 @@ function MobileSwipeLiveViewer({
   const currentTitle = currentItem.title;
   const currentSpeaker = currentItem.speakerName;
   const currentPoster = currentItem.posterUrl || `https://i.ytimg.com/vi/${currentVideoId}/hqdefault.jpg`;
+  const displayTime = isScrubbing ? scrubTime : currentTime;
+  const effectiveMaxDuration = duration > 0 ? duration : Math.max(60, Math.ceil(displayTime + 30));
+  const progressPercent = effectiveMaxDuration > 0 ? Math.min(100, Math.max(0, (displayTime / effectiveMaxDuration) * 100)) : 0;
 
   return (
     <div
@@ -782,22 +928,83 @@ function MobileSwipeLiveViewer({
               </div>
             )}
 
-            {/* Tap to Unmute / Play-Pause Overlay Ala TikTok */}
+            {/* Tap / Double-Tap Overlay Ala TikTok & YouTube Shorts */}
             <div
               onClick={handleVideoAreaTap}
               className="absolute inset-0 z-10 cursor-pointer flex items-center justify-center select-none"
               aria-label={isMuted ? 'Nyalakan Suara' : isPaused ? 'Putar Video' : 'Jeda Video'}
             >
-              {/* Centered Frosted Play Icon saat di-Pause, atau jika Autoplay ditahan Browser khusus di iOS */}
+              {/* Indikator Animasi Double-Tap Skip Kiri (-10d) */}
+              {skipFeedback === 'backward' && (
+                <div className="absolute left-5 top-1/2 -translate-y-1/2 px-3.5 py-2 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white flex flex-col items-center gap-0.5 shadow-2xl animate-in fade-in zoom-in-75 duration-150 pointer-events-none">
+                  <span className="material-symbols-outlined text-[26px] text-emerald-400">
+                    fast_rewind
+                  </span>
+                  <span className="text-[10px] font-bold tracking-wide">-10 detik</span>
+                </div>
+              )}
+
+              {/* Indikator Animasi Double-Tap Skip Kanan (+10d) */}
+              {skipFeedback === 'forward' && (
+                <div className="absolute right-5 top-1/2 -translate-y-1/2 px-3.5 py-2 rounded-2xl bg-black/75 backdrop-blur-md border border-white/20 text-white flex flex-col items-center gap-0.5 shadow-2xl animate-in fade-in zoom-in-75 duration-150 pointer-events-none">
+                  <span className="material-symbols-outlined text-[26px] text-emerald-400">
+                    fast_forward
+                  </span>
+                  <span className="text-[10px] font-bold tracking-wide">+10 detik</span>
+                </div>
+              )}
+
+              {/* Centered Frosted Controls saat di-Pause (-10d, Play, +10d) ala YouTube Shorts / TikTok */}
               {(isPaused || (isIOS && autoplayFailed)) && (
-                <div className="flex flex-col items-center gap-2 animate-in zoom-in-75 duration-200">
-                  <div className="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md text-white flex items-center justify-center shadow-2xl border border-white/25 active:scale-90 transition-transform">
-                    <span className="material-symbols-outlined text-[38px] ml-1 text-white">play_arrow</span>
+                <div className="flex flex-col items-center gap-2.5 animate-in zoom-in-75 duration-200">
+                  <div className="flex items-center gap-5">
+                    {/* Tombol Mundur 10 Detik saat Pause */}
+                    <button
+                      type="button"
+                      data-no-swipe="true"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSkipSeconds(-10);
+                      }}
+                      className="w-11 h-11 rounded-full bg-black/65 hover:bg-black/85 backdrop-blur-md text-white flex items-center justify-center shadow-xl border border-white/20 active:scale-90 transition-transform cursor-pointer"
+                      aria-label="Mundur 10 detik"
+                    >
+                      <span className="material-symbols-outlined text-[22px]">replay_10</span>
+                    </button>
+
+                    {/* Tombol Play Utama */}
+                    <div className="w-16 h-16 rounded-full bg-black/75 backdrop-blur-md text-white flex items-center justify-center shadow-2xl border border-white/25 active:scale-90 transition-transform">
+                      <span className="material-symbols-outlined text-[38px] ml-1 text-white">
+                        play_arrow
+                      </span>
+                    </div>
+
+                    {/* Tombol Maju 10 Detik saat Pause */}
+                    <button
+                      type="button"
+                      data-no-swipe="true"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSkipSeconds(10);
+                      }}
+                      className="w-11 h-11 rounded-full bg-black/65 hover:bg-black/85 backdrop-blur-md text-white flex items-center justify-center shadow-xl border border-white/20 active:scale-90 transition-transform cursor-pointer"
+                      aria-label="Maju 10 detik"
+                    >
+                      <span className="material-symbols-outlined text-[22px]">forward_10</span>
+                    </button>
                   </div>
-                  {isIOS && autoplayFailed && (
+
+                  {/* Pill Durasi Ringkas saat Dijeda atau Info Ketuk iOS */}
+                  {isIOS && autoplayFailed ? (
                     <span className="px-3 py-1 rounded-full bg-black/70 backdrop-blur-md text-white/90 text-[11px] font-semibold border border-white/15 shadow-lg">
                       Ketuk untuk Memutar
                     </span>
+                  ) : (
+                    duration > 0 && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-white/90 text-[11px] font-mono font-semibold border border-white/15 shadow-lg tabular-nums">
+                        {formatVideoTime(displayTime)} / {formatVideoTime(duration)}
+                      </span>
+                    )
                   )}
                 </div>
               )}
@@ -821,7 +1028,11 @@ function MobileSwipeLiveViewer({
         </div>
 
         {/* TIKTOK-STYLE ACTION BAR DI SEBELAH KANAN (MINIMALIS & BERSIH) */}
-        <aside className="absolute right-3.5 bottom-28 z-30 flex flex-col items-center gap-4">
+        <aside
+          className={`absolute right-3.5 bottom-28 z-30 flex flex-col items-center gap-4 transition-opacity duration-150 ${
+            isScrubbing ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        >
           {/* Tombol Suara / Mute */}
           <button
             type="button"
@@ -879,10 +1090,33 @@ function MobileSwipeLiveViewer({
         </aside>
       </div>
 
-      {/* BOTTOM OVERLAY INFO & SWIPE HINT (DIBERI PADDING DI ATAS BOTTOM NAV) */}
-      <footer className="relative z-20 px-4 pb-[calc(76px+env(safe-area-inset-bottom,16px))] pt-2 flex flex-col gap-2 bg-gradient-to-t from-black via-black/85 to-transparent">
-        {/* Info Pemateri & Channel */}
-        <div className="pr-16 flex flex-col gap-1">
+      {/* BOTTOM OVERLAY INFO, SWIPE HINT & TIKTOK/SHORTS EDGE-TO-EDGE TIMELINE SCRUBBER */}
+      <footer className="relative z-20 px-4 pb-[calc(68px+env(safe-area-inset-bottom,12px))] pt-2 flex flex-col gap-1.5 bg-gradient-to-t from-black via-black/85 to-transparent">
+        {/* Saat Scrubbing Aktif: Tampilkan HUD Angka Waktu Besar di Tengah Bawah ala TikTok / Shorts */}
+        {isScrubbing && (
+          <div className="absolute inset-x-0 bottom-[calc(86px+env(safe-area-inset-bottom,12px))] z-30 flex items-center justify-center pointer-events-none animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-2 rounded-2xl bg-black/80 backdrop-blur-md border border-white/15 shadow-2xl flex items-baseline gap-2 font-mono tabular-nums">
+              <span className="text-xl font-extrabold text-white tracking-tight">
+                {formatVideoTime(scrubTime)}
+              </span>
+              {duration > 0 && (
+                <>
+                  <span className="text-sm text-white/40 font-bold">/</span>
+                  <span className="text-base font-semibold text-white/60">
+                    {formatVideoTime(duration)}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Info Pemateri & Channel (Otomatis fade-out saat pengguna menggeser timeline seperti TikTok) */}
+        <div
+          className={`pr-16 flex flex-col gap-1 transition-opacity duration-150 ${
+            isScrubbing ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          }`}
+        >
           <div className="flex items-center gap-2 flex-wrap">
             {currentItem.isLive ? (
               <span className="px-2 py-0.5 rounded-md bg-red-600 text-white text-[10px] font-black tracking-wider uppercase flex items-center gap-1 shadow-xs">
@@ -899,15 +1133,11 @@ function MobileSwipeLiveViewer({
               {currentItem.channelName}
             </span>
             {currentItem.timeText && (
-              <span className="text-[10px] text-white/60">
-                • {currentItem.timeText}
-              </span>
+              <span className="text-[10px] text-white/60">• {currentItem.timeText}</span>
             )}
           </div>
 
-          <p className="text-xs font-semibold text-amber-300 truncate">
-            {currentSpeaker}
-          </p>
+          <p className="text-xs font-semibold text-amber-300 truncate">{currentSpeaker}</p>
 
           <p
             onClick={() => setIsTitleExpanded(!isTitleExpanded)}
@@ -917,49 +1147,102 @@ function MobileSwipeLiveViewer({
           >
             {currentTitle}
           </p>
-        </div>
 
-        {/* SWIPE HINT / QUICK PREV-NEXT NAVIGATION */}
-        <div className="pt-1.5 flex items-center justify-between text-[11px] text-white/60 border-t border-white/10">
-          <button
-            type="button"
-            onClick={goToPrev}
-            disabled={currentIndex === 0}
-            className={`flex items-center gap-1 transition-opacity ${
-              currentIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:text-white cursor-pointer active:scale-95'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[16px]">expand_less</span>
-            <span>Sebelumnya</span>
-          </button>
-
-          {!hasSwipedUp ? (
-            <div className="flex items-center gap-1 text-white/70 font-medium animate-in fade-in duration-300">
-              <span className="material-symbols-outlined text-[15px] animate-bounce text-red-500">
+          {!hasSwipedUp && items.length > 1 && (
+            <div className="pt-1 flex items-center gap-1 text-[11px] text-white/60 font-medium animate-in fade-in duration-300">
+              <span className="material-symbols-outlined text-[14px] animate-bounce text-red-500">
                 swipe_vertical
               </span>
-              <span>Geser ke atas</span>
-            </div>
-          ) : (
-            <div className="text-[10px] text-white/40 tracking-wider font-medium">
-              {currentIndex + 1} / {items.length}
+              <span>Geser ke atas untuk kajian berikutnya</span>
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={goToNext}
-            disabled={currentIndex === items.length - 1}
-            className={`flex items-center gap-1 transition-opacity ${
-              currentIndex === items.length - 1
-                ? 'opacity-30 cursor-not-allowed'
-                : 'hover:text-white cursor-pointer active:scale-95'
-            }`}
-          >
-            <span>Berikutnya</span>
-            <span className="material-symbols-outlined text-[16px]">expand_more</span>
-          </button>
         </div>
+
+        {/* GARIS TIMELINE EDGE-TO-EDGE DI BATAS BAWAH (TEPAT DI ATAS BOTTOM NAV ALA TIKTOK / YOUTUBE SHORTS) */}
+        {!playbackError && (
+          <div
+            data-no-swipe="true"
+            onTouchStart={(e) => e.stopPropagation()}
+            onTouchMove={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
+            className="relative -mx-4 h-6 flex items-center select-none z-30"
+          >
+            {/* Visual Track Background (Tipis 3px saat idle, menebal 8px saat digeser jari) */}
+            <div
+              className={`w-full bg-white/25 overflow-hidden transition-all duration-150 ${
+                isScrubbing ? 'h-2 bg-white/35' : 'h-[3px]'
+              }`}
+            >
+              <div
+                className={`h-full transition-[width] duration-75 ${
+                  isScrubbing ? 'bg-red-500' : 'bg-white/90'
+                }`}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+
+            {/* Visual Thumb Dot (Kecil saat idle, membesar saat digeser atau dijeda) */}
+            <div
+              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full pointer-events-none transition-all duration-150 ${
+                isScrubbing
+                  ? 'w-4 h-4 bg-red-500 border-2 border-white shadow-[0_0_12px_rgba(239,68,68,0.9)] scale-110'
+                  : isPaused
+                    ? 'w-2.5 h-2.5 bg-white shadow-md'
+                    : 'w-1.5 h-1.5 bg-white/90'
+              }`}
+              style={{ left: `${progressPercent}%` }}
+            />
+
+            {/* Native Range Input dengan Area Sentuh Lebar (24px tinggi) */}
+            <input
+              type="range"
+              min={0}
+              max={effectiveMaxDuration}
+              step={1}
+              value={Math.min(effectiveMaxDuration, Math.max(0, Math.floor(displayTime)))}
+              aria-label="Geser Timeline Video"
+              onPointerDown={() => {
+                isScrubbingRef.current = true;
+                setIsScrubbing(true);
+                setScrubTime(currentTime);
+              }}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                isScrubbingRef.current = true;
+                setIsScrubbing(true);
+                setScrubTime(currentTime);
+              }}
+              onChange={(e) => {
+                const nextVal = Number(e.target.value);
+                if (!isScrubbingRef.current) {
+                  isScrubbingRef.current = true;
+                  setIsScrubbing(true);
+                }
+                setScrubTime(nextVal);
+              }}
+              onPointerUp={(e) => {
+                const finalVal = Number((e.target as HTMLInputElement).value);
+                isScrubbingRef.current = false;
+                setIsScrubbing(false);
+                handleSeekTo(finalVal);
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation();
+                isScrubbingRef.current = false;
+                setIsScrubbing(false);
+                handleSeekTo(scrubTime);
+              }}
+              onKeyUp={(e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                  isScrubbingRef.current = false;
+                  setIsScrubbing(false);
+                  handleSeekTo(scrubTime);
+                }
+              }}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 m-0"
+            />
+          </div>
+        )}
       </footer>
     </div>
   );
