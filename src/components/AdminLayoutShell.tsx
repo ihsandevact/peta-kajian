@@ -48,6 +48,7 @@ export default function AdminLayoutShell({ children }: AdminLayoutShellProps) {
       items: [
         { href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', exact: true },
         { href: '/admin/masjid', label: 'Database Masjid', icon: 'mosque' },
+        { href: '/admin/artikel', label: 'Kelola Artikel', icon: 'article' },
         { href: '/admin/youtube', label: 'YouTube Live', icon: 'smart_display' },
         { href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed' },
       ],

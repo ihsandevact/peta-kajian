@@ -103,6 +103,8 @@ export default function MobileNavDrawer({
 
   const adminNavLinks = [
     { id: 'admin-mod', href: '/admin', label: 'Moderasi Kajian', icon: 'fact_check', desc: 'Tinjau & setujui kiriman kajian' },
+    { id: 'admin-masjid', href: '/admin/masjid', label: 'Database Masjid', icon: 'mosque', desc: 'Kelola katalog lokasi masjid' },
+    { id: 'admin-artikel', href: '/admin/artikel', label: 'Kelola Artikel Islam', icon: 'article', desc: 'Tulis, sunting & kurasi artikel dakwah' },
     { id: 'admin-users', href: '/admin/users', label: 'Kelola Relawan', icon: 'group', desc: 'Daftar pengguna & hak akses' },
     { id: 'admin-telegram', href: '/admin/telegram', label: 'Channel Telegram', icon: 'rss_feed', desc: 'Kelola sumber data scraper' },
     { id: 'admin-youtube', href: '/admin/youtube', label: 'YouTube Live Channels', icon: 'smart_display', desc: 'Kelola & pantau siaran live kajian' },
