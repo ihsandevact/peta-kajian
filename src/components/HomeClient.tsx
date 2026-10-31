@@ -21,6 +21,7 @@ import {
   getStoredVehicleIcon,
 } from '@/utils/navigationVehicle';
 import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
+import { MapCanvasSkeleton } from '@/components/PetaPageSkeleton';
 
 const InAppRoutePanel = dynamic(() => import('@/components/InAppRoutePanel'), {
   ssr: false,
@@ -36,6 +37,7 @@ const RequestContributorModal = dynamic(() => import('@/components/RequestContri
 
 const MapComponent = dynamic(() => import('@/components/Map'), {
   ssr: false,
+  loading: () => <MapCanvasSkeleton />,
 });
 
 export type FilterState = {
@@ -43,7 +45,6 @@ export type FilterState = {
   audience: string[];
   radius: number;
   searchQuery: string;
-  facilities: string[];
   region: SelectedRegion | null;
 };
 
@@ -77,7 +78,6 @@ export default function HomeClient() {
     audience: ['umum', 'ikhwan', 'akhwat'],
     radius: 20,
     searchQuery: '',
-    facilities: [],
     region: null,
   });
 
@@ -604,14 +604,6 @@ export default function HomeClient() {
       // Kategori
       if (!filters.audience.includes(s.audience_type)) return false;
 
-      // Fasilitas
-      if (filters.facilities.length > 0 && s.venues?.facilities) {
-        const hasAllFacilities = filters.facilities.every(
-          (fac) => s.venues!.facilities[fac as keyof typeof s.venues.facilities] === true
-        );
-        if (!hasAllFacilities) return false;
-      }
-
       // Status Filter: Berlangsung, Tersimpan, Selesai, Rutin, Online
       const now = new Date();
       const info = getEffectiveSessionInfo(s, now);
@@ -748,8 +740,7 @@ export default function HomeClient() {
       prevFiltersRef.current.time !== filters.time ||
       prevFiltersRef.current.searchQuery !== filters.searchQuery ||
       regionChanged ||
-      JSON.stringify(prevFiltersRef.current.audience) !== JSON.stringify(filters.audience) ||
-      JSON.stringify(prevFiltersRef.current.facilities) !== JSON.stringify(filters.facilities);
+      JSON.stringify(prevFiltersRef.current.audience) !== JSON.stringify(filters.audience);
 
     const locationJustArrived = !prevUserLocationRef.current && !!userLocation && filters.time === 'terdekat';
     prevUserLocationRef.current = userLocation;

@@ -13,21 +13,12 @@ import {
 import type { StudySession } from '@/lib/services/kajian';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
-export const KAJIAN_FACILITY_OPTIONS = [
-  { id: 'parking_car', label: 'Parkir Mobil', icon: 'local_parking' },
-  { id: 'kids_friendly', label: 'Ramah Anak', icon: 'family_restroom' },
-  { id: 'wheelchair_accessible', label: 'Kursi Roda', icon: 'accessible' },
-  { id: 'air_conditioned', label: 'Ruangan AC', icon: 'ac_unit' },
-] as const;
-
 interface RegionPickerModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedRegion: SelectedRegion | null;
   onSelectRegion: (region: SelectedRegion | null) => void;
   sessions: StudySession[];
-  selectedFacilities?: string[];
-  onToggleFacility?: (facilityId: string) => void;
   onResetAll?: () => void;
 }
 
@@ -37,8 +28,6 @@ export default function RegionPickerModal({
   selectedRegion,
   onSelectRegion,
   sessions,
-  selectedFacilities = [],
-  onToggleFacility,
   onResetAll,
 }: RegionPickerModalProps) {
   const [search, setSearch] = useState('');
@@ -188,47 +177,9 @@ export default function RegionPickerModal({
     </div>
   );
 
-  // 3. Scrollable List Body (Fasilitas Masjid, Seluruh Indonesia, Kota Populer, Provinsi & Kota)
+  // 3. Scrollable List Body (Seluruh Indonesia, Kota Populer, Provinsi & Kota)
   const renderBody = () => (
     <>
-      {/* 0. Filter Fasilitas Masjid (Tampil saat tidak sedang mengetik pencarian kota) */}
-      {!search && onToggleFacility && (
-        <div>
-          <p className="text-[11px] font-bold text-outline uppercase tracking-wider mb-2">
-            Fasilitas Masjid
-          </p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {KAJIAN_FACILITY_OPTIONS.map((fac) => {
-              const isSelected = selectedFacilities.includes(fac.id);
-              return (
-                <button
-                  type="button"
-                  key={fac.id}
-                  onClick={() => onToggleFacility(fac.id)}
-                  className={`flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
-                    isSelected
-                      ? 'bg-primary/10 border-primary text-primary shadow-2xs'
-                      : 'bg-surface-container-low/60 border-surface-container-high hover:bg-surface-container text-on-surface'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="material-symbols-outlined text-[16px] shrink-0">
-                      {fac.icon}
-                    </span>
-                    <span className="truncate">{fac.label}</span>
-                  </div>
-                  {isSelected && (
-                    <span className="material-symbols-outlined text-[16px] text-primary shrink-0">
-                      check_circle
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* 1. Opsi Seluruh Indonesia */}
       <button
         type="button"
@@ -397,7 +348,7 @@ export default function RegionPickerModal({
     </>
   );
 
-  const hasAnyActiveFilter = Boolean(selectedRegion || selectedFacilities.length > 0);
+  const hasAnyActiveFilter = Boolean(selectedRegion);
 
   // 4. Footer Bar
   const renderFooter = () => (

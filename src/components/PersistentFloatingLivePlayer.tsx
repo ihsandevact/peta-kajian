@@ -34,6 +34,7 @@ export default function PersistentFloatingLivePlayer() {
 
   const pathname = usePathname();
   const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
+  const isLiveRoute = (pathname === '/live' || pathname?.startsWith('/live')) && !isPipRoute;
 
   const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
   useEffect(() => {
@@ -832,6 +833,45 @@ export default function PersistentFloatingLivePlayer() {
     closePlayer();
   }, [closePlayer]);
 
+  // Handler Pintar Maximize: Jika berada di halaman /live, kembalikan video ke pemutar atas (berlaku Desktop & Mobile)
+  const handleSmartMaximize = useCallback(() => {
+    if (isLiveRoute && activeStream) {
+      window.dispatchEvent(
+        new CustomEvent('peta-kajian:restore-live-video', {
+          detail: {
+            videoId: activeStream.videoId,
+            title: activeStream.title,
+            channelName: activeStream.channelName,
+            speakerName: activeStream.speakerName,
+          },
+        })
+      );
+      closePlayer();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    expandToModal();
+  }, [isLiveRoute, activeStream, closePlayer, expandToModal]);
+
+  const handleSmartUnminimize = useCallback(() => {
+    if (isLiveRoute && activeStream) {
+      window.dispatchEvent(
+        new CustomEvent('peta-kajian:restore-live-video', {
+          detail: {
+            videoId: activeStream.videoId,
+            title: activeStream.title,
+            channelName: activeStream.channelName,
+            speakerName: activeStream.speakerName,
+          },
+        })
+      );
+      closePlayer();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    maximizePlayer();
+  }, [isLiveRoute, activeStream, closePlayer, maximizePlayer]);
+
   if (isPipRoute || !isOpen || !activeStream) {
     return null;
   }
@@ -1018,26 +1058,30 @@ export default function PersistentFloatingLivePlayer() {
                 <span className="material-symbols-outlined text-[18px]">picture_in_picture_alt</span>
               </button>
 
-              <button
-                type="button"
-                onClick={maximizePlayer}
-                className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-                title="Perbesar Tampilan Video"
-                aria-label="Perbesar Video"
-              >
-                <span className="material-symbols-outlined text-[16px]">expand_less</span>
-              </button>
+              {/* Tombol Maximize / Restore (Hanya muncul saat berada di halaman /live) */}
+              {isLiveRoute && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSmartUnminimize}
+                    className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                    title="Kembalikan ke Pemutar Utama"
+                    aria-label="Kembalikan ke Pemutar Utama"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">expand_less</span>
+                  </button>
 
-              {/* Tombol Maximize ke Modal Layar Penuh dari Bar Audio */}
-              <button
-                type="button"
-                onClick={expandToModal}
-                className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-                title="Perbesar Penuh (Modal)"
-                aria-label="Perbesar Penuh"
-              >
-                <span className="material-symbols-outlined text-[16px]">open_in_full</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={handleSmartMaximize}
+                    className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                    title="Kembalikan ke Pemutar Utama"
+                    aria-label="Kembalikan ke Pemutar Utama"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">open_in_full</span>
+                  </button>
+                </>
+              )}
 
               <button
                 type="button"
@@ -1181,16 +1225,18 @@ export default function PersistentFloatingLivePlayer() {
                     <span className="material-symbols-outlined text-[18px]">expand_more</span>
                   </button>
 
-                  {/* Tombol Maximize / Perbesar ke Modal */}
-                  <button
-                    type="button"
-                    onClick={expandToModal}
-                    className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                    title="Perbesar Tampilan (Modal)"
-                    aria-label="Perbesar Tampilan Modal"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">open_in_full</span>
-                  </button>
+                  {/* Tombol Maximize / Perbesar ke Modal (Hanya muncul saat berada di halaman /live) */}
+                  {isLiveRoute && (
+                    <button
+                      type="button"
+                      onClick={handleSmartMaximize}
+                      className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                      title="Kembalikan ke Pemutar Utama"
+                      aria-label="Kembalikan ke Pemutar Utama"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+                    </button>
+                  )}
 
                   {/* Tombol Tutup */}
                   <button
