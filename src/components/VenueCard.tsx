@@ -118,7 +118,7 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
 
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
-      <div className={`w-full max-h-[min(430px,calc(100vh-250px))] md:max-h-[min(520px,calc(100vh-120px))] no-scrollbar overflow-y-auto bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom flex flex-col relative overflow-x-hidden ${
+      <div className={`w-full max-h-[min(540px,calc(100dvh-100px))] flex flex-col bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom overflow-hidden ${
         isPast ? 'border-surface-container-highest shadow-md' : 'border-surface-container-high/80'
       }`}>
         {/* Gambar Poster Header - Dapat diklik untuk membuka Preview Modal */}
@@ -209,7 +209,7 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
           </div>
         )}
 
-        <div className="p-2.5 sm:p-3">
+        <div className="p-2.5 sm:p-3 overflow-y-auto no-scrollbar flex-1 min-h-0">
           {/* Header Badges & Action Buttons */}
           <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-surface-container-high/60 mb-1.5">
             {isPast ? (
@@ -388,9 +388,10 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
               </button>
             )}
           </div>
+        </div>
 
-          {/* Aksi Bawah */}
-          <div className="mt-2 pt-2 border-t border-surface-container-high/60 flex flex-col gap-1.5">
+        {/* Aksi Bawah (Fixed Footer Actions - Selalu utuh di bawah kartu, tidak akan terpotong) */}
+        <div className="p-2.5 sm:p-3 pt-2 border-t border-surface-container-high/60 flex flex-col gap-1.5 bg-surface-container-lowest shrink-0">
           {/* Skenario Khusus: Kajian Selesai/Arsip (Hanya Aktifkan Link Rute Maps ke Masjid) */}
           {isPast ? (
             <div className="flex flex-col gap-1.5 w-full">
@@ -622,7 +623,6 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
           )}
         </div>
       </div>
-    </div>
 
       {/* Segitiga Penunjuk (Pointer Tip) - Berada tepat di bawah kartu tanpa overlap konten */}
       <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px pointer-events-none z-10 flex flex-col items-center">

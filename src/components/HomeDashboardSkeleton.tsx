@@ -7,13 +7,13 @@ export function HomeKajianCardSkeleton({ className = '' }: { className?: string 
   return (
     <div
       aria-hidden="true"
-      className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-outline-variant/40 bg-surface-container-low shadow-2xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
+      className={`p-4 rounded-2xl border border-outline-variant/40 bg-surface-container-low shadow-2xs pointer-events-none select-none flex flex-col justify-between gap-3 ${className}`}
     >
       <div className="space-y-2 animate-pulse">
-        {/* Baris Badges Tanggal & Jarak */}
+        {/* Baris Badges Tanggal & Bookmark */}
         <div className="flex items-center justify-between gap-1.5">
           <div className="h-5 bg-emerald-600/15 rounded-full w-28 sm:w-32" />
-          <div className="h-5 bg-surface-container-high rounded-full w-16 sm:w-20" />
+          <div className="w-7 h-7 rounded-full bg-surface-container-high" />
         </div>
 
         {/* Judul Kajian (2 Baris) */}
@@ -33,12 +33,9 @@ export function HomeKajianCardSkeleton({ className = '' }: { className?: string 
       </div>
 
       {/* Tombol Aksi Bawah */}
-      <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-outline-variant/30 animate-pulse">
-        <div className="flex items-center gap-1.5">
-          <div className="h-7 w-20 sm:w-24 rounded-lg sm:rounded-xl bg-surface-container-high" />
-          <div className="w-7 h-7 rounded-lg sm:rounded-xl bg-surface-container-high" />
-        </div>
-        <div className="h-4 w-20 rounded bg-emerald-600/20" />
+      <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-outline-variant/30 animate-pulse">
+        <div className="h-7 w-24 rounded-xl bg-surface-container-high" />
+        <div className="h-7 w-24 rounded-xl bg-emerald-600/20" />
       </div>
     </div>
   );

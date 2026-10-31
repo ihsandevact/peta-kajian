@@ -330,16 +330,6 @@ export default function SidebarFilter({
             <h1 className="font-semibold text-base text-on-surface tracking-tight">Peta Kajian</h1>
             <span className="w-2 h-2 rounded-full bg-primary-container inline-block ml-1.5 align-middle"></span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/faq"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:bg-primary/10 px-2.5 py-0.5 rounded-full transition-colors border border-primary/20"
-              title="Pusat Bantuan & Tanya Jawab"
-            >
-              <span className="material-symbols-outlined text-[13px]">help</span>
-              <span>FAQ</span>
-            </Link>
-          </div>
         </div>
         
         {/* Search Input + Unified Filter Button */}

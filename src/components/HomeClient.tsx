@@ -16,7 +16,6 @@ import { getUserRoleAndStatus } from '@/lib/services/admin';
 import LiveStreamFloatingPill from '@/components/LiveStreamFloatingPill';
 import { useBottomNav } from '@/context/BottomNavContext';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
-import { Drawer } from 'vaul';
 import {
   type NavigationVehicleIcon,
   getStoredVehicleIcon,
@@ -83,7 +82,7 @@ export default function HomeClient() {
   });
 
   const [selectedSession, setSelectedSession] = useState<StudySession | null>(null);
-  const [snapPoint, setSnapPoint] = useState<string | number | null>(0.65);
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('list');
   const [isMounted, setIsMounted] = useState<boolean>(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
 
@@ -336,7 +335,7 @@ export default function HomeClient() {
     setIsRouteLoading(true);
     setRouteError(null);
     setSelectedSession(null); // Tutup popup info agar tampilan peta bersih untuk rute
-    setSnapPoint('224px'); // Ciutkan bottom sheet ke peek saat rute aktif/selesai
+    setMobileView('map'); // Alihkan ke tampilan peta saat rute aktif
 
     // Otomatis tentukan ikon kursor: jika jalan kaki -> person, jika kendaraan -> mobil/motor (default mobil)
     if (routeMode === 'walking') {
@@ -503,8 +502,8 @@ export default function HomeClient() {
       setRouteError(null);
     }
     setSelectedSession(session ? { ...session } : null);
-    if (session) {
-      setSnapPoint('224px');
+    if (session && typeof window !== 'undefined' && window.innerWidth < 768) {
+      setMobileView('map');
     }
   }, [activeRouteSession, handleExitLiveNav]);
 
@@ -727,7 +726,7 @@ export default function HomeClient() {
             setFilters(p => ({ ...p, time: 'selesai' }));
           }
           setSelectedSession(found);
-          setSnapPoint('224px');
+          setMobileView('map');
         }
       }
     }
@@ -884,19 +883,6 @@ export default function HomeClient() {
               {isSidebarCollapsed && (
                 <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
                   Leaderboard Relawan
-                </span>
-              )}
-            </Link>
-
-            <Link 
-              href="/faq"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
-            >
-              <span className="material-symbols-outlined text-[20px] text-primary">help</span>
-              {!isSidebarCollapsed && <span>Pusat Bantuan & FAQ</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Pusat Bantuan & FAQ
                 </span>
               )}
             </Link>
@@ -1105,11 +1091,98 @@ export default function HomeClient() {
           activeRouteSession ? 'pb-0' : 'md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */'
         }`}>
           
-          {/* Kolom Kanan: Map */}
-          <div className="absolute inset-0 w-full h-full md:relative md:flex-1 bg-[#f1f5f9] overflow-hidden z-10">
-            {/* Quick Access Floating Pill jika ada channel live (disembunyikan saat mode navigasi aktif) */}
+          {/* Kolom Daftar Kajian:
+              - Desktop (md:): selalu tampil di samping kiri (w-[410px] lg:w-[430px])
+              - Mobile (<md): tampil penuh saat mobileView === 'list', disembunyikan saat mobileView === 'map'
+          */}
+          <aside
+            className={`h-full flex-col bg-surface-container-lowest shadow-[1px_0_0_0_rgba(226,232,240,0.8)] shrink-0 z-30 transition-transform duration-200 overflow-hidden ${
+              mobileView === 'list'
+                ? 'flex w-full absolute inset-0 md:relative md:inset-auto md:w-[410px] lg:w-[430px]'
+                : 'hidden md:flex md:w-[410px] lg:w-[430px]'
+            }`}
+          >
+            <SidebarFilter 
+              filters={filters} 
+              setFilters={setFilters} 
+              sessions={sortedSessions} 
+              allSessions={sessions}
+              selectedSession={selectedSession}
+              onSelectSession={handleSelectSession}
+              isLoading={isLoading}
+              userLocation={userLocation}
+              onRequestLocation={requestUserLocation}
+              isRefreshing={isRefreshing}
+              onRefresh={handleManualRefresh}
+              currentUser={currentUser}
+              hasConnectionError={hasConnectionError}
+              isOffline={isOffline}
+            />
+          </aside>
+
+          {/* Tombol Melayang "Lihat Peta" (Khusus Mobile saat tampilan Daftar) */}
+          {mobileView === 'list' && !isNavigating && !activeRouteSession && (
+            <button
+              type="button"
+              onClick={() => setMobileView('map')}
+              className="md:hidden fixed z-40 bottom-20 left-1/2 -translate-x-1/2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-full shadow-lg flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer border border-emerald-500/40"
+              title="Buka Tampilan Peta"
+              aria-label="Buka Tampilan Peta"
+            >
+              <span className="material-symbols-outlined text-[17px]">map</span>
+              <span>Lihat Peta</span>
+              <span className="px-1.5 py-0.5 rounded-full bg-black/20 text-[10px] font-extrabold">
+                {sortedSessions.length}
+              </span>
+            </button>
+          )}
+
+          {/* Kolom Kanan: Map
+              - Desktop (md:): flex-1 selalu terlihat di kanan
+              - Mobile (<md): tampil penuh saat mobileView === 'map', disembunyikan saat mobileView === 'list'
+          */}
+          <div
+            className={`w-full h-full md:relative md:flex-1 bg-[#f1f5f9] overflow-hidden z-10 ${
+              mobileView === 'map' ? 'block absolute inset-0 md:relative md:inset-auto' : 'hidden md:block'
+            }`}
+          >
+            {/* Quick Access Floating Pill jika ada channel live (khusus desktop, disembunyikan di mobile agar peta mobile bersih) */}
             {!isNavigating && (
-              <LiveStreamFloatingPill hasSelectedSession={!!selectedSession} isNavigating={isNavigating} />
+              <div className="hidden md:block">
+                <LiveStreamFloatingPill hasSelectedSession={!!selectedSession} isNavigating={isNavigating} />
+              </div>
+            )}
+
+            {/* Floating Controls di Peta Mobile: Tombol Kembali ke Daftar & Info Wilayah */}
+            {!isNavigating && !activeRouteSession && mobileView === 'map' && (
+              <div className="md:hidden absolute top-3 left-3 right-3 z-30 flex items-center justify-between gap-2 pointer-events-none">
+                {/* Chip Info Wilayah & Total Kajian */}
+                <div className="pointer-events-auto">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold shadow-md border backdrop-blur-md bg-surface-container-lowest/95 text-on-surface border-surface-container-high">
+                    <span className="material-symbols-outlined text-[16px] text-emerald-600">location_on</span>
+                    <span className="truncate max-w-[140px]">
+                      {filters.region ? filters.region.name : filters.time === 'terdekat' ? 'Terdekat Saya' : 'Semua Wilayah'}
+                    </span>
+                    <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-extrabold">
+                      {sortedSessions.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tombol Kembali ke Daftar */}
+                <div className="pointer-events-auto">
+                  <button
+                    type="button"
+                    onClick={() => setMobileView('list')}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-surface-container-lowest/95 text-on-surface border border-surface-container-high shadow-md backdrop-blur-md cursor-pointer active:scale-95 transition-transform"
+                    title="Buka Tampilan Daftar Kajian"
+                    aria-label="Buka Tampilan Daftar Kajian"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">format_list_bulleted</span>
+                    <span>Daftar</span>
+                  </button>
+                </div>
+              </div>
             )}
 
             <MapComponent 
@@ -1129,6 +1202,7 @@ export default function HomeClient() {
               savedParkingSpot={savedParkingSpot}
               onClearParkingSpot={handleClearParking}
               onSelectAlternativeRoute={handleSelectAlternativeRoute}
+              mobileView={mobileView}
             />
 
             {/* Panel Rute In-App Pratinjau (Tampil sebelum mulai navigasi langsung) */}
@@ -1167,79 +1241,6 @@ export default function HomeClient() {
               />
             )}
           </div>
-          
-          {/* Kolom Kiri Desktop: Search & List (hanya tampil di layar md ke atas) */}
-          {(!isMounted || isDesktop) && (
-            <aside className="hidden md:flex w-[410px] lg:w-[430px] h-full shrink-0 flex-col bg-surface-container-lowest shadow-[1px_0_0_0_rgba(226,232,240,0.8)] order-first overflow-hidden">
-              <SidebarFilter 
-                filters={filters} 
-                setFilters={setFilters} 
-                sessions={sortedSessions} 
-                allSessions={sessions}
-                selectedSession={selectedSession}
-                onSelectSession={handleSelectSession}
-                isLoading={isLoading}
-                userLocation={userLocation}
-                onRequestLocation={requestUserLocation}
-                isRefreshing={isRefreshing}
-                onRefresh={handleManualRefresh}
-                currentUser={currentUser}
-                hasConnectionError={hasConnectionError}
-                isOffline={isOffline}
-              />
-            </aside>
-          )}
-
-          {/* Kolom Kiri Mobile: Vaul Bottom Sheet Drawer dengan Native Gestures & Snap Points */}
-          {isMounted && !isDesktop && (
-            <div className="md:hidden">
-              <Drawer.Root
-                snapPoints={['224px', 0.65, 0.92]}
-                activeSnapPoint={snapPoint}
-                setActiveSnapPoint={setSnapPoint}
-                modal={false}
-                dismissible={false}
-                open={!activeRouteSession}
-              >
-                <Drawer.Portal>
-                  <Drawer.Content 
-                    className="md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col h-[92dvh] max-h-[92dvh] bg-surface-container-lowest rounded-t-[28px] shadow-[0_-8px_30px_rgba(0,0,0,0.12)] border-t border-surface-container-high/60 focus:outline-none pb-[calc(64px+env(safe-area-inset-bottom,0px))] pointer-events-auto"
-                  >
-                    <Drawer.Title className="sr-only">Daftar &amp; Filter Kajian</Drawer.Title>
-                    <Drawer.Description className="sr-only">Navigasi dan filter daftar jadwal kajian</Drawer.Description>
-                    
-                    {/* Drag Handle Indicator */}
-                    <div 
-                      className="w-full flex justify-center pt-3 pb-2 shrink-0 cursor-pointer hover:bg-surface-container-low transition-colors touch-none"
-                      onClick={() => setSnapPoint(prev => (prev === '224px' ? 0.65 : '224px'))}
-                    >
-                      <Drawer.Handle className="w-12 h-1.5 rounded-full bg-outline/60" />
-                    </div>
-
-                    <div className="flex-1 overflow-hidden min-h-0">
-                      <SidebarFilter 
-                        filters={filters} 
-                        setFilters={setFilters} 
-                        sessions={sortedSessions} 
-                        allSessions={sessions}
-                        selectedSession={selectedSession}
-                        onSelectSession={handleSelectSession}
-                        isLoading={isLoading}
-                        userLocation={userLocation}
-                        onRequestLocation={requestUserLocation}
-                        isRefreshing={isRefreshing}
-                        onRefresh={handleManualRefresh}
-                        currentUser={currentUser}
-                        hasConnectionError={hasConnectionError}
-                        isOffline={isOffline}
-                      />
-                    </div>
-                  </Drawer.Content>
-                </Drawer.Portal>
-              </Drawer.Root>
-            </div>
-          )}
-          
         </main>
       </div>
 
