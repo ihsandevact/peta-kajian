@@ -1,7 +1,13 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { type SketchStroke, type SketchPoint } from '@/utils/studyNotes';
+import {
+  type DrawingShape,
+  type ShapeStroke,
+  type SketchStroke,
+  type SketchPoint,
+  convertStrokesToShapes,
+} from '@/utils/studyNotes';
 import { useConfirm } from '@/context/ConfirmDialogContext';
 
 export interface StudySketchCanvasProps {
@@ -30,15 +36,18 @@ export interface StudySketchCanvasProps {
   copiedToast: boolean;
   isMobileViewport: boolean;
   isFocusFullscreen: boolean;
-  // Coretan Props
-  strokes: SketchStroke[];
-  onChangeStrokes: (nextStrokes: SketchStroke[]) => void;
+  // Coretan Props: Mendukung DrawingShape[] baru dan SketchStroke[] legacy
+  shapes?: DrawingShape[];
+  onChangeShapes?: (nextShapes: DrawingShape[]) => void;
+  strokes?: SketchStroke[];
+  onChangeStrokes?: (nextStrokes: SketchStroke[]) => void;
   className?: string;
 }
 
 type UnifiedMode = 'type' | 'draw';
-type SketchTool = 'pen' | 'highlighter' | 'eraser';
+type SketchTool = 'pen' | 'highlighter';
 type PaperPattern = 'lines' | 'dots' | 'blank';
+type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 const COLOR_PALETTE = [
   { id: 'auto', label: 'Tinta Utama', hex: 'auto', previewClass: 'bg-slate-900 dark:bg-slate-100' },
@@ -58,12 +67,8 @@ const STROKE_SIZES = [
 const LINE_HEIGHT_PX = 28;
 const EXTRA_BOTTOM_SPACE = 240;
 
-// Custom High-Contrast SVG Cursors (Memiliki halo putih + inti gelap/berwarna agar tidak pernah hilang di mode gelap maupun terang)
 const TEXT_IBEAM_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cg stroke='%23ffffff' stroke-width='3.5' stroke-linecap='round'%3E%3Cpath d='M9 4h6M9 20h6M12 4v16'/%3E%3C/g%3E%3Cg stroke='%23059669' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='M9 4h6M9 20h6M12 4v16'/%3E%3C/g%3E%3C/svg%3E") 12 12, text`;
-
 const PEN_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='3.5' fill='%2310b981' stroke='%23ffffff' stroke-width='2'/%3E%3Cpath d='M12 3v5M12 16v5M3 12h5M16 12h5' stroke='%23ffffff' stroke-width='3' stroke-linecap='round'/%3E%3Cpath d='M12 3v5M12 16v5M3 12h5M16 12h5' stroke='%230f172a' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, pointer`;
-
-const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='7' fill='rgba(244,63,94,0.25)' stroke='%23ffffff' stroke-width='2.5'/%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%23e11d48' stroke-width='1.5'/%3E%3C/svg%3E") 12 12, pointer`;
 
 export default function StudySketchCanvas({
   title,
@@ -89,9 +94,10 @@ export default function StudySketchCanvas({
   copiedToast,
   isMobileViewport,
   isFocusFullscreen,
-  strokes,
+  shapes: externalShapes,
+  onChangeShapes,
+  strokes: legacyStrokes,
   onChangeStrokes,
-  className = '',
 }: StudySketchCanvasProps) {
   const confirm = useConfirm();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -99,38 +105,79 @@ export default function StudySketchCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const textMirrorRef = useRef<HTMLDivElement | null>(null);
 
-  // Mode Terpadu: 'type' (Ketik Teks) atau 'draw' (Coret / Stabilo di atas lembar yang sama)
+  // Mode: 'type' (Ketik), 'draw' (Coret Pena/Stabilo), 'select' (Pilih & Edit Shape ala Word)
   const [activeMode, setActiveMode] = useState<UnifiedMode>('type');
   const [activeTool, setActiveTool] = useState<SketchTool>('pen');
   const [activeColor, setActiveColor] = useState<string>('auto');
   const [activeSize, setActiveSize] = useState<number>(4.5);
   const [paperPattern, setPaperPattern] = useState<PaperPattern>('lines');
-  const [redoStack, setRedoStack] = useState<SketchStroke[][]>([]);
   const [paperHeight, setPaperHeight] = useState<number>(520);
 
-  // State posisi kursor live di atas kanvas agar selalu terlihat jelas (tidak hilang di background gelap/terang)
-  const [hoverPointer, setHoverPointer] = useState<SketchPoint | null>(null);
-
-  const isDrawingRef = useRef<boolean>(false);
-  const currentPointsRef = useRef<SketchPoint[]>([]);
-  const strokesRef = useRef<SketchStroke[]>(strokes);
+  // Inisialisasi Shapes
+  const [shapesList, setShapesList] = useState<DrawingShape[]>(() => {
+    if (externalShapes && externalShapes.length > 0) return externalShapes;
+    if (legacyStrokes && legacyStrokes.length > 0) return convertStrokesToShapes(legacyStrokes);
+    return [];
+  });
 
   useEffect(() => {
-    strokesRef.current = strokes;
-  }, [strokes]);
-
-  // Hitung titik Y terdalam dari coretan agar kertas tidak pernah memotong coretan yang ada di bawah
-  const getMaxStrokeY = useCallback((strokeList: SketchStroke[]): number => {
-    let maxY = 0;
-    for (const s of strokeList) {
-      for (const pt of s.points) {
-        if (pt.y > maxY) maxY = pt.y;
-      }
+    if (externalShapes !== undefined) {
+      setShapesList(externalShapes);
+    } else if (legacyStrokes !== undefined) {
+      setShapesList(convertStrokesToShapes(legacyStrokes));
     }
-    return maxY;
-  }, []);
+  }, [externalShapes, legacyStrokes]);
 
-  // Sesuaikan tinggi kertas otomatis mengikuti panjang teks + coretan + ruang ekstra bawah
+  const commitShapesChange = useCallback(
+    (nextShapes: DrawingShape[]) => {
+      setShapesList(nextShapes);
+      if (onChangeShapes) {
+        onChangeShapes(nextShapes);
+      }
+      if (onChangeStrokes) {
+        // Fallback untuk backward compatibility
+        const flatStrokes: SketchStroke[] = nextShapes.flatMap((shp) =>
+          shp.strokes.map((stk) => ({
+            id: stk.id,
+            tool: stk.tool,
+            color: stk.color,
+            size: stk.size,
+            points: stk.points.map((p) => ({
+              x: shp.x + p.rx * shp.width,
+              y: shp.y + p.ry * shp.height,
+            })),
+          }))
+        );
+        onChangeStrokes(flatStrokes);
+      }
+    },
+    [onChangeShapes, onChangeStrokes]
+  );
+
+  // Selection & Manipulation State (Word Drawing Box)
+  const [selectedShapeId, setSelectedShapeId] = useState<string | null>(null);
+  const [hoverPointer, setHoverPointer] = useState<SketchPoint | null>(null);
+
+  // Dragging & Resizing Refs
+  const isInteractingRef = useRef<boolean>(false);
+  const interactionTypeRef = useRef<'drawing' | 'moving' | 'resizing' | null>(null);
+  const resizeHandleRef = useRef<ResizeHandle | null>(null);
+  const activeShapeIdRef = useRef<string | null>(null);
+  const startPointerRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const startShapeBoundsRef = useRef<{ x: number; y: number; width: number; height: number }>({
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+  });
+
+  // Current drawing stroke
+  const currentDrawPointsRef = useRef<SketchPoint[]>([]);
+
+  // Redo Stack
+  const [redoShapesStack, setRedoShapesStack] = useState<DrawingShape[][]>([]);
+
+  // Hitung tinggi kertas
   const updatePaperDimensions = useCallback(() => {
     const scrollEl = scrollContainerRef.current;
     const mirrorEl = textMirrorRef.current;
@@ -138,22 +185,20 @@ export default function StudySketchCanvas({
 
     const viewportH = scrollEl.clientHeight || 400;
     const textH = mirrorEl ? mirrorEl.scrollHeight : 0;
-    const maxStrokeY = getMaxStrokeY(strokesRef.current);
+    let maxShapeY = 0;
+    for (const shp of shapesList) {
+      const bottom = shp.y + shp.height;
+      if (bottom > maxShapeY) maxShapeY = bottom;
+    }
 
-    const targetHeight = Math.max(
-      viewportH,
-      textH + EXTRA_BOTTOM_SPACE,
-      maxStrokeY + 140
-    );
-
+    const targetHeight = Math.max(viewportH, textH + EXTRA_BOTTOM_SPACE, maxShapeY + 140);
     setPaperHeight((prev) => (Math.abs(prev - targetHeight) > 4 ? targetHeight : prev));
-  }, [getMaxStrokeY]);
+  }, [shapesList]);
 
   useEffect(() => {
     updatePaperDimensions();
-  }, [noteContent, strokes, isFocusFullscreen, isMobileViewport, updatePaperDimensions]);
+  }, [noteContent, shapesList, isFocusFullscreen, isMobileViewport, updatePaperDimensions]);
 
-  // Deteksi apakah tema sedang dark mode untuk warna tinta 'auto'
   const resolveStrokeColor = useCallback((colorCode: string, forExportLight = false) => {
     if (colorCode !== 'auto') return colorCode;
     if (forExportLight) return '#0f172a';
@@ -163,64 +208,9 @@ export default function StudySketchCanvas({
     return '#0f172a';
   }, []);
 
-  // Fungsi menggambar satu stroke secara mulus dengan kurva kuadratik
-  const drawSingleStroke = useCallback(
-    (
-      ctx: CanvasRenderingContext2D,
-      stroke: SketchStroke,
-      forExportLight = false
-    ) => {
-      const pts = stroke.points;
-      if (!pts || pts.length === 0) return;
-
-      ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-
-      if (stroke.tool === 'eraser') {
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.strokeStyle = 'rgba(0,0,0,1)';
-        ctx.lineWidth = stroke.size * 3.5;
-        ctx.globalAlpha = 1;
-      } else if (stroke.tool === 'highlighter') {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = resolveStrokeColor(
-          stroke.color === 'auto' ? '#f59e0b' : stroke.color,
-          forExportLight
-        );
-        ctx.lineWidth = stroke.size * 3.2;
-        ctx.globalAlpha = 0.32;
-      } else {
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.strokeStyle = resolveStrokeColor(stroke.color, forExportLight);
-        ctx.lineWidth = stroke.size;
-        ctx.globalAlpha = 1;
-      }
-
-      ctx.beginPath();
-      if (pts.length === 1) {
-        ctx.arc(pts[0].x, pts[0].y, ctx.lineWidth / 2, 0, Math.PI * 2);
-        ctx.fillStyle = ctx.strokeStyle;
-        ctx.fill();
-      } else {
-        ctx.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length - 1; i++) {
-          const midX = (pts[i].x + pts[i + 1].x) / 2;
-          const midY = (pts[i].y + pts[i + 1].y) / 2;
-          ctx.quadraticCurveTo(pts[i].x, pts[i].y, midX, midY);
-        }
-        const last = pts[pts.length - 1];
-        ctx.lineTo(last.x, last.y);
-        ctx.stroke();
-      }
-      ctx.restore();
-    },
-    [resolveStrokeColor]
-  );
-
-  // Render ulang seluruh kanvas di atas lembar kertas
+  // Gambar seluruh Shape ke dalam canvas 2D
   const redrawCanvas = useCallback(
-    (activeStroke?: SketchStroke | null) => {
+    (liveStroke?: { tool: SketchTool; color: string; size: number; points: SketchPoint[] } | null) => {
       const canvas = canvasRef.current;
       const paper = paperRef.current;
       if (!canvas || !paper) return;
@@ -242,181 +232,351 @@ export default function StudySketchCanvas({
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, rect.width, paperHeight);
 
-      for (const s of strokesRef.current) {
-        drawSingleStroke(ctx, s, false);
+      // Gambar semua shape
+      for (const shp of shapesList) {
+        for (const stk of shp.strokes) {
+          if (!stk.points || stk.points.length === 0) continue;
+          ctx.save();
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (stk.tool === 'highlighter') {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = resolveStrokeColor(
+              stk.color === 'auto' ? '#f59e0b' : stk.color,
+              false
+            );
+            ctx.lineWidth = stk.size * 3.2;
+            ctx.globalAlpha = 0.35;
+          } else {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = resolveStrokeColor(stk.color, false);
+            ctx.lineWidth = stk.size;
+            ctx.globalAlpha = 1;
+          }
+
+          ctx.beginPath();
+          const p0 = stk.points[0];
+          const x0 = shp.x + p0.rx * shp.width;
+          const y0 = shp.y + p0.ry * shp.height;
+
+          if (stk.points.length === 1) {
+            ctx.arc(x0, y0, ctx.lineWidth / 2, 0, Math.PI * 2);
+            ctx.fillStyle = ctx.strokeStyle;
+            ctx.fill();
+          } else {
+            ctx.moveTo(x0, y0);
+            for (let i = 1; i < stk.points.length - 1; i++) {
+              const cur = stk.points[i];
+              const next = stk.points[i + 1];
+              const curX = shp.x + cur.rx * shp.width;
+              const curY = shp.y + cur.ry * shp.height;
+              const nextX = shp.x + next.rx * shp.width;
+              const nextY = shp.y + next.ry * shp.height;
+              const midX = (curX + nextX) / 2;
+              const midY = (curY + nextY) / 2;
+              ctx.quadraticCurveTo(curX, curY, midX, midY);
+            }
+            const last = stk.points[stk.points.length - 1];
+            ctx.lineTo(shp.x + last.rx * shp.width, shp.y + last.ry * shp.height);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
       }
 
-      if (activeStroke) {
-        drawSingleStroke(ctx, activeStroke, false);
+      // Live stroke saat user sedang mencoret
+      if (liveStroke && liveStroke.points.length > 0) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (liveStroke.tool === 'highlighter') {
+          ctx.strokeStyle = resolveStrokeColor(
+            liveStroke.color === 'auto' ? '#f59e0b' : liveStroke.color,
+            false
+          );
+          ctx.lineWidth = liveStroke.size * 3.2;
+          ctx.globalAlpha = 0.35;
+        } else {
+          ctx.strokeStyle = resolveStrokeColor(liveStroke.color, false);
+          ctx.lineWidth = liveStroke.size;
+          ctx.globalAlpha = 1;
+        }
+        ctx.beginPath();
+        const pts = liveStroke.points;
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) {
+          ctx.lineTo(pts[i].x, pts[i].y);
+        }
+        ctx.stroke();
+        ctx.restore();
       }
+
       ctx.restore();
     },
-    [drawSingleStroke, paperHeight]
+    [shapesList, paperHeight, resolveStrokeColor]
   );
 
   useEffect(() => {
     redrawCanvas();
-  }, [strokes, paperHeight, redrawCanvas]);
+  }, [redrawCanvas]);
 
-  // Pantau perubahan ukuran wadah & perubahan tema dark/light
-  useEffect(() => {
+  const getPointerCoords = (e: React.PointerEvent<HTMLCanvasElement | HTMLDivElement>): SketchPoint => {
     const paper = paperRef.current;
-    const scrollEl = scrollContainerRef.current;
-    if (!paper || !scrollEl) return;
-
-    const resizeObserver = new ResizeObserver(() => {
-      updatePaperDimensions();
-      redrawCanvas();
-    });
-    resizeObserver.observe(paper);
-    resizeObserver.observe(scrollEl);
-
-    const mutationObserver = new MutationObserver(() => {
-      redrawCanvas();
-    });
-    if (typeof document !== 'undefined') {
-      mutationObserver.observe(document.documentElement, {
-        attributes: true,
-        attributeFilter: ['class'],
-      });
-    }
-
-    return () => {
-      resizeObserver.disconnect();
-      mutationObserver.disconnect();
-    };
-  }, [redrawCanvas, updatePaperDimensions]);
-
-  const switchToMode = (nextMode: UnifiedMode) => {
-    setActiveMode(nextMode);
-    if (nextMode === 'draw') {
-      // Tutup keyboard virtual saat beralih ke mode Coret-Coret
-      textareaRef.current?.blur();
-    } else {
-      setTimeout(() => {
-        textareaRef.current?.focus();
-      }, 20);
-    }
-  };
-
-  const getPointerCoords = (e: React.PointerEvent<HTMLCanvasElement>): SketchPoint => {
-    const canvas = canvasRef.current;
-    if (!canvas) return { x: 0, y: 0 };
-    const rect = canvas.getBoundingClientRect();
+    if (!paper) return { x: 0, y: 0 };
+    const rect = paper.getBoundingClientRect();
     return {
       x: Math.round((e.clientX - rect.left) * 10) / 10,
       y: Math.round((e.clientY - rect.top) * 10) / 10,
     };
   };
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  // --- LOGIKA MENGGAMBAR PENA / STABILO ---
+  const handleCanvasPointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (activeMode !== 'draw') return;
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     e.stopPropagation();
 
+    // Jika user mulai mencoret di kanvas kosong, batalkan seleksi shape sebelumnya
+    setSelectedShapeId(null);
+
     const pt = getPointerCoords(e);
-    isDrawingRef.current = true;
-    currentPointsRef.current = [pt];
+    isInteractingRef.current = true;
+    interactionTypeRef.current = 'drawing';
+    currentDrawPointsRef.current = [pt];
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {}
 
-    const previewStroke: SketchStroke = {
-      id: `live-${Date.now()}`,
+    redrawCanvas({
       tool: activeTool,
       color: activeColor,
       size: activeSize,
       points: [pt],
-    };
-    redrawCanvas(previewStroke);
+    });
   };
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const handleCanvasPointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (activeMode !== 'draw') return;
     const pt = getPointerCoords(e);
     if (e.pointerType !== 'touch') {
       setHoverPointer(pt);
     }
 
-    if (!isDrawingRef.current) return;
+    if (!isInteractingRef.current || interactionTypeRef.current !== 'drawing') return;
     e.stopPropagation();
 
-    const pts = currentPointsRef.current;
+    const pts = currentDrawPointsRef.current;
     const lastPt = pts[pts.length - 1];
     if (lastPt && Math.hypot(pt.x - lastPt.x, pt.y - lastPt.y) < 1.5) {
       return;
     }
 
     pts.push(pt);
-    const previewStroke: SketchStroke = {
-      id: 'preview',
+    redrawCanvas({
       tool: activeTool,
       color: activeColor,
       size: activeSize,
       points: pts,
-    };
-    redrawCanvas(previewStroke);
+    });
   };
 
-  const finishStroke = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawingRef.current) return;
+  const handleCanvasPointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isInteractingRef.current || interactionTypeRef.current !== 'drawing') return;
     e.stopPropagation();
-    isDrawingRef.current = false;
+    isInteractingRef.current = false;
+    interactionTypeRef.current = null;
 
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
     } catch {}
 
-    if (currentPointsRef.current.length > 0) {
-      const newStroke: SketchStroke = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        tool: activeTool,
-        color: activeColor,
-        size: activeSize,
-        points: [...currentPointsRef.current],
+    const pts = currentDrawPointsRef.current;
+    if (pts.length > 0) {
+      // Hitung Bounding Box Coretan Baru secara otomatis (Auto-Shape ala Word)
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+
+      for (const p of pts) {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
+
+      const pad = Math.max(10, activeSize * 2);
+      const x = Math.max(0, minX - pad);
+      const y = Math.max(0, minY - pad);
+      const width = Math.max(30, maxX - minX + pad * 2);
+      const height = Math.max(30, maxY - minY + pad * 2);
+
+      const newShape: DrawingShape = {
+        id: `shape-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        x,
+        y,
+        width,
+        height,
+        strokes: [
+          {
+            id: `stk-${Date.now()}`,
+            tool: activeTool,
+            color: activeColor,
+            size: activeSize,
+            points: pts.map((p) => ({
+              rx: Math.max(0, Math.min(1, (p.x - x) / width)),
+              ry: Math.max(0, Math.min(1, (p.y - y) / height)),
+            })),
+          },
+        ],
+        created_at: Date.now(),
       };
-      const nextStrokes = [...strokesRef.current, newStroke];
-      setRedoStack([]);
-      onChangeStrokes(nextStrokes);
+
+      const nextShapes = [...shapesList, newShape];
+      setRedoShapesStack([]);
+      commitShapesChange(nextShapes);
+      setSelectedShapeId(newShape.id);
     }
-    currentPointsRef.current = [];
+
+    currentDrawPointsRef.current = [];
   };
 
-  const handleUndoSketch = () => {
-    if (strokes.length === 0) return;
-    const prevStrokes = strokes.slice(0, -1);
-    setRedoStack((prev) => [strokes, ...prev]);
-    onChangeStrokes(prevStrokes);
+  // --- LOGIKA MANIPULASI SHAPE (DRAG MOVE & RESIZE HANDLES) ---
+  const handleShapeMoveStart = (e: React.PointerEvent, shape: DrawingShape) => {
+    e.stopPropagation();
+    setSelectedShapeId(shape.id);
+    isInteractingRef.current = true;
+    interactionTypeRef.current = 'moving';
+    activeShapeIdRef.current = shape.id;
+    startPointerRef.current = { x: e.clientX, y: e.clientY };
+    startShapeBoundsRef.current = { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
   };
 
-  const handleRedoSketch = () => {
-    if (redoStack.length === 0) return;
-    const [nextStrokes, ...rest] = redoStack;
-    setRedoStack(rest);
-    onChangeStrokes(nextStrokes);
+  const handleResizeStart = (e: React.PointerEvent, shape: DrawingShape, handle: ResizeHandle) => {
+    e.stopPropagation();
+    setSelectedShapeId(shape.id);
+    isInteractingRef.current = true;
+    interactionTypeRef.current = 'resizing';
+    resizeHandleRef.current = handle;
+    activeShapeIdRef.current = shape.id;
+    startPointerRef.current = { x: e.clientX, y: e.clientY };
+    startShapeBoundsRef.current = { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
+
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
   };
 
-  const handleClearCanvas = async () => {
-    if (strokes.length === 0) return;
+  const handleInteractionMove = (e: React.PointerEvent) => {
+    if (!isInteractingRef.current) return;
+    const currentShapeId = activeShapeIdRef.current;
+    if (!currentShapeId) return;
+
+    const dx = e.clientX - startPointerRef.current.x;
+    const dy = e.clientY - startPointerRef.current.y;
+    const start = startShapeBoundsRef.current;
+
+    if (interactionTypeRef.current === 'moving') {
+      const nextX = Math.max(0, Math.round(start.x + dx));
+      const nextY = Math.max(0, Math.round(start.y + dy));
+
+      setShapesList((prev) =>
+        prev.map((s) => (s.id === currentShapeId ? { ...s, x: nextX, y: nextY } : s))
+      );
+    } else if (interactionTypeRef.current === 'resizing') {
+      const h = resizeHandleRef.current;
+      let newX = start.x;
+      let newY = start.y;
+      let newW = start.width;
+      let newH = start.height;
+
+      if (h?.includes('e')) newW = Math.max(30, start.width + dx);
+      if (h?.includes('s')) newH = Math.max(30, start.height + dy);
+      if (h?.includes('w')) {
+        const potentialW = start.width - dx;
+        if (potentialW >= 30) {
+          newW = potentialW;
+          newX = start.x + dx;
+        }
+      }
+      if (h?.includes('n')) {
+        const potentialH = start.height - dy;
+        if (potentialH >= 30) {
+          newH = potentialH;
+          newY = start.y + dy;
+        }
+      }
+
+      setShapesList((prev) =>
+        prev.map((s) =>
+          s.id === currentShapeId
+            ? { ...s, x: Math.round(newX), y: Math.round(newY), width: Math.round(newW), height: Math.round(newH) }
+            : s
+        )
+      );
+    }
+  };
+
+  const handleInteractionEnd = (e: React.PointerEvent) => {
+    if (!isInteractingRef.current) return;
+    isInteractingRef.current = false;
+    interactionTypeRef.current = null;
+    resizeHandleRef.current = null;
+    activeShapeIdRef.current = null;
+
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+
+    commitShapesChange(shapesList);
+  };
+
+  const handleDeleteSelectedShape = () => {
+    if (!selectedShapeId) return;
+    const next = shapesList.filter((s) => s.id !== selectedShapeId);
+    setSelectedShapeId(null);
+    commitShapesChange(next);
+  };
+
+  const handleUndoShapes = () => {
+    if (shapesList.length === 0) return;
+    const prev = shapesList.slice(0, -1);
+    setRedoShapesStack((old) => [shapesList, ...old]);
+    commitShapesChange(prev);
+    setSelectedShapeId(null);
+  };
+
+  const handleRedoShapes = () => {
+    if (redoShapesStack.length === 0) return;
+    const [next, ...rest] = redoShapesStack;
+    setRedoShapesStack(rest);
+    commitShapesChange(next);
+    setSelectedShapeId(null);
+  };
+
+  const handleClearAllShapes = async () => {
+    if (shapesList.length === 0) return;
     const ok = await confirm({
-      title: 'Bersihkan Semua Coretan?',
-      description: 'Seluruh coretan & stabilo pada lembar catatan ini akan dihapus (teks ketikan Anda tetap aman).',
+      title: 'Bersihkan Semua Coretan & Shape?',
+      description: 'Seluruh coretan objek gambar pada catatan ini akan dihapus. Teks ketikan Anda tetap aman.',
       confirmText: 'Ya, Bersihkan Coretan',
       cancelText: 'Batal',
       variant: 'danger',
       icon: 'delete_sweep',
     });
     if (!ok) return;
-    setRedoStack((prev) => [strokes, ...prev]);
-    onChangeStrokes([]);
+    setRedoShapesStack((old) => [shapesList, ...old]);
+    commitShapesChange([]);
+    setSelectedShapeId(null);
   };
 
-  const handleScrollByStep = (deltaY: number) => {
-    scrollContainerRef.current?.scrollBy({ top: deltaY, behavior: 'smooth' });
-  };
-
-  // Ekspor Gabungan Teks + Coretan menjadi 1 Gambar Catatan Utuh (.PNG)
+  // Ekspor Catatan Gabungan PNG
   const handleDownloadUnifiedPng = () => {
     const paper = paperRef.current;
     if (!paper) return;
@@ -428,20 +588,13 @@ export default function StudySketchCanvas({
     const padTop = 14;
     const maxTextWidth = width - padX * 2;
 
-    // Siapkan offscreen canvas untuk mengukur tinggi teks yang di-wrap
     const measureCanvas = document.createElement('canvas');
     const measureCtx = measureCanvas.getContext('2d');
     const fontSize = isMobileViewport ? 16 : 14;
     const baseFont = `${fontSize}px sans-serif`;
     const boldFont = `bold ${fontSize}px sans-serif`;
 
-    interface WrappedLine {
-      text: string;
-      isHeading: boolean;
-      isQuote: boolean;
-    }
-
-    const wrappedLines: WrappedLine[] = [];
+    const wrappedLines: { text: string; isHeading: boolean; isQuote: boolean }[] = [];
     if (measureCtx && noteContent.trim().length > 0) {
       const rawParagraphs = noteContent.split('\n');
       for (const rawLine of rawParagraphs) {
@@ -452,7 +605,6 @@ export default function StudySketchCanvas({
           : rawLine.replace(/\*\*(.*?)\*\*/g, '$1');
 
         measureCtx.font = isHeading ? boldFont : baseFont;
-
         if (!cleanLine.trim()) {
           wrappedLines.push({ text: '', isHeading: false, isQuote: false });
           continue;
@@ -460,7 +612,6 @@ export default function StudySketchCanvas({
 
         const words = cleanLine.split(' ');
         let currentLine = '';
-
         for (const word of words) {
           const testLine = currentLine ? `${currentLine} ${word}` : word;
           const metrics = measureCtx.measureText(testLine);
@@ -477,9 +628,13 @@ export default function StudySketchCanvas({
       }
     }
 
+    let maxShapeY = 0;
+    for (const s of shapesList) {
+      if (s.y + s.height > maxShapeY) maxShapeY = s.y + s.height;
+    }
+
     const textTotalHeight = wrappedLines.length * LINE_HEIGHT_PX + padTop * 2 + 40;
-    const strokeMaxY = getMaxStrokeY(strokes) + 60;
-    const bodyHeight = Math.max(420, Math.round(rect.height), textTotalHeight, strokeMaxY);
+    const bodyHeight = Math.max(420, Math.round(rect.height), textTotalHeight, maxShapeY + 60);
     const totalHeight = headerHeight + bodyHeight;
 
     const exportCanvas = document.createElement('canvas');
@@ -490,24 +645,15 @@ export default function StudySketchCanvas({
 
     ctx.scale(2, 2);
 
-    // 1. Background Kertas Hangat
+    // Kertas Hangat
     ctx.fillStyle = '#fffbeb';
     ctx.fillRect(0, 0, width, totalHeight);
 
-    // 2. Motif Kertas (Garis / Titik)
-    if (paperPattern === 'dots') {
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.38)';
-      for (let x = 20; x < width; x += 20) {
-        for (let y = headerHeight + 20; y < totalHeight; y += 20) {
-          ctx.beginPath();
-          ctx.arc(x, y, 1, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
-    } else if (paperPattern === 'lines') {
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.28)';
+    // Garis Kertas
+    if (paperPattern === 'lines') {
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.24)';
       ctx.lineWidth = 1;
-      for (let y = headerHeight + padTop + LINE_HEIGHT_PX - 4; y < totalHeight; y += LINE_HEIGHT_PX) {
+      for (let y = headerHeight + 14; y < totalHeight; y += LINE_HEIGHT_PX) {
         ctx.beginPath();
         ctx.moveTo(0, y);
         ctx.lineTo(width, y);
@@ -515,113 +661,112 @@ export default function StudySketchCanvas({
       }
     }
 
-    // 3. Render Teks Catatan di Atas Kertas
-    ctx.textBaseline = 'alphabetic';
-    wrappedLines.forEach((lineObj, idx) => {
-      const yPos = headerHeight + padTop + (idx + 1) * LINE_HEIGHT_PX - 7;
-      if (lineObj.isHeading) {
-        ctx.font = boldFont;
-        ctx.fillStyle = '#065f46';
-      } else if (lineObj.isQuote) {
-        ctx.font = `italic ${fontSize}px sans-serif`;
-        ctx.fillStyle = '#92400e';
-      } else {
-        ctx.font = baseFont;
-        ctx.fillStyle = '#1e293b';
-      }
-      ctx.fillText(lineObj.text, padX, yPos);
-    });
-
-    // 4. Gambar Coretan & Stabilo pada Offscreen Layer (agar Eraser hanya menghapus coretan)
-    const inkCanvas = document.createElement('canvas');
-    inkCanvas.width = width * 2;
-    inkCanvas.height = bodyHeight * 2;
-    const inkCtx = inkCanvas.getContext('2d');
-    if (inkCtx) {
-      inkCtx.scale(2, 2);
-      for (const s of strokes) {
-        drawSingleStroke(inkCtx, s, true);
-      }
-      ctx.drawImage(inkCanvas, 0, headerHeight, width, bodyHeight);
-    }
-
-    // 5. Header Banner Kajian
+    // Header Kartu
     ctx.fillStyle = '#065f46';
     ctx.fillRect(0, 0, width, headerHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 14px sans-serif';
-    ctx.fillText(title.slice(0, 75), 16, 28);
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillText(title.slice(0, 52), padX, 28);
     ctx.fillStyle = '#a7f3d0';
     ctx.font = '11px sans-serif';
-    ctx.fillText(
-      `${speakerName ? `${speakerName} • ` : ''}Catatan Faidah & Coretan — Peta Kajian`,
-      16,
-      48
-    );
+    ctx.fillText(`${speakerName ? `Pemateri: ${speakerName} • ` : ''}PetaKajian.id`, padX, 48);
 
-    const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 35);
-    const dataUrl = exportCanvas.toDataURL('image/png');
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = `Catatan_Kajian_${cleanTitle}.png`;
-    a.click();
+    // Teks Catatan
+    let curY = headerHeight + padTop + fontSize;
+    ctx.fillStyle = '#0f172a';
+    for (const l of wrappedLines) {
+      if (l.text) {
+        ctx.font = l.isHeading ? boldFont : baseFont;
+        ctx.fillText(l.text, padX, curY);
+      }
+      curY += LINE_HEIGHT_PX;
+    }
+
+    // Gambar Seluruh Shapes
+    for (const shp of shapesList) {
+      for (const stk of shp.strokes) {
+        if (!stk.points || stk.points.length === 0) continue;
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (stk.tool === 'highlighter') {
+          ctx.strokeStyle = resolveStrokeColor(
+            stk.color === 'auto' ? '#f59e0b' : stk.color,
+            true
+          );
+          ctx.lineWidth = stk.size * 3.2;
+          ctx.globalAlpha = 0.35;
+        } else {
+          ctx.strokeStyle = resolveStrokeColor(stk.color, true);
+          ctx.lineWidth = stk.size;
+          ctx.globalAlpha = 1;
+        }
+        ctx.beginPath();
+        const p0 = stk.points[0];
+        ctx.moveTo(shp.x + p0.rx * shp.width, headerHeight + shp.y + p0.ry * shp.height);
+        for (let i = 1; i < stk.points.length; i++) {
+          const pt = stk.points[i];
+          ctx.lineTo(shp.x + pt.rx * shp.width, headerHeight + shp.y + pt.ry * shp.height);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Unduh File
+    const link = document.createElement('a');
+    link.download = `Catatan_${title.replace(/[^a-z0-9]/gi, '_').slice(0, 30)}.png`;
+    link.href = exportCanvas.toDataURL('image/png');
+    link.click();
   };
 
+  const selectedShape = shapesList.find((s) => s.id === selectedShapeId);
+
   return (
-    <div
-      className={`flex flex-col flex-1 min-h-0 h-full ${className}`}
-      onPointerDown={(e) => e.stopPropagation()}
-    >
-      {/* =================================================================
-          1. BARIS KONTROL TERPADU (SWITCH KETIK/CORET + ALAT KONTEKSTUAL + EKSPOR)
-          ================================================================= */}
-      <div className="px-2.5 py-1.5 bg-surface-container-low/90 dark:bg-neutral-800/85 border-b border-surface-container-high/50 flex items-center justify-between gap-1.5 overflow-x-auto no-scrollbar shrink-0 select-none">
-        {/* KIRI: Toggle Alat Utama [Ketik] vs [Coret] */}
+    <div className="flex-1 flex flex-col min-h-0 relative select-none font-geist text-on-surface">
+      {/* 1. TOOLBAR ATAS TERPADU */}
+      <div className="px-3 py-1.5 bg-surface-container-low/90 dark:bg-neutral-900/90 border-b border-surface-container-high/60 flex items-center justify-between gap-1 overflow-x-auto no-scrollbar shrink-0 select-none">
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center gap-0.5 bg-surface-container/90 dark:bg-neutral-900/80 p-0.5 rounded-xl border border-surface-container-high/70 shrink-0">
+          {/* TAB MODE: KETIK vs CORET (Shape otomatis aktif & bisa langsung diklik saat di mode Coret) */}
+          <div className="flex items-center p-0.5 rounded-lg bg-surface-container border border-surface-container-high text-[11px] font-bold">
             <button
               type="button"
-              onClick={() => switchToMode('type')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+              onClick={() => {
+                setActiveMode('type');
+                setSelectedShapeId(null); // Otomatis hilangkan kotak seleksi resize saat beralih ke mode Ketik
+                setTimeout(() => textareaRef.current?.focus(), 20);
+              }}
+              className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
                 activeMode === 'type'
                   ? 'bg-emerald-600 text-white shadow-2xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                  : 'text-outline hover:text-on-surface'
               }`}
-              title="Mode Ketik Teks & Gulir Halaman"
+              title="Mode Ketik Teks Catatan (Kotak seleksi shape disembunyikan)"
             >
-              <span className="material-symbols-outlined text-[14px]">keyboard</span>
+              <span className="material-symbols-outlined text-[14px]">edit_note</span>
               <span>Ketik</span>
             </button>
-
             <button
               type="button"
-              onClick={() => switchToMode('draw')}
-              className={`px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+              onClick={() => {
+                setActiveMode('draw');
+                textareaRef.current?.blur();
+              }}
+              className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
                 activeMode === 'draw'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-outline hover:text-on-surface'
               }`}
-              title="Mode Coret-Coret & Stabilo langsung di atas lembar catatan"
+              title="Mode Coretan: Coret dengan pena atau klik bentuk yang ada untuk menggeser & mengatur ukuran"
             >
               <span className="material-symbols-outlined text-[14px]">draw</span>
               <span>Coret</span>
-              {strokes.length > 0 && (
-                <span
-                  className={`px-1 py-0.1 rounded-full text-[9px] font-extrabold ${
-                    activeMode === 'draw'
-                      ? 'bg-white/25 text-white'
-                      : 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                  }`}
-                >
-                  {strokes.length}
-                </span>
-              )}
             </button>
           </div>
 
-          <div className="w-[1px] h-4 bg-surface-container-high/80 shrink-0" />
+          <div className="w-[1px] h-4 bg-surface-container-high shrink-0" />
 
-          {/* TENGAH: ALAT KONTEKSTUAL (Otomatis menyesuaikan mode Ketik atau Coret) */}
+          {/* ALAT KONTEKSTUAL */}
           {activeMode === 'type' ? (
             /* --- ALAT FORMAT TEKS --- */
             <div className="flex items-center gap-1 shrink-0">
@@ -629,139 +774,96 @@ export default function StudySketchCanvas({
                 type="button"
                 onClick={onUndoText}
                 disabled={!canUndoText}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                  canUndoText
-                    ? 'hover:bg-surface-container text-on-surface cursor-pointer'
-                    : 'text-outline/30 cursor-not-allowed'
-                }`}
-                title="Urungkan Ketikan (Ctrl+Z)"
+                className="w-6 h-6 rounded-md flex items-center justify-center text-outline hover:text-on-surface disabled:opacity-30 cursor-pointer"
+                title="Undo Teks"
               >
                 <span className="material-symbols-outlined text-[15px]">undo</span>
               </button>
-
               <button
                 type="button"
                 onClick={onRedoText}
                 disabled={!canRedoText}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                  canRedoText
-                    ? 'hover:bg-surface-container text-on-surface cursor-pointer'
-                    : 'text-outline/30 cursor-not-allowed'
-                }`}
-                title="Ulangi Ketikan (Ctrl+Y)"
+                className="w-6 h-6 rounded-md flex items-center justify-center text-outline hover:text-on-surface disabled:opacity-30 cursor-pointer"
+                title="Redo Teks"
               >
                 <span className="material-symbols-outlined text-[15px]">redo</span>
               </button>
-
-              <div className="w-[1px] h-3.5 bg-surface-container-high/80 mx-0.5 shrink-0" />
-
               <button
                 type="button"
                 onClick={onInsertBold}
-                className="w-6 h-6 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                title="Teks Tebal (Ctrl+B)"
+                className="w-6 h-6 rounded-md hover:bg-surface-container text-[11px] font-bold text-outline hover:text-on-surface cursor-pointer"
+                title="Teks Tebal"
               >
                 B
               </button>
-
               <button
                 type="button"
                 onClick={onInsertItalic}
-                className="w-6 h-6 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-serif italic font-bold flex items-center justify-center transition-colors cursor-pointer"
-                title="Teks Miring (Ctrl+I)"
+                className="w-6 h-6 rounded-md hover:bg-surface-container text-[11px] font-serif italic font-bold text-outline hover:text-on-surface cursor-pointer"
+                title="Teks Miring"
               >
                 I
               </button>
-
               <button
                 type="button"
                 onClick={onInsertHeading}
-                className="w-6 h-6 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                title="Sub-judul Bab (###)"
+                className="w-6 h-6 rounded-md hover:bg-surface-container text-[11px] font-bold text-outline hover:text-on-surface cursor-pointer"
+                title="Sub-judul"
               >
                 H
               </button>
-
-              <button
-                type="button"
-                onClick={onInsertNumbered}
-                className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-bold transition-colors cursor-pointer"
-                title="Daftar Nomor (1.)"
-              >
-                1.
-              </button>
-
               <button
                 type="button"
                 onClick={onInsertPoint}
-                className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-bold transition-colors cursor-pointer shrink-0"
-                title="Sisipkan Poin Faidah (•)"
+                className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-[10px] font-bold text-outline hover:text-on-surface cursor-pointer"
+                title="Poin Faidah"
               >
                 • Poin
               </button>
-
-              <button
-                type="button"
-                onClick={onInsertDalil}
-                className="px-1.5 py-0.5 rounded-md hover:bg-surface-container text-outline hover:text-on-surface text-[10px] font-semibold flex items-center gap-0.5 transition-colors cursor-pointer shrink-0"
-                title="Sisipkan Kutipan Dalil"
-              >
-                <span>📖 Dalil</span>
-              </button>
-
               <button
                 type="button"
                 onClick={onInsertTimestamp}
-                className="px-2 py-0.5 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-800 dark:text-amber-200 text-[10px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
-                title="Sisipkan Stempel Waktu Saat Ini"
+                className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                title="Timestamp Video"
               >
                 <span className="material-symbols-outlined text-[12px]">schedule</span>
                 <span>+ Waktu</span>
               </button>
             </div>
           ) : (
-            /* --- ALAT GAMBAR & STABILO --- */
+            /* --- ALAT CORET / MANIPULASI SHAPE --- */
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
-                onClick={() => setActiveTool('pen')}
+                onClick={() => {
+                  setActiveTool('pen');
+                  setActiveMode('draw');
+                }}
                 className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  activeTool === 'pen'
-                    ? 'bg-emerald-600 text-white shadow-2xs'
+                  activeTool === 'pen' && activeMode === 'draw'
+                    ? 'bg-emerald-600 text-white'
                     : 'text-outline hover:bg-surface-container hover:text-on-surface'
                 }`}
-                title="Pena Tulis"
+                title="Pena"
               >
                 <span className="material-symbols-outlined text-[14px]">stylus</span>
                 <span>Pena</span>
               </button>
-
               <button
                 type="button"
-                onClick={() => setActiveTool('highlighter')}
+                onClick={() => {
+                  setActiveTool('highlighter');
+                  setActiveMode('draw');
+                }}
                 className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  activeTool === 'highlighter'
-                    ? 'bg-amber-500 text-white shadow-2xs'
+                  activeTool === 'highlighter' && activeMode === 'draw'
+                    ? 'bg-amber-500 text-white'
                     : 'text-outline hover:bg-surface-container hover:text-on-surface'
                 }`}
-                title="Stabilo Penanda Teks"
+                title="Stabilo Penanda"
               >
                 <span className="material-symbols-outlined text-[14px]">format_ink_highlighter</span>
                 <span>Stabilo</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTool('eraser')}
-                className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                  activeTool === 'eraser'
-                    ? 'bg-rose-600 text-white shadow-2xs'
-                    : 'text-outline hover:bg-surface-container hover:text-on-surface'
-                }`}
-                title="Penghapus Coretan"
-              >
-                <span className="material-symbols-outlined text-[14px]">ink_eraser</span>
-                <span className="hidden xs:inline">Hapus</span>
               </button>
 
               <div className="w-[1px] h-4 bg-surface-container-high mx-0.5 shrink-0" />
@@ -769,22 +871,16 @@ export default function StudySketchCanvas({
               {/* Pilihan Warna */}
               <div className="flex items-center gap-1 shrink-0">
                 {COLOR_PALETTE.map((c) => {
-                  const isSelected = activeColor === c.hex && activeTool !== 'eraser';
+                  const isSelected = activeColor === c.hex;
                   return (
                     <button
                       key={c.id}
                       type="button"
-                      onClick={() => {
-                        setActiveColor(c.hex);
-                        if (activeTool === 'eraser') setActiveTool('pen');
-                      }}
-                      className={`w-4 h-4 rounded-full ${c.previewClass} transition-transform cursor-pointer ${
-                        isSelected
-                          ? 'scale-125 ring-2 ring-emerald-500 ring-offset-1 ring-offset-surface'
-                          : 'opacity-75 hover:opacity-100'
+                      onClick={() => setActiveColor(c.hex)}
+                      className={`w-3.5 h-3.5 rounded-full ${c.previewClass} cursor-pointer transition-transform ${
+                        isSelected ? 'scale-125 ring-2 ring-emerald-500' : 'opacity-70 hover:opacity-100'
                       }`}
                       title={c.label}
-                      aria-label={c.label}
                     />
                   );
                 })}
@@ -792,19 +888,17 @@ export default function StudySketchCanvas({
 
               <div className="w-[1px] h-4 bg-surface-container-high mx-0.5 shrink-0" />
 
-              {/* Pilihan Ketebalan Garis */}
+              {/* Ukuran */}
               <div className="flex items-center gap-0.5 shrink-0">
                 {STROKE_SIZES.map((sz) => (
                   <button
                     key={sz.label}
                     type="button"
                     onClick={() => setActiveSize(sz.value)}
-                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-colors cursor-pointer ${
-                      activeSize === sz.value
-                        ? 'bg-surface-container-highest text-on-surface ring-1 ring-emerald-500/60'
-                        : 'text-outline hover:bg-surface-container'
+                    className={`w-5 h-5 rounded flex items-center justify-center cursor-pointer ${
+                      activeSize === sz.value ? 'bg-surface-container-highest text-on-surface' : 'text-outline'
                     }`}
-                    title={`Ukuran ${sz.label}`}
+                    title={sz.label}
                   >
                     <span className={`rounded-full bg-current ${sz.dotSize}`} />
                   </button>
@@ -813,44 +907,30 @@ export default function StudySketchCanvas({
 
               <div className="w-[1px] h-4 bg-surface-container-high mx-0.5 shrink-0" />
 
-              {/* Undo / Redo / Clear Coretan */}
+              {/* Undo / Redo / Clear Shape */}
               <button
                 type="button"
-                onClick={handleUndoSketch}
-                disabled={strokes.length === 0}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                  strokes.length > 0
-                    ? 'hover:bg-surface-container text-on-surface cursor-pointer'
-                    : 'text-outline/30 cursor-not-allowed'
-                }`}
-                title="Urungkan Coretan"
+                onClick={handleUndoShapes}
+                disabled={shapesList.length === 0}
+                className="w-6 h-6 rounded flex items-center justify-center text-outline hover:text-on-surface disabled:opacity-30 cursor-pointer"
+                title="Undo Coretan Shape"
               >
                 <span className="material-symbols-outlined text-[15px]">undo</span>
               </button>
-
               <button
                 type="button"
-                onClick={handleRedoSketch}
-                disabled={redoStack.length === 0}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                  redoStack.length > 0
-                    ? 'hover:bg-surface-container text-on-surface cursor-pointer'
-                    : 'text-outline/30 cursor-not-allowed'
-                }`}
-                title="Ulangi Coretan"
+                onClick={handleRedoShapes}
+                disabled={redoShapesStack.length === 0}
+                className="w-6 h-6 rounded flex items-center justify-center text-outline hover:text-on-surface disabled:opacity-30 cursor-pointer"
+                title="Redo Coretan Shape"
               >
                 <span className="material-symbols-outlined text-[15px]">redo</span>
               </button>
-
               <button
                 type="button"
-                onClick={handleClearCanvas}
-                disabled={strokes.length === 0}
-                className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors ${
-                  strokes.length > 0
-                    ? 'hover:bg-rose-500/15 text-rose-500 cursor-pointer'
-                    : 'text-outline/30 cursor-not-allowed'
-                }`}
+                onClick={handleClearAllShapes}
+                disabled={shapesList.length === 0}
+                className="w-6 h-6 rounded flex items-center justify-center text-outline hover:text-red-500 disabled:opacity-30 cursor-pointer"
                 title="Bersihkan Semua Coretan"
               >
                 <span className="material-symbols-outlined text-[15px]">delete_sweep</span>
@@ -859,76 +939,43 @@ export default function StudySketchCanvas({
           )}
         </div>
 
-        {/* KANAN: Motif Kertas & Ekspor (WA, Salin, Unduh PNG Gabungan, Unduh TXT) */}
-        <div className="flex items-center gap-1 shrink-0 pl-1.5 border-l border-surface-container-high/60">
-          {/* Toggle Motif Kertas */}
-          <button
-            type="button"
-            onClick={() =>
-              setPaperPattern((prev) =>
-                prev === 'lines' ? 'dots' : prev === 'dots' ? 'blank' : 'lines'
-              )
-            }
-            className="w-6 h-6 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-            title={`Ganti Motif Kertas (Saat ini: ${
-              paperPattern === 'lines' ? 'Bergaris' : paperPattern === 'dots' ? 'Titik-titik' : 'Polos'
-            })`}
-          >
-            <span className="material-symbols-outlined text-[14px]">
-              {paperPattern === 'lines'
-                ? 'subject'
-                : paperPattern === 'dots'
-                ? 'grid_4x4'
-                : 'check_box_outline_blank'}
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onShareWhatsApp}
-            className="px-2 py-1 rounded-lg text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 flex items-center gap-1 transition-colors cursor-pointer"
-            title="Bagikan Catatan ke WhatsApp"
-          >
-            <span className="material-symbols-outlined text-[13px]">share</span>
-            <span className="hidden sm:inline">WA</span>
-          </button>
-
+        {/* ALAT EKSPOR KANAN */}
+        <div className="flex items-center gap-1 shrink-0">
           <button
             type="button"
             onClick={onCopyWhatsApp}
-            className="w-6 h-6 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-            title="Salin Teks Catatan"
+            className="w-6 h-6 rounded hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center cursor-pointer"
+            title="Salin Teks"
           >
             <span className="material-symbols-outlined text-[14px]">
               {copiedToast ? 'check' : 'content_copy'}
             </span>
           </button>
-
           <button
             type="button"
             onClick={handleDownloadUnifiedPng}
-            className="w-6 h-6 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 flex items-center justify-center transition-colors cursor-pointer"
-            title="Unduh Gambar Catatan Utuh (Teks + Coretan .PNG)"
+            className="w-6 h-6 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 hover:bg-amber-500/25 flex items-center justify-center cursor-pointer"
+            title="Unduh Gambar Catatan (PNG)"
           >
             <span className="material-symbols-outlined text-[14px]">image</span>
           </button>
-
           <button
             type="button"
             onClick={onDownloadTxt}
-            className="w-6 h-6 rounded-lg hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-            title="Unduh File Teks (.txt)"
+            className="w-6 h-6 rounded hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center cursor-pointer"
+            title="Unduh Teks (.txt)"
           >
             <span className="material-symbols-outlined text-[14px]">download</span>
           </button>
         </div>
       </div>
 
-      {/* =================================================================
-          2. LEMBAR KERTAS CATATAN TERPADU (TEKS + OVERLAY KANVAS IKUT TER-SCROLL)
-          ================================================================= */}
+      {/* 2. LEMBAR KERTAS CATATAN TERPADU */}
       <div
         ref={scrollContainerRef}
+        onPointerMove={handleInteractionMove}
+        onPointerUp={handleInteractionEnd}
+        onPointerCancel={handleInteractionEnd}
         className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative bg-amber-50/35 dark:bg-neutral-950/60"
       >
         <div
@@ -937,24 +984,15 @@ export default function StudySketchCanvas({
             height: `${paperHeight}px`,
             minHeight: '100%',
             backgroundImage:
-              paperPattern === 'dots'
-                ? 'radial-gradient(rgba(148, 163, 184, 0.42) 1px, transparent 1px)'
-                : paperPattern === 'lines'
-                ? 'linear-gradient(to bottom, transparent 27px, rgba(148, 163, 184, 0.24) 28px)'
+              paperPattern === 'lines'
+                ? `linear-gradient(to bottom, transparent 27px, rgba(148, 163, 184, 0.24) 28px)`
                 : 'none',
-            backgroundSize:
-              paperPattern === 'dots'
-                ? '20px 20px'
-                : paperPattern === 'lines'
-                ? `100% ${LINE_HEIGHT_PX}px`
-                : 'auto',
-            backgroundPosition: paperPattern === 'lines' ? '0 14px' : '0 0',
+            backgroundSize: `100% ${LINE_HEIGHT_PX}px`,
+            backgroundPosition: '0 14px',
           }}
-          className={`relative w-full ${
-            isFocusFullscreen ? 'max-w-4xl mx-auto shadow-xs' : ''
-          }`}
+          className={`relative w-full ${isFocusFullscreen ? 'max-w-4xl mx-auto shadow-xs' : ''}`}
         >
-          {/* Hidden Mirror Div untuk mengukur tinggi teks secara presisi tanpa scrollbar ganda */}
+          {/* Hidden Mirror Div */}
           <div
             ref={textMirrorRef}
             aria-hidden="true"
@@ -968,14 +1006,18 @@ export default function StudySketchCanvas({
             {'\n'}
           </div>
 
-          {/* LAPISAN 1: TEXTAREA EDITOR CATATAN */}
+          {/* LAPISAN 1: TEXTAREA EDITOR */}
           <textarea
             ref={textareaRef}
             value={noteContent}
             onChange={onChangeText}
             onKeyDown={onKeyDownText}
-            readOnly={activeMode === 'draw'}
-            placeholder="Tuliskan faidah penting, ayat, hadits, atau kesimpulan kajian di sini... (Pilih 'Coret' di atas untuk memberi stabilo atau menggambar skema di lembar ini)"
+            onClick={() => {
+              // Jika user mengklik area teks kosong di luar shape, hilangkan seleksi shape
+              setSelectedShapeId(null);
+            }}
+            readOnly={activeMode !== 'type'}
+            placeholder="Tuliskan faidah penting di sini... (Pilih 'Coret' di atas untuk menggambar coretan/shape yang bisa di-drag & resize)"
             style={{
               fontSize: isMobileViewport ? '16px' : isFocusFullscreen ? '14px' : '13px',
               lineHeight: `${LINE_HEIGHT_PX}px`,
@@ -983,114 +1025,107 @@ export default function StudySketchCanvas({
               cursor: activeMode === 'type' ? TEXT_IBEAM_CURSOR : 'default',
             }}
             className={`w-full resize-none overflow-hidden border-0 bg-transparent px-4 pt-3.5 pb-12 text-on-surface caret-emerald-600 dark:caret-amber-400 placeholder:text-outline/45 focus:outline-hidden font-sans ${
-              activeMode === 'draw' ? 'pointer-events-none select-none' : 'cursor-text select-text'
+              activeMode !== 'type' ? 'pointer-events-none select-none' : 'cursor-text select-text'
             }`}
             spellCheck={false}
           />
 
-          {/* LAPISAN 2: OVERLAY KANVAS CORETAN & STABILO (Menempel pada kertas & ikut ter-scroll) */}
+          {/* LAPISAN 2: CANVAS CORETAN (Render goresan) */}
           <canvas
             ref={canvasRef}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishStroke}
-            onPointerCancel={finishStroke}
+            onPointerDown={handleCanvasPointerDown}
+            onPointerMove={handleCanvasPointerMove}
+            onPointerUp={handleCanvasPointerUp}
+            onPointerCancel={handleCanvasPointerUp}
             onPointerLeave={() => setHoverPointer(null)}
             style={{
               touchAction: activeMode === 'draw' ? 'none' : 'auto',
-              cursor:
-                activeMode === 'draw'
-                  ? activeTool === 'eraser'
-                    ? ERASER_CURSOR
-                    : PEN_CURSOR
-                  : 'default',
+              cursor: activeMode === 'draw' ? PEN_CURSOR : 'default',
             }}
             className={`absolute inset-0 w-full h-full z-10 ${
               activeMode === 'draw' ? 'pointer-events-auto' : 'pointer-events-none'
             }`}
           />
 
-          {/* Indikator Visual Ujung Pena / Stabilo / Penghapus saat Hover di atas Kanvas */}
-          {activeMode === 'draw' && hoverPointer && (
-            <div
-              aria-hidden="true"
-              style={{
-                left: `${hoverPointer.x}px`,
-                top: `${hoverPointer.y}px`,
-                width: `${
-                  activeTool === 'eraser'
-                    ? activeSize * 3.5
-                    : activeTool === 'highlighter'
-                    ? activeSize * 3.2
-                    : Math.max(10, activeSize * 2)
-                }px`,
-                height: `${
-                  activeTool === 'eraser'
-                    ? activeSize * 3.5
-                    : activeTool === 'highlighter'
-                    ? activeSize * 3.2
-                    : Math.max(10, activeSize * 2)
-                }px`,
-                borderColor:
-                  activeTool === 'eraser'
-                    ? '#e11d48'
-                    : activeColor === 'auto'
-                    ? '#10b981'
-                    : activeColor,
-                backgroundColor:
-                  activeTool === 'highlighter'
-                    ? activeColor === 'auto'
-                      ? 'rgba(245, 158, 11, 0.35)'
-                      : `${activeColor}40`
-                    : activeTool === 'eraser'
-                    ? 'rgba(225, 29, 72, 0.15)'
-                    : 'transparent',
-              }}
-              className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 shadow-[0_0_0_1.5px_rgba(255,255,255,0.9)] z-20 transition-transform duration-75"
-            />
-          )}
+          {/* LAPISAN 3: OBJEK SHAPE INTERAKTIF (SELALU BISA DIKLIK, DIGESER & DIRESIZE BAHKAN DI MODE KETIK) */}
+          {shapesList.map((shp) => {
+            const isSelected = selectedShapeId === shp.id;
+            return (
+              <div
+                key={shp.id}
+                onPointerDown={(e) => {
+                  handleShapeMoveStart(e, shp);
+                }}
+                style={{
+                  left: `${shp.x}px`,
+                  top: `${shp.y}px`,
+                  width: `${shp.width}px`,
+                  height: `${shp.height}px`,
+                  touchAction: 'none',
+                }}
+                className={`absolute z-20 cursor-move pointer-events-auto transition-shadow ${
+                  isSelected
+                    ? 'ring-2 ring-emerald-500 ring-offset-1 ring-offset-transparent border border-dashed border-emerald-400/80 bg-emerald-500/5'
+                    : 'hover:border hover:border-dashed hover:border-emerald-500/50'
+                }`}
+              >
+                {/* 8 RESIZE HANDLES & ACTION TOOLBAR SAAT SHAPE TERPILIH */}
+                {isSelected && (
+                  <>
+                    {/* Toolbar Mini Aksi Shape */}
+                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md px-2 py-0.5 rounded-full border border-surface-container-high shadow-md pointer-events-auto z-30">
+                      <span className="text-[9px] font-bold text-outline">Bentuk</span>
+                      <button
+                        type="button"
+                        onClick={handleDeleteSelectedShape}
+                        className="w-5 h-5 rounded hover:bg-red-500/10 text-red-500 flex items-center justify-center cursor-pointer"
+                        title="Hapus Bentuk"
+                      >
+                        <span className="material-symbols-outlined text-[13px]">delete</span>
+                      </button>
+                    </div>
+
+                    {/* 4 Sudut */}
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'nw')}
+                      className="absolute -top-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-nwse-resize pointer-events-auto shadow-xs"
+                    />
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'ne')}
+                      className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-nesw-resize pointer-events-auto shadow-xs"
+                    />
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'se')}
+                      className="absolute -bottom-1.5 -right-1.5 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-nwse-resize pointer-events-auto shadow-xs"
+                    />
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'sw')}
+                      className="absolute -bottom-1.5 -left-1.5 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-nesw-resize pointer-events-auto shadow-xs"
+                    />
+
+                    {/* 4 Tepi */}
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'n')}
+                      className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-ns-resize pointer-events-auto shadow-xs"
+                    />
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 's')}
+                      className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-ns-resize pointer-events-auto shadow-xs"
+                    />
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'w')}
+                      className="absolute top-1/2 -left-1.5 -translate-y-1/2 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-ew-resize pointer-events-auto shadow-xs"
+                    />
+                    <div
+                      onPointerDown={(e) => handleResizeStart(e, shp, 'e')}
+                      className="absolute top-1/2 -right-1.5 -translate-y-1/2 w-3 h-3 bg-white border-2 border-emerald-600 rounded-sm cursor-ew-resize pointer-events-auto shadow-xs"
+                    />
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
-
-        {/* Toast Salin Catatan */}
-        {copiedToast && (
-          <div className="sticky bottom-3 left-1/2 -translate-x-1/2 w-fit px-3 py-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold shadow-lg animate-in fade-in duration-150 flex items-center gap-1 pointer-events-none z-20">
-            <span className="material-symbols-outlined text-[13px]">check</span>
-            Catatan berhasil disalin!
-          </div>
-        )}
-
-        {/* Tombol Bantu Scroll Cepat Saat Mode Coret-Coret Aktif */}
-        {activeMode === 'draw' && (
-          <div className="sticky bottom-2.5 right-2.5 ml-auto mr-2.5 w-fit flex items-center gap-1 bg-surface-container-lowest/90 dark:bg-neutral-900/90 backdrop-blur-md px-2 py-1 rounded-full border border-amber-500/40 shadow-md z-20">
-            <span className="text-[9px] font-semibold text-amber-700 dark:text-amber-300 pl-1">
-              Mode Coret Aktif
-            </span>
-            <button
-              type="button"
-              onClick={() => handleScrollByStep(-180)}
-              className="w-6 h-6 rounded-full hover:bg-surface-container text-on-surface flex items-center justify-center cursor-pointer"
-              title="Geser Kertas ke Atas"
-            >
-              <span className="material-symbols-outlined text-[14px]">keyboard_arrow_up</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleScrollByStep(180)}
-              className="w-6 h-6 rounded-full hover:bg-surface-container text-on-surface flex items-center justify-center cursor-pointer"
-              title="Geser Kertas ke Bawah (Tambah Ruang Gambar)"
-            >
-              <span className="material-symbols-outlined text-[14px]">keyboard_arrow_down</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => switchToMode('type')}
-              className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold cursor-pointer hover:bg-emerald-700 transition-colors"
-              title="Kembali ke Mode Ketik"
-            >
-              Selesai Coret
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

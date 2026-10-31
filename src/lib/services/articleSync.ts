@@ -337,7 +337,32 @@ export async function syncAllArticleFeeds(): Promise<SyncArticlesReport> {
     supabase = createAdminClient();
   } catch {}
 
-  for (const source of ARTICLE_SOURCES) {
+  let activeSources: ArticleSource[] = [...ARTICLE_SOURCES];
+  if (supabase) {
+    try {
+      const { data: dbSources } = await supabase
+        .from('article_sources')
+        .select('*')
+        .eq('is_active', true);
+      if (dbSources && dbSources.length > 0) {
+        activeSources = dbSources.map((ds: any) => ({
+          id: ds.slug || ds.id,
+          name: ds.name,
+          slug: ds.slug,
+          websiteUrl: ds.website_url,
+          rssFeedUrl: ds.rss_feed_url,
+          organization: ds.organization || 'Lembaga Dakwah Sunnah',
+          defaultAuthor: ds.default_author || 'Asatidzah Ahlus Sunnah',
+          badgeColor: 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+          icon: 'menu_book',
+        }));
+      }
+    } catch (fetchErr) {
+      console.warn('[articleSync] Gagal memuat portal dari database, fallback lokal:', fetchErr);
+    }
+  }
+
+  for (const source of activeSources) {
     try {
       const articles = await syncSourceArticles(source);
       report.totalParsed += articles.length;

@@ -5,6 +5,39 @@ export interface SketchPoint {
   y: number;
 }
 
+export interface RelativePoint {
+  rx: number; // 0..1 relatif terhadap bounding box shape
+  ry: number; // 0..1 relatif terhadap bounding box shape
+}
+
+/**
+ * Representasi goresan di dalam shape (bisa garis bebas, stabilo, bentuk)
+ */
+export interface ShapeStroke {
+  id: string;
+  tool: 'pen' | 'highlighter';
+  color: string;
+  size: number;
+  points: RelativePoint[];
+}
+
+/**
+ * Shape Objek Coretan Terpadu ala Microsoft Word / Drawing Canvas
+ * - Memiliki bounding box (x, y, width, height)
+ * - Bisa di-drag (geser posisi)
+ * - Bisa di-resize (skala besar/kecil via 8 handle sudut/tepi)
+ */
+export interface DrawingShape {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  strokes: ShapeStroke[];
+  created_at?: number;
+}
+
+// Kompatibilitas dengan kode sebelumnya
 export interface SketchStroke {
   id: string;
   tool: 'pen' | 'highlighter' | 'eraser';
@@ -32,41 +65,110 @@ const PENDING_STUDY_SESSION_KEY = 'peta_kajian_pending_study_session';
 const SKETCH_METADATA_REGEX = /\n*<!--PK_SKETCH_DATA:([\s\S]*?)-->\s*$/;
 
 /**
- * Pisahkan teks catatan murni dengan metadata coretan (sketch) yang disematkan
+ * Konversi SketchStroke[] (legacy) menjadi DrawingShape[]
+ */
+export function convertStrokesToShapes(strokes: SketchStroke[]): DrawingShape[] {
+  if (!strokes || strokes.length === 0) return [];
+
+  // Hitung bounding box global untuk sekumpulan stroke legacy
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const s of strokes) {
+    if (s.tool === 'eraser') continue;
+    for (const p of s.points) {
+      if (p.x < minX) minX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y > maxY) maxY = p.y;
+    }
+  }
+
+  if (minX === Infinity || maxX === -Infinity) return [];
+
+  const padding = 10;
+  const x = Math.max(0, minX - padding);
+  const y = Math.max(0, minY - padding);
+  const width = Math.max(30, maxX - minX + padding * 2);
+  const height = Math.max(30, maxY - minY + padding * 2);
+
+  const shapeStrokes: ShapeStroke[] = strokes
+    .filter((s) => s.tool !== 'eraser')
+    .map((s) => ({
+      id: s.id,
+      tool: s.tool === 'highlighter' ? 'highlighter' : 'pen',
+      color: s.color,
+      size: s.size,
+      points: s.points.map((p) => ({
+        rx: Math.max(0, Math.min(1, (p.x - x) / width)),
+        ry: Math.max(0, Math.min(1, (p.y - y) / height)),
+      })),
+    }));
+
+  return [
+    {
+      id: `legacy-${Date.now()}`,
+      x,
+      y,
+      width,
+      height,
+      strokes: shapeStrokes,
+    },
+  ];
+}
+
+/**
+ * Pisahkan teks catatan murni dengan metadata coretan (sketch/shapes) yang disematkan
  */
 export function decodeNoteWithSketch(rawContent: string): {
   textContent: string;
+  shapes: DrawingShape[] | null;
   strokes: SketchStroke[] | null;
 } {
   if (!rawContent) {
-    return { textContent: '', strokes: null };
+    return { textContent: '', shapes: null, strokes: null };
   }
   const match = rawContent.match(SKETCH_METADATA_REGEX);
   if (!match) {
-    return { textContent: rawContent, strokes: null };
+    return { textContent: rawContent, shapes: null, strokes: null };
   }
   const cleanText = rawContent.replace(SKETCH_METADATA_REGEX, '');
   try {
     const parsed = JSON.parse(match[1]);
     if (Array.isArray(parsed)) {
-      return { textContent: cleanText, strokes: parsed };
+      // Deteksi apakah format baru DrawingShape[] (memiliki properti width & height)
+      if (parsed.length > 0 && typeof parsed[0].width === 'number') {
+        return { textContent: cleanText, shapes: parsed as DrawingShape[], strokes: null };
+      }
+      // Format legacy SketchStroke[]
+      const legacyStrokes = parsed as SketchStroke[];
+      return {
+        textContent: cleanText,
+        shapes: convertStrokesToShapes(legacyStrokes),
+        strokes: legacyStrokes,
+      };
     }
   } catch {
     // Abaikan jika gagal parse
   }
-  return { textContent: cleanText, strokes: null };
+  return { textContent: cleanText, shapes: null, strokes: null };
 }
 
 /**
- * Gabungkan teks catatan dengan metadata coretan untuk disimpan ke database
+ * Gabungkan teks catatan dengan metadata DrawingShape[] untuk disimpan ke database
  */
-export function encodeNoteWithSketch(textContent: string, strokes: SketchStroke[]): string {
+export function encodeNoteWithSketch(
+  textContent: string,
+  shapesOrStrokes: DrawingShape[] | SketchStroke[]
+): string {
   const cleanText = textContent.replace(SKETCH_METADATA_REGEX, '');
-  if (!strokes || strokes.length === 0) {
+  if (!shapesOrStrokes || shapesOrStrokes.length === 0) {
     return cleanText;
   }
   try {
-    return `${cleanText}\n\n<!--PK_SKETCH_DATA:${JSON.stringify(strokes)}-->`;
+    return `${cleanText}\n\n<!--PK_SKETCH_DATA:${JSON.stringify(shapesOrStrokes)}-->`;
   } catch {
     return cleanText;
   }
@@ -81,15 +183,30 @@ export function stripSketchMetadata(rawContent: string): string {
 }
 
 /**
- * Simpan data coretan (sketch) ke localStorage
+ * Helper menghasilkan key penyimpanan lokal yang terisolasi per user ID
  */
-export function setLocalSketchData(videoId: string, strokes: SketchStroke[]): void {
+function getStorageKey(prefix: string, videoId: string, userId?: string | null): string {
+  if (userId) {
+    return `${prefix}${userId}_${videoId}`;
+  }
+  return `${prefix}${videoId}`;
+}
+
+/**
+ * Simpan data coretan (shapes/sketch) ke localStorage secara terisolasi per user
+ */
+export function setLocalSketchData(
+  videoId: string,
+  shapes: DrawingShape[] | SketchStroke[],
+  userId?: string | null
+): void {
   if (typeof window === 'undefined') return;
+  const key = getStorageKey(LOCAL_SKETCH_PREFIX, videoId, userId);
   try {
-    if (!strokes || strokes.length === 0) {
-      localStorage.removeItem(`${LOCAL_SKETCH_PREFIX}${videoId}`);
+    if (!shapes || shapes.length === 0) {
+      localStorage.removeItem(key);
     } else {
-      localStorage.setItem(`${LOCAL_SKETCH_PREFIX}${videoId}`, JSON.stringify(strokes));
+      localStorage.setItem(key, JSON.stringify(shapes));
     }
   } catch (err) {
     console.warn('Gagal menyimpan data coretan lokal:', err);
@@ -97,39 +214,46 @@ export function setLocalSketchData(videoId: string, strokes: SketchStroke[]): vo
 }
 
 /**
- * Ambil data coretan (sketch) dari localStorage
+ * Ambil data coretan (shapes/sketch) dari localStorage secara terisolasi per user
  */
-export function getLocalSketchData(videoId: string): SketchStroke[] {
+export function getLocalSketchData(videoId: string, userId?: string | null): DrawingShape[] {
   if (typeof window === 'undefined') return [];
+  const key = getStorageKey(LOCAL_SKETCH_PREFIX, videoId, userId);
   try {
-    const raw = localStorage.getItem(`${LOCAL_SKETCH_PREFIX}${videoId}`);
+    const raw = localStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    if (parsed.length > 0 && typeof parsed[0].width === 'number') {
+      return parsed as DrawingShape[];
+    }
+    return convertStrokesToShapes(parsed as SketchStroke[]);
   } catch {
     return [];
   }
 }
 
 /**
- * Simpan draft ke localStorage sebagai proteksi instan jika koneksi bermasalah
+ * Simpan draft ke localStorage sebagai proteksi instan (terisolasi per user)
  */
-export function setLocalDraftNote(videoId: string, content: string): void {
+export function setLocalDraftNote(videoId: string, content: string, userId?: string | null): void {
   if (typeof window === 'undefined') return;
+  const key = getStorageKey(LOCAL_BACKUP_PREFIX, videoId, userId);
   try {
-    localStorage.setItem(`${LOCAL_BACKUP_PREFIX}${videoId}`, content);
+    localStorage.setItem(key, content);
   } catch (err) {
     console.warn('Gagal menyimpan draft note lokal:', err);
   }
 }
 
 /**
- * Ambil draft note dari localStorage
+ * Ambil draft note dari localStorage (terisolasi per user)
  */
-export function getLocalDraftNote(videoId: string): string {
+export function getLocalDraftNote(videoId: string, userId?: string | null): string {
   if (typeof window === 'undefined') return '';
+  const key = getStorageKey(LOCAL_BACKUP_PREFIX, videoId, userId);
   try {
-    return localStorage.getItem(`${LOCAL_BACKUP_PREFIX}${videoId}`) || '';
+    return localStorage.getItem(key) || '';
   } catch {
     return '';
   }
@@ -138,9 +262,12 @@ export function getLocalDraftNote(videoId: string): string {
 /**
  * Hapus draft note lokal setelah berhasil disimpan penuh
  */
-export function clearLocalDraftNote(videoId: string): void {
+export function clearLocalDraftNote(videoId: string, userId?: string | null): void {
   if (typeof window === 'undefined') return;
+  const key = getStorageKey(LOCAL_BACKUP_PREFIX, videoId, userId);
   try {
+    localStorage.removeItem(key);
+    // Bersihkan juga key lama jika ada
     localStorage.removeItem(`${LOCAL_BACKUP_PREFIX}${videoId}`);
   } catch {
     // Abaikan

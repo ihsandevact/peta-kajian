@@ -19,6 +19,7 @@ import {
   getPendingStudySession,
   clearPendingStudySession,
   type PendingStudySession,
+  type DrawingShape,
   type SketchStroke,
 } from '@/utils/studyNotes';
 import { FEATURE_FLAGS } from '@/config/features';
@@ -65,18 +66,23 @@ export default function FloatingStudyNotes() {
   // Content, Sketch & Sync State
   const [noteContent, setNoteContent] = useState('');
   const [sketchStrokes, setSketchStrokes] = useState<SketchStroke[]>([]);
+  const [drawingShapes, setDrawingShapes] = useState<DrawingShape[]>([]);
   const [syncStatus, setSyncStatus] = useState<'saved' | 'saving' | 'offline'>('saved');
   const [copiedToast, setCopiedToast] = useState(false);
 
   // Ref terbaru agar auto-save selalu menggabungkan teks + coretan terkini
   const noteContentRef = useRef<string>('');
   const sketchStrokesRef = useRef<SketchStroke[]>([]);
+  const drawingShapesRef = useRef<DrawingShape[]>([]);
   useEffect(() => {
     noteContentRef.current = noteContent;
   }, [noteContent]);
   useEffect(() => {
     sketchStrokesRef.current = sketchStrokes;
   }, [sketchStrokes]);
+  useEffect(() => {
+    drawingShapesRef.current = drawingShapes;
+  }, [drawingShapes]);
 
   // Engine Undo / Redo Teks
   const historyRef = useRef<string[]>([]);
@@ -259,7 +265,13 @@ export default function FloatingStudyNotes() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user || null);
+      const nextUser = session?.user || null;
+      setCurrentUser(nextUser);
+      if (!nextUser) {
+        setNoteContent('');
+        setSketchStrokes([]);
+        setDrawingShapes([]);
+      }
     });
 
     return () => {
@@ -294,14 +306,14 @@ export default function FloatingStudyNotes() {
 
   // Simpan Perubahan Teks & Coretan ke Supabase dan localStorage (Auto-save)
   const triggerAutoSave = useCallback(
-    (textVal: string, strokesVal?: SketchStroke[]) => {
+    (textVal: string, shapesVal?: DrawingShape[]) => {
       if (!studySession || !currentUser) return;
-      const activeStrokes = strokesVal !== undefined ? strokesVal : sketchStrokesRef.current;
-      const combinedPayload = encodeNoteWithSketch(textVal, activeStrokes);
+      const activeShapes = shapesVal !== undefined ? shapesVal : drawingShapesRef.current;
+      const combinedPayload = encodeNoteWithSketch(textVal, activeShapes);
 
       setSyncStatus('saving');
-      setLocalDraftNote(studySession.videoId, combinedPayload);
-      setLocalSketchData(studySession.videoId, activeStrokes);
+      setLocalDraftNote(studySession.videoId, combinedPayload, currentUser.id);
+      setLocalSketchData(studySession.videoId, activeShapes, currentUser.id);
 
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
@@ -328,14 +340,22 @@ export default function FloatingStudyNotes() {
     [studySession, currentUser]
   );
 
-  // Handler saat coretan (sketch) berubah
+  // Handler saat coretan bentuk (shapes) berubah
+  const handleChangeShapes = useCallback(
+    (nextShapes: DrawingShape[]) => {
+      setDrawingShapes(nextShapes);
+      drawingShapesRef.current = nextShapes;
+      triggerAutoSave(noteContentRef.current, nextShapes);
+    },
+    [triggerAutoSave]
+  );
+
   const handleChangeSketchStrokes = useCallback(
     (nextStrokes: SketchStroke[]) => {
       setSketchStrokes(nextStrokes);
       sketchStrokesRef.current = nextStrokes;
-      triggerAutoSave(noteContentRef.current, nextStrokes);
     },
-    [triggerAutoSave]
+    []
   );
 
   // Catat Snapshot Riwayat untuk Undo & Redo
@@ -406,20 +426,22 @@ export default function FloatingStudyNotes() {
 
     async function loadNote() {
       setSyncStatus('saving');
-      // 1. Cek draft lokal & sketsa lokal terlebih dahulu
-      const localDraftRaw = getLocalDraftNote(studySession!.videoId);
-      const localSketch = getLocalSketchData(studySession!.videoId);
-      if (localSketch.length > 0) {
-        setSketchStrokes(localSketch);
+      // 1. Cek draft lokal & sketsa lokal yang terisolasi dengan currentUser.id
+      const localDraftRaw = getLocalDraftNote(studySession!.videoId, currentUser.id);
+      const localShapes = getLocalSketchData(studySession!.videoId, currentUser.id);
+      if (localShapes.length > 0) {
+        setDrawingShapes(localShapes);
       } else {
-        setSketchStrokes([]);
+        setDrawingShapes([]);
       }
 
       if (localDraftRaw) {
-        const { textContent, strokes } = decodeNoteWithSketch(localDraftRaw);
+        const { textContent, shapes, strokes } = decodeNoteWithSketch(localDraftRaw);
         setNoteContent(textContent);
         initHistory(textContent);
-        if (strokes && strokes.length > 0) {
+        if (shapes && shapes.length > 0) {
+          setDrawingShapes(shapes);
+        } else if (strokes && strokes.length > 0) {
           setSketchStrokes(strokes);
         }
       }
@@ -428,12 +450,14 @@ export default function FloatingStudyNotes() {
       const cloudNote = await fetchStudyNoteByVideo(currentUser.id, studySession!.videoId);
       if (isMounted) {
         if (cloudNote?.content) {
-          const { textContent, strokes } = decodeNoteWithSketch(cloudNote.content);
+          const { textContent, shapes, strokes } = decodeNoteWithSketch(cloudNote.content);
           setNoteContent(textContent);
           initHistory(textContent);
-          if (strokes && strokes.length > 0) {
+          if (shapes && shapes.length > 0) {
+            setDrawingShapes(shapes);
+            setLocalSketchData(studySession!.videoId, shapes, currentUser.id);
+          } else if (strokes && strokes.length > 0) {
             setSketchStrokes(strokes);
-            setLocalSketchData(studySession!.videoId, strokes);
           }
           setSyncStatus('saved');
         } else if (!localDraftRaw) {
@@ -1122,6 +1146,8 @@ export default function FloatingStudyNotes() {
               copiedToast={copiedToast}
               isMobileViewport={isMobileViewport}
               isFocusFullscreen={isFocusFullscreen}
+              shapes={drawingShapes}
+              onChangeShapes={handleChangeShapes}
               strokes={sketchStrokes}
               onChangeStrokes={handleChangeSketchStrokes}
             />

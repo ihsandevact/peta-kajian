@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
 import { checkIsAdmin } from '@/lib/services/admin';
 import { ARTICLE_SOURCES } from '@/data/initialArticles';
+import AdminArticleSourcesTab from '@/components/admin/AdminArticleSourcesTab';
 import {
   getAdminArticlesAction,
   createArticleAction,
@@ -82,6 +83,7 @@ export default function AdminArticlesPage() {
   const debouncedSearch = useDebounce(searchQuery, 300);
   const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'featured'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [adminTab, setAdminTab] = useState<'articles' | 'sources'>('articles');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
 
   // Toast & Processing
@@ -192,6 +194,11 @@ export default function AdminArticlesPage() {
   useEffect(() => {
     setPage(0);
   }, [debouncedSearch, statusFilter, categoryFilter, sourceFilter]);
+
+  // Callback stabil saat ada portal sumber yang dimutasi (tambah/edit/hapus/toggle)
+  const handleSourceMutated = useCallback(() => {
+    loadArticles(0);
+  }, [loadArticles]);
 
   // Fetch when page or filters change
   useEffect(() => {
@@ -487,57 +494,103 @@ export default function AdminArticlesPage() {
       )}
 
       {/* HEADER SECTION */}
-      <div className="bg-surface-container-lowest border-b border-surface-container-high/60 py-6 px-4 sm:px-6">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-emerald-600 text-[26px]">
-                article
-              </span>
-              <h1 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
-                Kelola Artikel & Faidah Islam
-              </h1>
+      <div className="bg-surface-container-lowest border-b border-surface-container-high/60 px-4 sm:px-6 pt-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Baris Atas: Judul & Action Buttons */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-emerald-600 text-[26px]">
+                  article
+                </span>
+                <h1 className="text-xl sm:text-2xl font-black text-on-surface tracking-tight">
+                  Kelola Artikel & Faidah Islam
+                </h1>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                <p className="text-xs text-outline">
+                  Tulis artikel dakwah baru, sunting konten, atur status tayang, atau sinkronkan sindikasi RSS.
+                </p>
+                <span className="text-outline/40 hidden sm:inline">•</span>
+                <Link
+                  href="/artikel"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+                >
+                  <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                  <span>Lihat Katalog Publik</span>
+                </Link>
+              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              <p className="text-xs text-outline">
-                Tulis artikel dakwah baru, sunting konten, atur status tayang, atau sinkronkan sindikasi RSS.
-              </p>
-              <span className="text-outline/40 hidden sm:inline">•</span>
-              <Link
-                href="/artikel"
-                className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline"
+
+            {/* Tombol Aksi Utama */}
+            <div className="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleSyncRss}
+                disabled={isSyncing}
+                className="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-xs"
+                title="Tarik artikel terbaru dari Muslim.or.id, Rumaysho, KonsultasiSyariah, & Almanhaj"
               >
-                <span className="material-symbols-outlined text-[14px]">open_in_new</span>
-                <span>Lihat Katalog Publik</span>
-              </Link>
+                <span
+                  className={`material-symbols-outlined text-[16px] text-amber-600 ${
+                    isSyncing ? 'animate-spin' : ''
+                  }`}
+                >
+                  rss_feed
+                </span>
+                <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan RSS'}</span>
+              </button>
+
+              {adminTab === 'articles' && (
+                <button
+                  type="button"
+                  onClick={handleOpenCreateModal}
+                  className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[17px]">add_circle</span>
+                  <span>Tulis Artikel Baru</span>
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          {/* Baris Bawah: Navigasi Sub-Tab Halaman */}
+          <div className="flex items-center gap-1 border-t border-surface-container-high/40 pt-1 -mb-[1px]">
             <button
               type="button"
-              onClick={handleSyncRss}
-              disabled={isSyncing}
-              className="px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-surface-container-high text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
-              title="Tarik artikel terbaru dari Muslim.or.id, Rumaysho, KonsultasiSyariah, & Almanhaj"
+              onClick={() => setAdminTab('articles')}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                adminTab === 'articles'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-outline hover:text-on-surface hover:border-surface-container-highest'
+              }`}
             >
-              <span
-                className={`material-symbols-outlined text-[16px] text-amber-600 ${
-                  isSyncing ? 'animate-spin' : ''
-                }`}
-              >
-                rss_feed
-              </span>
-              <span>{isSyncing ? 'Menyinkronkan...' : 'Sinkronkan RSS'}</span>
+              <span className="material-symbols-outlined text-[17px]">article</span>
+              <span>Kelola Artikel</span>
+              {articles.length > 0 && (
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                    adminTab === 'articles'
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                      : 'bg-surface-container text-outline'
+                  }`}
+                >
+                  {articles.length}
+                </span>
+              )}
             </button>
 
             <button
               type="button"
-              onClick={handleOpenCreateModal}
-              className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer active:scale-95"
+              onClick={() => setAdminTab('sources')}
+              className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer ${
+                adminTab === 'sources'
+                  ? 'border-emerald-600 text-emerald-600 dark:text-emerald-400'
+                  : 'border-transparent text-outline hover:text-on-surface hover:border-surface-container-highest'
+              }`}
             >
-              <span className="material-symbols-outlined text-[17px]">add_circle</span>
-              <span>Tulis Artikel Baru</span>
+              <span className="material-symbols-outlined text-[17px]">hub</span>
+              <span>Portal Sumber Islam</span>
             </button>
           </div>
         </div>
@@ -545,6 +598,14 @@ export default function AdminArticlesPage() {
 
       {/* MAIN CONTENT BODY */}
       <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 pt-6 space-y-6">
+        {/* TAB 2: PORTAL SUMBER ISLAM */}
+        {adminTab === 'sources' && (
+          <AdminArticleSourcesTab onRefreshSources={handleSourceMutated} />
+        )}
+
+        {/* TAB 1: KELOLA ARTIKEL */}
+        {adminTab === 'articles' && (
+          <div className="space-y-6">
         {/* BANNER LAPORAN SINKRONISASI RSS (Jika baru dijalankan) */}
         {syncReport && (
           <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 space-y-2.5 animate-in fade-in duration-200">
@@ -988,6 +1049,8 @@ export default function AdminArticlesPage() {
             </div>
           )}
         </div>
+          </div>
+        )}
       </div>
 
       {/* =================================================================
