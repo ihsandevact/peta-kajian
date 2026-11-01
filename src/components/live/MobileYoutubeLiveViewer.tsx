@@ -38,6 +38,7 @@ interface MobileYoutubeLiveViewerProps {
     title: string;
     channelName: string;
     speakerName?: string;
+    isLive?: boolean;
   }) => void;
   onSelectVideo?: (stream: PlayingVideoInfo) => void;
   initialVideo?: PlayingVideoInfo | null;
@@ -100,6 +101,7 @@ export default function MobileYoutubeLiveViewer({
   const [isPlayerMuted, setIsPlayerMuted] = useState<boolean>(true);
   const [origin, setOrigin] = useState<string>('');
   const [liveSeekTime, setLiveSeekTime] = useState<number | null>(null);
+  const [restoreKey, setRestoreKey] = useState<number>(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -388,15 +390,34 @@ export default function MobileYoutubeLiveViewer({
         title: string;
         channelName: string;
         speakerName?: string;
+        isLive?: boolean;
+        avatarUrl?: string;
+        sessionId?: string;
+        channelHandle?: string;
       }>;
       if (customEvt.detail) {
+        const matchingLive = liveChannels.find(
+          (c) => c.current_video_id === customEvt.detail.videoId
+        );
+        const isLive =
+          customEvt.detail.isLive !== undefined
+            ? customEvt.detail.isLive
+            : Boolean(matchingLive);
+
         setActiveVideo({
           videoId: customEvt.detail.videoId,
           title: customEvt.detail.title,
           channelName: customEvt.detail.channelName,
           speakerName: customEvt.detail.speakerName,
+          isLive,
+          avatarUrl: customEvt.detail.avatarUrl || matchingLive?.avatar_url || undefined,
+          sessionId: customEvt.detail.sessionId || matchingLive?.current_session_id || undefined,
+          channelHandle: customEvt.detail.channelHandle || matchingLive?.channel_handle || undefined,
         });
         setIsPlayerMinimized(false);
+        setLiveSeekTime(null);
+        setRestoreKey((prev) => prev + 1);
+        setIsPlaying(true);
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
         // Otomatis aktifkan audio seketika saat restore ke player utama
@@ -424,7 +445,7 @@ export default function MobileYoutubeLiveViewer({
     return () => {
       window.removeEventListener('peta-kajian:restore-live-video', handleRestoreEvent);
     };
-  }, [sendIframeCommand]);
+  }, [sendIframeCommand, liveChannels]);
 
   // Pantau transisi isMiniPlayerActive: Jika mini player ditutup dengan tombol X (bukan restore maximize),
   // pastikan activeVideo dihentikan / di-reset ke null agar video tidak tiba-tiba berbunyi di background
@@ -624,6 +645,9 @@ export default function MobileYoutubeLiveViewer({
                           window.dispatchEvent(new CustomEvent('peta-kajian:stop-mini-player'));
                         } catch {}
                         onRestoreFromMiniPlayer();
+                        setRestoreKey((prev) => prev + 1);
+                        setLiveSeekTime(null);
+                        setIsPlaying(true);
                         setTimeout(() => {
                           try {
                             sendIframeCommand('unMute');
@@ -669,7 +693,7 @@ export default function MobileYoutubeLiveViewer({
             ) : (
               <iframe
                 ref={iframeRef}
-                key={activeVideo.videoId}
+                key={`${activeVideo.videoId}-${restoreKey}`}
                 src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&mute=1&controls=0&enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
                 title={activeVideo.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -744,6 +768,7 @@ export default function MobileYoutubeLiveViewer({
                         title: activeVideo.title,
                         channelName: activeVideo.channelName,
                         speakerName: activeVideo.speakerName,
+                        isLive: activeVideo.isLive,
                       });
                     }
                   }}

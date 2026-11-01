@@ -895,6 +895,7 @@ export default function PersistentFloatingLivePlayer() {
             title: activeStream.title,
             channelName: activeStream.channelName,
             speakerName: activeStream.speakerName,
+            isLive: activeStream.isLive,
           },
         })
       );
@@ -915,6 +916,7 @@ export default function PersistentFloatingLivePlayer() {
             title: activeStream.title,
             channelName: activeStream.channelName,
             speakerName: activeStream.speakerName,
+            isLive: activeStream.isLive,
           },
         })
       );

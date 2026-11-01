@@ -96,6 +96,7 @@ export default function LiveStreamingPage() {
         title: string;
         channelName: string;
         speakerName?: string;
+        isLive?: boolean;
       }>;
       if (customEvt.detail) {
         if (!isMobileScreen && (typeof window === 'undefined' || window.innerWidth >= 640)) {
@@ -106,7 +107,7 @@ export default function LiveStreamingPage() {
             speakerName: customEvt.detail.speakerName,
             avatarUrl: prev?.avatarUrl,
             channelHandle: prev?.channelHandle,
-            isLive: prev?.isLive ?? true,
+            isLive: customEvt.detail.isLive ?? prev?.isLive ?? true,
           }));
         }
         closePlayer();
@@ -589,6 +590,7 @@ export default function LiveStreamingPage() {
                 title: stream.title,
                 channelName: stream.channelName,
                 speakerName: stream.speakerName || '',
+                isLive: stream.isLive,
               });
             }}
           />

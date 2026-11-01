@@ -9,6 +9,7 @@ export interface ActiveLiveStream {
   speakerName: string;
   channelName: string;
   handle?: string;
+  isLive?: boolean;
 }
 
 export interface ActiveStudySession {
