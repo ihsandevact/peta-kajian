@@ -62,6 +62,14 @@ export default function DesktopYoutubeWatchView({
   });
   const [isDescExpanded, setIsDescExpanded] = useState(false);
 
+  const [origin, setOrigin] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
+  }, []);
+
   // Reset error & mute state saat berganti video
   useEffect(() => {
     setPlayerError(false);
@@ -267,7 +275,7 @@ export default function DesktopYoutubeWatchView({
             ) : (
               <iframe
                 ref={iframeRef}
-                src={`https://www.youtube.com/embed/${currentVideo.videoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&rel=0`}
+                src={`https://www.youtube.com/embed/${currentVideo.videoId}?autoplay=1&mute=1&controls=1&enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
                 title={currentVideo.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen

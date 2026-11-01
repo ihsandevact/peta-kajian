@@ -90,9 +90,22 @@ export default function MobileYoutubeLiveViewer({
     return null;
   });
 
-  // State tampilan pemutar: 'expanded' (nempel di atas 16:9) vs 'minimized' (bar tipis di atas bottom nav)
+  // State tampilan & kontrol pemutar video:
   const [isPlayerMinimized, setIsPlayerMinimized] = useState<boolean>(false);
   const [playerError, setPlayerError] = useState<boolean>(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<number>(1);
+  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(0);
+  const [isPlayerMuted, setIsPlayerMuted] = useState<boolean>(true);
+  const [origin, setOrigin] = useState<string>('');
+  const [liveSeekTime, setLiveSeekTime] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
+  }, []);
   const [activeTab, setActiveTab] = useState<'live' | 'upcoming' | 'ended'>(() => {
     const hasLive = liveChannels.some((c) => Boolean(c.current_video_id));
     return hasLive ? 'live' : 'ended';
@@ -143,6 +156,7 @@ export default function MobileYoutubeLiveViewer({
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const hasUserInteractedRef = useRef(false);
+  const isSeekingRef = useRef(false);
 
   // Pantau setiap sentuhan / klik pengguna di halaman
   useEffect(() => {
@@ -177,12 +191,29 @@ export default function MobileYoutubeLiveViewer({
     };
   }, []);
 
-  // Reset error state saat video berganti
+  // Helper format durasi waktu MM:SS atau HH:MM:SS
+  const formatTime = (seconds: number) => {
+    if (isNaN(seconds) || seconds < 0) return '0:00';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = Math.floor(seconds % 60);
+    if (hrs > 0) {
+      return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  // Reset error state & status pemutaran saat video berganti
   useEffect(() => {
     setPlayerError(false);
+    setPlaybackSpeed(1);
+    setIsPlaying(true);
+    setCurrentTime(0);
+    setDuration(0);
+    setLiveSeekTime(null);
   }, [activeVideo?.videoId]);
 
-  // Handler interaksi iframe YouTube
+  // Handler interaksi iframe YouTube via PostMessage API
   const sendIframeCommand = useCallback((func: string, args: any[] = []) => {
     try {
       if (iframeRef.current?.contentWindow) {
@@ -194,25 +225,61 @@ export default function MobileYoutubeLiveViewer({
     } catch {}
   }, []);
 
+  const handleTogglePlayPause = useCallback(() => {
+    if (isPlaying) {
+      sendIframeCommand('pauseVideo');
+      setIsPlaying(false);
+    } else {
+      sendIframeCommand('playVideo');
+      setIsPlaying(true);
+    }
+  }, [isPlaying, sendIframeCommand]);
+
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    if (activeVideo?.isLive) {
+      const liveMax = duration > 0 ? duration : Math.max(currentTime + 60, 3600);
+      if (val >= liveMax - 15) {
+        setLiveSeekTime(null);
+        sendIframeCommand('seekTo', [duration > 0 ? duration : 999999, true]);
+      } else {
+        setLiveSeekTime(val);
+        sendIframeCommand('seekTo', [val, true]);
+      }
+    } else {
+      setCurrentTime(val);
+      sendIframeCommand('seekTo', [val, true]);
+    }
+  }, [activeVideo?.isLive, duration, currentTime, sendIframeCommand]);
+
+  const handleJumpToLive = useCallback(() => {
+    setLiveSeekTime(null);
+    const target = duration > 0 ? duration : 999999;
+    sendIframeCommand('seekTo', [target, true]);
+    sendIframeCommand('playVideo');
+    setIsPlaying(true);
+  }, [duration, sendIframeCommand]);
+
+  const handleChangeSpeed = useCallback((speed: number) => {
+    setPlaybackSpeed(speed);
+    try {
+      sendIframeCommand('setPlaybackRate', [speed]);
+    } catch {}
+  }, [sendIframeCommand]);
+
   const tryUnmute = useCallback(() => {
     const hasGesture =
       (typeof navigator !== 'undefined' && 'userActivation' in navigator
         ? navigator.userActivation.hasBeenActive
         : false) || hasUserInteractedRef.current;
 
-    // SELALU pastikan video tetap berputar (playVideo)
-    try {
-      sendIframeCommand('playVideo');
-    } catch {}
-
     // Hanya lakukan unMute jika SUDAH ada interaksi pengguna (user gesture)
-    // Hal ini krusial: browser mobile (Chrome/Safari) akan mem-PAUSE video jika unMute dipanggil tanpa user gesture saat refresh!
     if (hasGesture) {
       setTimeout(() => {
         try {
           sendIframeCommand('unMute');
           sendIframeCommand('setVolume', [100]);
-          sendIframeCommand('playVideo');
+          setIsPlayerMuted(false);
         } catch {}
       }, 100);
     }
@@ -221,10 +288,10 @@ export default function MobileYoutubeLiveViewer({
   const handleUnmute = useCallback(() => {
     sendIframeCommand('unMute');
     sendIframeCommand('setVolume', [100]);
-    sendIframeCommand('playVideo');
+    setIsPlayerMuted(false);
   }, [sendIframeCommand]);
 
-  // Pantau pesan event dari YouTube iframe (ready, muted, error, playerState)
+  // Pantau pesan event dari YouTube iframe (ready, muted, error, playerState, currentTime)
   useEffect(() => {
     if (!activeVideo) return;
 
@@ -248,22 +315,44 @@ export default function MobileYoutubeLiveViewer({
           tryUnmute();
         }
 
+        // Sinkronkan playerState (1 = playing, 2 = paused, 0 = ended)
         const playerState = data?.info?.playerState;
-        // Jika browser mencoba mem-pause autoplay saat baru di-refresh (playerState 2 = PAUSED),
-        // otomatis kirim playVideo kembali agar siaran langsung tetap berputar mulus!
-        if (playerState === 2 || playerState === -1 || playerState === 5) {
-          if (!isMiniPlayerActive) {
-            try {
-              sendIframeCommand('playVideo');
-            } catch {}
+        if (typeof playerState === 'number') {
+          if (playerState === 1) {
+            setIsPlaying(true);
+          } else if (playerState === 2 || playerState === 0) {
+            setIsPlaying(false);
           }
+        }
+
+        // Sinkronkan waktu pemutaran (currentTime & duration)
+        const time = data?.info?.currentTime ?? data?.currentTime;
+        if (typeof time === 'number' && !isNaN(time)) {
+          if (!isSeekingRef.current) {
+            setCurrentTime(Math.floor(time));
+          }
+        }
+        const dur = data?.info?.duration ?? data?.duration;
+        if (typeof dur === 'number' && !isNaN(dur) && dur > 0) {
+          setDuration(Math.floor(dur));
+        }
+
+        // Sinkronkan playbackRate jika diubah pengguna
+        const rate = data?.info?.playbackRate;
+        if (typeof rate === 'number' && !isNaN(rate) && rate > 0) {
+          setPlaybackSpeed(rate);
+        }
+
+        // Sinkronkan status muted
+        if (typeof data?.info?.muted === 'boolean') {
+          setIsPlayerMuted(data.info.muted);
         }
       } catch {}
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [activeVideo, sendIframeCommand, tryUnmute, isMiniPlayerActive]);
+  }, [activeVideo, sendIframeCommand, tryUnmute]);
 
   // Listener gestur interaksi pertama (sentuhan / scroll) agar audio langsung aktif otomatis jika dibatasi browser
   useEffect(() => {
@@ -271,7 +360,6 @@ export default function MobileYoutubeLiveViewer({
       try {
         sendIframeCommand('unMute');
         sendIframeCommand('setVolume', [100]);
-        sendIframeCommand('playVideo');
       } catch {}
       window.removeEventListener('pointerdown', handleFirstUserInteraction);
       window.removeEventListener('touchstart', handleFirstUserInteraction);
@@ -509,7 +597,7 @@ export default function MobileYoutubeLiveViewer({
       {activeVideo && !isPlayerMinimized && (
         <div className="sticky top-0 z-30 w-full bg-black shadow-lg">
           {/* 16:9 Video Box */}
-          <div className="relative aspect-video w-full bg-neutral-950 overflow-hidden">
+          <div className="relative aspect-video w-full bg-neutral-950 overflow-hidden flex items-center justify-center">
             {isMiniPlayerActive ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-neutral-900 via-neutral-950 to-black text-center select-none space-y-2 relative overflow-hidden">
                 <div
@@ -582,7 +670,7 @@ export default function MobileYoutubeLiveViewer({
               <iframe
                 ref={iframeRef}
                 key={activeVideo.videoId}
-                src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&rel=0`}
+                src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&mute=1&controls=0&enablejsapi=1&playsinline=1&rel=0${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
                 title={activeVideo.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
@@ -590,14 +678,37 @@ export default function MobileYoutubeLiveViewer({
                 className="w-full h-full border-0"
                 onLoad={() => {
                   try {
-                    iframeRef.current?.contentWindow?.postMessage(
-                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-                      '*'
-                    );
+                    const postListening = () => {
+                      iframeRef.current?.contentWindow?.postMessage(
+                        JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                        '*'
+                      );
+                    };
+                    postListening();
+                    setTimeout(postListening, 250);
+                    setTimeout(postListening, 600);
+                    setTimeout(postListening, 1200);
                     setTimeout(tryUnmute, 300);
                   } catch {}
                 }}
               />
+            )}
+
+            {/* Tap Overlay pada Video: 1 Ketukan untuk Jeda / Putar */}
+            {!isMiniPlayerActive && !playerError && (
+              <div
+                onClick={handleTogglePlayPause}
+                className="absolute inset-0 z-10 cursor-pointer flex items-center justify-center select-none"
+                title={isPlaying ? 'Ketuk untuk menjeda video' : 'Ketuk untuk memutar video'}
+                aria-label={isPlaying ? 'Ketuk untuk menjeda video' : 'Ketuk untuk memutar video'}
+              >
+                {/* Floating Feedback Indicator saat video dijeda */}
+                {!isPlaying && (
+                  <div className="w-14 h-14 rounded-full bg-black/70 backdrop-blur-md text-white flex items-center justify-center shadow-2xl border border-white/20 animate-in zoom-in-75 duration-150">
+                    <span className="material-symbols-outlined text-[32px] text-white">play_arrow</span>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Quick Header Overlay Button (Minimize / Floating Mini Player) */}
@@ -645,6 +756,100 @@ export default function MobileYoutubeLiveViewer({
               </div>
             )}
           </div>
+
+          {/* Interactive Player Timeline Bar (YouTube Signature Style) */}
+          {!isMiniPlayerActive && (() => {
+            const isLiveStream = Boolean(activeVideo.isLive);
+            const maxVal = duration > 0 ? duration : (isLiveStream ? Math.max(currentTime + 60, 3600) : 100);
+
+            let currentSliderValue: number;
+            let progressPercent: number;
+
+            if (isLiveStream) {
+              if (liveSeekTime !== null && liveSeekTime < maxVal - 10) {
+                // Pengguna sedang memundurkan live ke masa lalu
+                currentSliderValue = liveSeekTime;
+                progressPercent = Math.min(100, Math.max(0, (liveSeekTime / maxVal) * 100));
+              } else {
+                // Sedang menonton SIARAN LANGSUNG terkini -> Poin SELALU di UJUNG KANAN (100%)!
+                currentSliderValue = maxVal;
+                progressPercent = 100;
+              }
+            } else {
+              // Video rekaman biasa
+              currentSliderValue = currentTime;
+              progressPercent = Math.min(100, Math.max(0, (currentTime / maxVal) * 100));
+            }
+
+            return (
+              <div className="bg-neutral-950 border-b border-white/10 px-3 py-2 flex items-center gap-2.5 select-none text-white font-mono text-[11px]">
+                <span className="w-10 text-right shrink-0 text-white/90 font-medium">
+                  {isLiveStream && liveSeekTime !== null && liveSeekTime < maxVal - 10
+                    ? `-${formatTime(maxVal - liveSeekTime)}`
+                    : formatTime(currentTime)}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={maxVal}
+                  step={1}
+                  value={currentSliderValue}
+                  onChange={handleSeek}
+                  onTouchStart={() => {
+                    isSeekingRef.current = true;
+                  }}
+                  onTouchEnd={() => {
+                    isSeekingRef.current = false;
+                  }}
+                  onMouseDown={() => {
+                    isSeekingRef.current = true;
+                  }}
+                  onMouseUp={() => {
+                    isSeekingRef.current = false;
+                  }}
+                  style={{
+                    background: `linear-gradient(to right, #ff0000 0%, #ff0000 ${progressPercent}%, rgba(255, 255, 255, 0.25) ${progressPercent}%, rgba(255, 255, 255, 0.25) 100%)`,
+                  }}
+                  className="flex-1 h-[3px] hover:h-[5px] active:h-[5px] rounded-full appearance-none cursor-pointer focus:outline-none transition-all
+                    [&::-webkit-slider-thumb]:appearance-none
+                    [&::-webkit-slider-thumb]:w-3
+                    [&::-webkit-slider-thumb]:h-3
+                    [&::-webkit-slider-thumb]:rounded-full
+                    [&::-webkit-slider-thumb]:bg-[#ff0000]
+                    [&::-webkit-slider-thumb]:shadow-[0_0_4px_rgba(0,0,0,0.6)]
+                    [&::-webkit-slider-thumb]:cursor-pointer
+                    active:[&::-webkit-slider-thumb]:scale-125
+                    [&::-webkit-slider-thumb]:transition-transform
+                    [&::-moz-range-thumb]:w-3
+                    [&::-moz-range-thumb]:h-3
+                    [&::-moz-range-thumb]:rounded-full
+                    [&::-moz-range-thumb]:bg-[#ff0000]
+                    [&::-moz-range-thumb]:border-0
+                    [&::-moz-range-thumb]:cursor-pointer"
+                  aria-label="Linimasa video"
+                />
+                {activeVideo.isLive ? (
+                  <button
+                    type="button"
+                    onClick={handleJumpToLive}
+                    className={`px-2 py-0.5 rounded-full ${
+                      liveSeekTime === null
+                        ? 'bg-red-600 text-white shadow-xs'
+                        : 'bg-red-600/20 hover:bg-red-600/30 text-red-500 border border-red-500/30'
+                    } text-[10px] font-bold tracking-wider flex items-center gap-1 active:scale-95 transition-all shrink-0 cursor-pointer`}
+                    title={liveSeekTime === null ? 'Sedang Menonton Siaran Langsung Terkini' : 'Lompat Kembali ke Siaran Langsung Terkini'}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${liveSeekTime === null ? 'bg-white animate-pulse' : 'bg-red-500'}`} />
+                    <span>LIVE</span>
+                  </button>
+                ) : (
+                  <span className="w-10 shrink-0 text-white/60 font-medium">
+                    {formatTime(duration)}
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Video Metadata & Action Bar Khas YouTube Mobile */}
           <div className="bg-surface-container-lowest p-3 border-b border-surface-container-high/60 space-y-2">
@@ -742,11 +947,11 @@ export default function MobileYoutubeLiveViewer({
                       sessionId: activeVideo.sessionId,
                     });
                   }}
-                  className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs active:scale-95 transition-all cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs active:scale-95 transition-all cursor-pointer"
                   title="Catat Faidah Kajian"
                   aria-label="Catat Faidah Kajian"
                 >
-                  <span className="material-symbols-outlined text-[19px]">edit_note</span>
+                  <span className="material-symbols-outlined text-[18px]">edit_note</span>
                 </button>
               )}
             </div>
@@ -790,8 +995,19 @@ export default function MobileYoutubeLiveViewer({
             </p>
           </div>
 
-          {/* Actions: Restore & Close */}
+          {/* Actions: Play/Pause, Restore & Close */}
           <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={handleTogglePlayPause}
+              className="w-8 h-8 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface transition-colors cursor-pointer"
+              title={isPlaying ? 'Jeda Video' : 'Putar Video'}
+              aria-label={isPlaying ? 'Jeda Video' : 'Putar Video'}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {isPlaying ? 'pause' : 'play_arrow'}
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => {

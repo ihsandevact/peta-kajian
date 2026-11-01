@@ -78,6 +78,14 @@ export default function PersistentFloatingLivePlayer() {
   const pipWindowRef = useRef<Window | null>(null);
   const isShuttingDownRef = useRef(false);
 
+  const [origin, setOrigin] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
+  }, []);
+
   // Helper untuk mematikan dan memutuskan streaming audio iframe seketika
   const stopAndDestroyPlayer = useCallback(() => {
     isShuttingDownRef.current = true;
@@ -581,16 +589,6 @@ export default function PersistentFloatingLivePlayer() {
           // Sinkronkan status muted dari YouTube player
           if (typeof data?.info?.muted === 'boolean') {
             setIsPlayerMuted(data.info.muted);
-          }
-
-          const playerState = data?.info?.playerState;
-          if (!isShuttingDownRef.current && (playerState === 5 || playerState === -1)) {
-            try {
-              iframeRef.current?.contentWindow?.postMessage(
-                JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-                '*'
-              );
-            } catch {}
           }
 
           const time = data?.info?.currentTime ?? data?.currentTime;
@@ -1383,7 +1381,7 @@ export default function PersistentFloatingLivePlayer() {
                 <iframe
                   ref={iframeRef}
                   key={`${activeStream.videoId}-${resumeTime}`}
-                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1`}
+                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&controls=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
                   title={activeStream.title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
