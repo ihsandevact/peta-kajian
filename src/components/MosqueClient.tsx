@@ -8,6 +8,7 @@ import {
   fetchAllMosques,
   createDestinationSession,
   matchCityFilter,
+  CITY_COORDINATES,
   type MosqueVenue,
 } from '@/lib/services/venues';
 import { fetchRoute, type RouteResult } from '@/lib/services/routing';
@@ -377,44 +378,59 @@ export default function MosqueClient() {
       };
     }
 
-    // 2. Jika filter quick city chip aktif (misal Jakarta, Bandung, Surabaya)
+    // 2. Jika filter quick city chip aktif (misal Jakarta, Makassar, Palembang, Medan)
     if (selectedCity && selectedCity.toLowerCase() !== 'semua') {
-      const pts = filteredMosques.filter(
-        (m) => typeof m.lat === 'number' && typeof m.lng === 'number'
+      const cityKey = selectedCity.toLowerCase().trim();
+      const targetCoord = CITY_COORDINATES[cityKey];
+      const foundCity = ALL_CITIES.find(
+        (c) =>
+          c.name.toLowerCase().includes(cityKey) ||
+          c.id.toLowerCase() === cityKey ||
+          c.aliases.some((a) => a.toLowerCase() === cityKey)
       );
+
       let centerLat: number;
       let centerLng: number;
-      let maxDistKm = 0;
+      let computedRadius = 25;
 
-      if (pts.length > 0) {
-        centerLat = pts.reduce((s, m) => s + m.lat!, 0) / pts.length;
-        centerLng = pts.reduce((s, m) => s + m.lng!, 0) / pts.length;
-        for (const m of pts) {
-          const d = calculateDistance(centerLat, centerLng, m.lat!, m.lng!);
-          if (d > maxDistKm) maxDistKm = d;
-        }
+      if (targetCoord) {
+        centerLat = targetCoord.lat;
+        centerLng = targetCoord.lng;
+        computedRadius = Math.min(35, targetCoord.maxRadiusKm);
+      } else if (foundCity) {
+        centerLng = foundCity.center[0];
+        centerLat = foundCity.center[1];
       } else {
-        const foundCity = ALL_CITIES.find(
-          (c) => c.name.toLowerCase().includes(selectedCity.toLowerCase())
-        );
         const foundProv = INDONESIA_PROVINCES.find(
-          (p) => p.name.toLowerCase().includes(selectedCity.toLowerCase())
+          (p) => p.name.toLowerCase().includes(cityKey)
         );
         const center =
-          foundCity?.center ||
           foundProv?.center || [DEFAULT_FALLBACK_LOCATION.lng, DEFAULT_FALLBACK_LOCATION.lat];
         centerLng = center[0];
         centerLat = center[1];
-        maxDistKm = 15;
       }
 
-      const computedRadius = Math.min(35, Math.max(5, maxDistKm * 1.15));
+      // Sesuaikan radius dinamis bila ada masjid di dalam area metropolitan tersebut (maksimal 35 km)
+      const nearbyPts = filteredMosques.filter(
+        (m) =>
+          typeof m.lat === 'number' &&
+          typeof m.lng === 'number' &&
+          calculateDistance(centerLat, centerLng, m.lat, m.lng) <= 50
+      );
+      if (nearbyPts.length > 0) {
+        let maxDist = 0;
+        for (const m of nearbyPts) {
+          const d = calculateDistance(centerLat, centerLng, m.lat!, m.lng!);
+          if (d > maxDist) maxDist = d;
+        }
+        computedRadius = Math.min(35, Math.max(12, maxDist * 1.15));
+      }
 
       return {
         lat: centerLat,
         lng: centerLng,
         radiusKm: computedRadius,
-        key: `city:${selectedCity.toLowerCase()}`,
+        key: `city:${cityKey}`,
       };
     }
 

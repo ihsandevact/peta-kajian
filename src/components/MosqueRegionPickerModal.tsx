@@ -135,8 +135,18 @@ export function doesMosqueMatchRegion(
   // Fallback pencocokan teks langsung untuk nama provinsi/kota
   const text = `${mosque.city || ''} ${mosque.province || ''} ${mosque.address || ''} ${mosque.name || ''}`.toLowerCase();
   const rName = region.name.toLowerCase().replace(/^(kota|kab\.|kabupaten)\s+/i, '').trim();
-  if (rName && text.includes(rName)) {
-    return true;
+
+  // Proteksi kata ambigu umum seperti Medan Satria di Bekasi / Medan Merdeka di Jakarta
+  if (rName === 'medan' && (text.includes('medan satria') || text.includes('medan merdeka'))) {
+    return false;
+  }
+
+  if (rName) {
+    const escaped = rName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
+    if (regex.test(text)) {
+      return true;
+    }
   }
 
   return false;
