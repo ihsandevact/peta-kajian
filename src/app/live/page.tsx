@@ -57,11 +57,16 @@ export default function LiveStreamingPage() {
   const [selectedEndedChannelId, setSelectedEndedChannelId] = useState<string>('all');
   const [selectedVideo, setSelectedVideo] = useState<WatchVideoData | null>(null);
 
-  // Status apakah video terpilih sedang diputar via floating mini player
-  const isMiniPlayerActive = isLivePlayerOpen && activeStream?.videoId === selectedVideo?.videoId;
+  // Status apakah floating mini player sedang aktif memutar siaran live
+  const isMiniPlayerActive = isLivePlayerOpen && Boolean(activeStream);
 
   // Deteksi reaktif layar mobile (< 640px)
-  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(false);
+  const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 640;
+    }
+    return false;
+  });
 
   useEffect(() => {
     const checkMobile = () => {
@@ -80,9 +85,12 @@ export default function LiveStreamingPage() {
     };
   }, [setIsDarkTheme]);
 
+  const isRestoringRef = useRef(false);
+
   // Listener event untuk mengembalikan video dari floating mini player ke player utama saat Maximize diklik
   useEffect(() => {
     const handleRestoreEvent = (e: Event) => {
+      isRestoringRef.current = true;
       const customEvt = e as CustomEvent<{
         videoId: string;
         title: string;
@@ -90,27 +98,51 @@ export default function LiveStreamingPage() {
         speakerName?: string;
       }>;
       if (customEvt.detail) {
-        setSelectedVideo((prev) => ({
-          videoId: customEvt.detail.videoId,
-          title: customEvt.detail.title,
-          channelName: customEvt.detail.channelName,
-          speakerName: customEvt.detail.speakerName,
-          avatarUrl: prev?.avatarUrl,
-          channelHandle: prev?.channelHandle,
-          isLive: prev?.isLive ?? true,
-        }));
+        if (!isMobileScreen && (typeof window === 'undefined' || window.innerWidth >= 640)) {
+          setSelectedVideo((prev) => ({
+            videoId: customEvt.detail.videoId,
+            title: customEvt.detail.title,
+            channelName: customEvt.detail.channelName,
+            speakerName: customEvt.detail.speakerName,
+            avatarUrl: prev?.avatarUrl,
+            channelHandle: prev?.channelHandle,
+            isLive: prev?.isLive ?? true,
+          }));
+        }
         closePlayer();
         if (typeof window !== 'undefined') {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
       }
+      setTimeout(() => {
+        isRestoringRef.current = false;
+      }, 500);
     };
 
     window.addEventListener('peta-kajian:restore-live-video', handleRestoreEvent);
     return () => {
       window.removeEventListener('peta-kajian:restore-live-video', handleRestoreEvent);
     };
-  }, [closePlayer]);
+  }, [closePlayer, isMobileScreen]);
+
+  // Pantau penutupan mini player di desktop: jika mini player ditutup dengan tombol X (bukan restore),
+  // pastikan selectedVideo di-reset agar player desktop tidak tiba-tiba unhide & autoplay
+  const prevMiniPlayerActiveRef = useRef(isMiniPlayerActive);
+  useEffect(() => {
+    if (prevMiniPlayerActiveRef.current && !isMiniPlayerActive) {
+      if (!isRestoringRef.current && !isMobileScreen) {
+        setSelectedVideo(null);
+      }
+    }
+    prevMiniPlayerActiveRef.current = isMiniPlayerActive;
+  }, [isMiniPlayerActive, isMobileScreen]);
+
+  // Jika berada di layar mobile, pastikan selectedVideo selalu null agar tidak ada background watch view
+  useEffect(() => {
+    if (isMobileScreen && selectedVideo) {
+      setSelectedVideo(null);
+    }
+  }, [isMobileScreen, selectedVideo]);
 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -362,8 +394,13 @@ export default function LiveStreamingPage() {
   }, [selectedEndedChannelId, endedChannelsList]);
 
   // Otomatis putar video live terkini di desktop saat halaman dimuat (Prioritas: Live -> Rekaman Terbaru)
+  const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
-    if (isMobileScreen || selectedVideo) return;
+    if (hasAutoSelectedRef.current || isMobileScreen || selectedVideo) return;
+    if (typeof window !== 'undefined' && window.innerWidth < 640) return;
+    if (liveChannels.length === 0 && endedStreams.length === 0 && upcomingStreams.length === 0) return;
+
+    hasAutoSelectedRef.current = true;
     const firstLive = liveChannels.find((c) => !!c.current_video_id);
     if (firstLive && firstLive.current_video_id) {
       setSelectedVideo({
@@ -539,7 +576,7 @@ export default function LiveStreamingPage() {
             endedStreams={endedStreams}
             currentUser={currentUser}
             onOpenStudyMode={handleOpenStudyNotes}
-            isMiniPlayerActive={isLivePlayerOpen && !!activeStream}
+            isMiniPlayerActive={isMiniPlayerActive}
             onRestoreFromMiniPlayer={() => closePlayer()}
             onSelectVideo={() => {
               if (isLivePlayerOpen) {
@@ -559,7 +596,8 @@ export default function LiveStreamingPage() {
       )}
 
       {/* TAMPILAN KATALOG / GRID (DESKTOP >= 640px) */}
-      <div className="hidden sm:flex flex-col flex-1">
+      {!isMobileScreen && (
+        <div className="hidden sm:flex flex-col flex-1">
         {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
         <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
@@ -1068,6 +1106,7 @@ export default function LiveStreamingPage() {
         )}
       </main>
       </div>
+      )}
 
       {/* MODAL AJAKAN LOGIN KHUSUS MODE BELAJAR DARI CARD LIVE */}
       <StudyLoginModal

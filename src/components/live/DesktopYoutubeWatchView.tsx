@@ -68,6 +68,24 @@ export default function DesktopYoutubeWatchView({
     setIsMuted(true);
   }, [currentVideo.videoId]);
 
+  // Cleanup iframe audio saat unmount
+  useEffect(() => {
+    return () => {
+      try {
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+            '*'
+          );
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+            '*'
+          );
+        }
+      } catch {}
+    };
+  }, []);
+
   // Helper picu playVideo & unMute
   const sendPlay = useCallback(() => {
     try {
@@ -207,7 +225,12 @@ export default function DesktopYoutubeWatchView({
                   <div className="relative z-10 pt-2 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={onRestoreFromMiniPlayer}
+                      onClick={() => {
+                        try {
+                          window.dispatchEvent(new CustomEvent('peta-kajian:stop-mini-player'));
+                        } catch {}
+                        onRestoreFromMiniPlayer();
+                      }}
                       className="px-4 py-2 rounded-full bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold inline-flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px]">fullscreen</span>
@@ -384,7 +407,29 @@ export default function DesktopYoutubeWatchView({
               {onPlayGlobalMiniPlayer && (
                 <button
                   type="button"
-                  onClick={() => onPlayGlobalMiniPlayer(currentVideo)}
+                  onClick={() => {
+                    try {
+                      if (iframeRef.current?.contentWindow) {
+                        iframeRef.current.contentWindow.postMessage(
+                          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+                          '*'
+                        );
+                        iframeRef.current.contentWindow.postMessage(
+                          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+                          '*'
+                        );
+                        iframeRef.current.contentWindow.postMessage(
+                          JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+                          '*'
+                        );
+                      }
+                      if (iframeRef.current) {
+                        iframeRef.current.src = 'about:blank';
+                      }
+                    } catch {}
+
+                    onPlayGlobalMiniPlayer(currentVideo);
+                  }}
                   className="h-9 px-3.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold inline-flex items-center gap-1.5 border border-surface-container-high/60 shadow-2xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
                   title="Pindahkan ke pemutar mengambang mini di pojok kanan bawah"
                 >

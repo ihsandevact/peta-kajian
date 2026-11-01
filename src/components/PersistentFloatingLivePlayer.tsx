@@ -76,6 +76,56 @@ export default function PersistentFloatingLivePlayer() {
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
+  const isShuttingDownRef = useRef(false);
+
+  // Helper untuk mematikan dan memutuskan streaming audio iframe seketika
+  const stopAndDestroyPlayer = useCallback(() => {
+    isShuttingDownRef.current = true;
+    try {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+          '*'
+        );
+      }
+      if (iframeRef.current) {
+        iframeRef.current.src = 'about:blank';
+      }
+    } catch {}
+  }, []);
+
+  // Reset status shutdown saat player dibuka dengan stream baru
+  useEffect(() => {
+    if (isOpen && activeStream) {
+      isShuttingDownRef.current = false;
+    }
+  }, [isOpen, activeStream?.videoId]);
+
+  // Listener event global untuk mematikan audio seketika jika closePlayer dipicu dari luar
+  useEffect(() => {
+    const handleGlobalStop = () => {
+      stopAndDestroyPlayer();
+    };
+    window.addEventListener('peta-kajian:stop-mini-player', handleGlobalStop);
+    return () => {
+      window.removeEventListener('peta-kajian:stop-mini-player', handleGlobalStop);
+    };
+  }, [stopAndDestroyPlayer]);
+
+  // Cleanup saat komponen unmount
+  useEffect(() => {
+    return () => {
+      stopAndDestroyPlayer();
+    };
+  }, [stopAndDestroyPlayer]);
 
   // Helper untuk membuka suara (unMute) & memastikan pemutaran video aktif
   const sendUnmuteMiniPlayer = useCallback(() => {
@@ -534,7 +584,7 @@ export default function PersistentFloatingLivePlayer() {
           }
 
           const playerState = data?.info?.playerState;
-          if (playerState === 5 || playerState === -1 || playerState === 2) {
+          if (!isShuttingDownRef.current && (playerState === 5 || playerState === -1)) {
             try {
               iframeRef.current?.contentWindow?.postMessage(
                 JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
@@ -589,6 +639,7 @@ export default function PersistentFloatingLivePlayer() {
     if (isPipRoute || !isOpen || !activeStream || isPipActive) return;
 
     const handleVisibilityResume = () => {
+      if (isShuttingDownRef.current) return;
       if (document.visibilityState === 'visible' || !document.hidden) {
         try {
           iframeRef.current?.contentWindow?.postMessage(
@@ -608,6 +659,7 @@ export default function PersistentFloatingLivePlayer() {
     };
 
     const handleFocusResume = () => {
+      if (isShuttingDownRef.current) return;
       try {
         iframeRef.current?.contentWindow?.postMessage(
           JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
@@ -820,6 +872,7 @@ export default function PersistentFloatingLivePlayer() {
 
   // Handler Tutup Pemutar & Tutup PiP jika terbuka
   const handleClosePlayer = useCallback(() => {
+    stopAndDestroyPlayer();
     try {
       if (pipWindowRef.current && !pipWindowRef.current.closed) {
         pipWindowRef.current.close();
@@ -831,11 +884,12 @@ export default function PersistentFloatingLivePlayer() {
       pipCheckIntervalRef.current = null;
     }
     closePlayer();
-  }, [closePlayer]);
+  }, [closePlayer, stopAndDestroyPlayer]);
 
   // Handler Pintar Maximize: Jika berada di halaman /live, kembalikan video ke pemutar atas (berlaku Desktop & Mobile)
   const handleSmartMaximize = useCallback(() => {
     if (isLiveRoute && activeStream) {
+      stopAndDestroyPlayer();
       window.dispatchEvent(
         new CustomEvent('peta-kajian:restore-live-video', {
           detail: {
@@ -851,10 +905,11 @@ export default function PersistentFloatingLivePlayer() {
       return;
     }
     expandToModal();
-  }, [isLiveRoute, activeStream, closePlayer, expandToModal]);
+  }, [isLiveRoute, activeStream, closePlayer, expandToModal, stopAndDestroyPlayer]);
 
   const handleSmartUnminimize = useCallback(() => {
     if (isLiveRoute && activeStream) {
+      stopAndDestroyPlayer();
       window.dispatchEvent(
         new CustomEvent('peta-kajian:restore-live-video', {
           detail: {
@@ -870,7 +925,7 @@ export default function PersistentFloatingLivePlayer() {
       return;
     }
     maximizePlayer();
-  }, [isLiveRoute, activeStream, closePlayer, maximizePlayer]);
+  }, [isLiveRoute, activeStream, closePlayer, maximizePlayer, stopAndDestroyPlayer]);
 
   if (isPipRoute || !isOpen || !activeStream) {
     return null;
@@ -1083,10 +1138,13 @@ export default function PersistentFloatingLivePlayer() {
                 </>
               )}
 
+              {/* Tombol Tutup Player (Dihide di mobile saat berada di halaman /live) */}
               <button
                 type="button"
                 onClick={handleClosePlayer}
-                className="w-7 h-7 rounded-full hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                className={`${
+                  isLiveRoute ? 'hidden md:flex' : 'flex'
+                } w-7 h-7 rounded-full hover:bg-surface-container text-outline hover:text-on-surface items-center justify-center transition-colors cursor-pointer`}
                 title="Tutup Player"
                 aria-label="Tutup Player"
               >
@@ -1143,11 +1201,13 @@ export default function PersistentFloatingLivePlayer() {
                 >
                   <span className="material-symbols-outlined text-[19px]">close_fullscreen</span>
                 </button>
-                {/* Tombol Tutup Pemutar */}
+                {/* Tombol Tutup Pemutar (Dihide di mobile saat berada di halaman /live) */}
                 <button
                   type="button"
                   onClick={handleClosePlayer}
-                  className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-red-500 transition-colors shrink-0 cursor-pointer"
+                  className={`${
+                    isLiveRoute ? 'hidden md:flex' : 'flex'
+                  } w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest items-center justify-center text-outline hover:text-red-500 transition-colors shrink-0 cursor-pointer`}
                   title="Tutup Pemutar"
                   aria-label="Tutup Pemutar"
                 >
@@ -1238,11 +1298,13 @@ export default function PersistentFloatingLivePlayer() {
                     </button>
                   )}
 
-                  {/* Tombol Tutup */}
+                  {/* Tombol Tutup (Dihide di mobile saat berada di halaman /live) */}
                   <button
                     type="button"
                     onClick={handleClosePlayer}
-                    className="w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    className={`${
+                      isLiveRoute ? 'hidden md:flex' : 'flex'
+                    } w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 items-center justify-center transition-colors cursor-pointer shrink-0`}
                     title="Tutup Pemutar"
                     aria-label="Tutup Pemutar"
                   >

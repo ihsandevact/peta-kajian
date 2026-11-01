@@ -171,6 +171,11 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   }, []);
 
   const closePlayer = useCallback(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('peta-kajian:stop-mini-player'));
+      }
+    } catch {}
     setIsOpen(false);
     setActiveStream(null);
     setIsPipActive(false);

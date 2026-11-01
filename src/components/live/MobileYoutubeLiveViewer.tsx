@@ -92,7 +92,6 @@ export default function MobileYoutubeLiveViewer({
 
   // State tampilan pemutar: 'expanded' (nempel di atas 16:9) vs 'minimized' (bar tipis di atas bottom nav)
   const [isPlayerMinimized, setIsPlayerMinimized] = useState<boolean>(false);
-  const [isMuted, setIsMuted] = useState<boolean>(true);
   const [playerError, setPlayerError] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'live' | 'upcoming' | 'ended'>(() => {
     const hasLive = liveChannels.some((c) => Boolean(c.current_video_id));
@@ -102,8 +101,12 @@ export default function MobileYoutubeLiveViewer({
   const [selectedChannelId, setSelectedChannelId] = useState<string>('all');
 
   // Sinkronisasi otomatis saat data siaran selesai dimuat (jika tidak ada live -> putar rekaman terbaru)
+  const hasAutoSelectedRef = useRef(false);
   useEffect(() => {
-    if (activeVideo) return;
+    if (hasAutoSelectedRef.current || activeVideo) return;
+    if (liveChannels.length === 0 && endedStreams.length === 0) return;
+
+    hasAutoSelectedRef.current = true;
     const firstLive = liveChannels.find((c) => Boolean(c.current_video_id));
     if (firstLive && firstLive.current_video_id) {
       setActiveVideo({
@@ -139,11 +142,44 @@ export default function MobileYoutubeLiveViewer({
   const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hasUserInteractedRef = useRef(false);
 
-  // Reset error state & mute saat video berganti
+  // Pantau setiap sentuhan / klik pengguna di halaman
+  useEffect(() => {
+    const markInteraction = () => {
+      hasUserInteractedRef.current = true;
+    };
+    window.addEventListener('pointerdown', markInteraction, { capture: true, passive: true });
+    window.addEventListener('touchstart', markInteraction, { capture: true, passive: true });
+    window.addEventListener('click', markInteraction, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener('pointerdown', markInteraction, { capture: true });
+      window.removeEventListener('touchstart', markInteraction, { capture: true });
+      window.removeEventListener('click', markInteraction, { capture: true });
+    };
+  }, []);
+
+  // Cleanup iframe audio saat unmount
+  useEffect(() => {
+    return () => {
+      try {
+        if (iframeRef.current?.contentWindow) {
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+            '*'
+          );
+          iframeRef.current.contentWindow.postMessage(
+            JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+            '*'
+          );
+        }
+      } catch {}
+    };
+  }, []);
+
+  // Reset error state saat video berganti
   useEffect(() => {
     setPlayerError(false);
-    setIsMuted(true);
   }, [activeVideo?.videoId]);
 
   // Handler interaksi iframe YouTube
@@ -158,14 +194,37 @@ export default function MobileYoutubeLiveViewer({
     } catch {}
   }, []);
 
+  const tryUnmute = useCallback(() => {
+    const hasGesture =
+      (typeof navigator !== 'undefined' && 'userActivation' in navigator
+        ? navigator.userActivation.hasBeenActive
+        : false) || hasUserInteractedRef.current;
+
+    // SELALU pastikan video tetap berputar (playVideo)
+    try {
+      sendIframeCommand('playVideo');
+    } catch {}
+
+    // Hanya lakukan unMute jika SUDAH ada interaksi pengguna (user gesture)
+    // Hal ini krusial: browser mobile (Chrome/Safari) akan mem-PAUSE video jika unMute dipanggil tanpa user gesture saat refresh!
+    if (hasGesture) {
+      setTimeout(() => {
+        try {
+          sendIframeCommand('unMute');
+          sendIframeCommand('setVolume', [100]);
+          sendIframeCommand('playVideo');
+        } catch {}
+      }, 100);
+    }
+  }, [sendIframeCommand]);
+
   const handleUnmute = useCallback(() => {
     sendIframeCommand('unMute');
     sendIframeCommand('setVolume', [100]);
     sendIframeCommand('playVideo');
-    setIsMuted(false);
   }, [sendIframeCommand]);
 
-  // Pantau pesan event dari YouTube iframe (ready, muted, error)
+  // Pantau pesan event dari YouTube iframe (ready, muted, error, playerState)
   useEffect(() => {
     if (!activeVideo) return;
 
@@ -186,21 +245,56 @@ export default function MobileYoutubeLiveViewer({
         }
 
         if (data?.event === 'onReady') {
-          sendIframeCommand('playVideo');
+          tryUnmute();
         }
-        if (typeof data?.info?.muted === 'boolean') {
-          setIsMuted(data.info.muted);
+
+        const playerState = data?.info?.playerState;
+        // Jika browser mencoba mem-pause autoplay saat baru di-refresh (playerState 2 = PAUSED),
+        // otomatis kirim playVideo kembali agar siaran langsung tetap berputar mulus!
+        if (playerState === 2 || playerState === -1 || playerState === 5) {
+          if (!isMiniPlayerActive) {
+            try {
+              sendIframeCommand('playVideo');
+            } catch {}
+          }
         }
       } catch {}
     };
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [activeVideo, sendIframeCommand]);
+  }, [activeVideo, sendIframeCommand, tryUnmute, isMiniPlayerActive]);
+
+  // Listener gestur interaksi pertama (sentuhan / scroll) agar audio langsung aktif otomatis jika dibatasi browser
+  useEffect(() => {
+    const handleFirstUserInteraction = () => {
+      try {
+        sendIframeCommand('unMute');
+        sendIframeCommand('setVolume', [100]);
+        sendIframeCommand('playVideo');
+      } catch {}
+      window.removeEventListener('pointerdown', handleFirstUserInteraction);
+      window.removeEventListener('touchstart', handleFirstUserInteraction);
+      window.removeEventListener('scroll', handleFirstUserInteraction);
+    };
+
+    window.addEventListener('pointerdown', handleFirstUserInteraction, { passive: true });
+    window.addEventListener('touchstart', handleFirstUserInteraction, { passive: true });
+    window.addEventListener('scroll', handleFirstUserInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstUserInteraction);
+      window.removeEventListener('touchstart', handleFirstUserInteraction);
+      window.removeEventListener('scroll', handleFirstUserInteraction);
+    };
+  }, [sendIframeCommand]);
+
+  const isRestoringRef = useRef(false);
 
   // Listener untuk restore video dari floating mini player saat tombol maximize diklik di halaman live
   useEffect(() => {
     const handleRestoreEvent = (e: Event) => {
+      isRestoringRef.current = true;
       const customEvt = e as CustomEvent<{
         videoId: string;
         title: string;
@@ -216,14 +310,61 @@ export default function MobileYoutubeLiveViewer({
         });
         setIsPlayerMinimized(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Otomatis aktifkan audio seketika saat restore ke player utama
+        setTimeout(() => {
+          try {
+            sendIframeCommand('unMute');
+            sendIframeCommand('setVolume', [100]);
+            sendIframeCommand('playVideo');
+          } catch {}
+        }, 150);
+        setTimeout(() => {
+          try {
+            sendIframeCommand('unMute');
+            sendIframeCommand('setVolume', [100]);
+            sendIframeCommand('playVideo');
+          } catch {}
+        }, 500);
       }
+      setTimeout(() => {
+        isRestoringRef.current = false;
+      }, 500);
     };
 
     window.addEventListener('peta-kajian:restore-live-video', handleRestoreEvent);
     return () => {
       window.removeEventListener('peta-kajian:restore-live-video', handleRestoreEvent);
     };
-  }, []);
+  }, [sendIframeCommand]);
+
+  // Pantau transisi isMiniPlayerActive: Jika mini player ditutup dengan tombol X (bukan restore maximize),
+  // pastikan activeVideo dihentikan / di-reset ke null agar video tidak tiba-tiba berbunyi di background
+  const prevMiniPlayerActiveRef = useRef(isMiniPlayerActive);
+  useEffect(() => {
+    if (prevMiniPlayerActiveRef.current && !isMiniPlayerActive) {
+      if (!isRestoringRef.current) {
+        // Mini player ditutup pengguna (tombol X), bukan dikembalikan (restore)
+        try {
+          if (iframeRef.current?.contentWindow) {
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+              '*'
+            );
+            iframeRef.current.contentWindow.postMessage(
+              JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+              '*'
+            );
+          }
+          if (iframeRef.current) {
+            iframeRef.current.src = 'about:blank';
+          }
+        } catch {}
+        setActiveVideo(null);
+      }
+    }
+    prevMiniPlayerActiveRef.current = isMiniPlayerActive;
+  }, [isMiniPlayerActive]);
 
   // Filter video berdasarkan pencarian lokal & filter saluran
   const q = searchQuery.toLowerCase().trim();
@@ -332,6 +473,13 @@ export default function MobileYoutubeLiveViewer({
       onSelectVideo(video);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      try {
+        sendIframeCommand('unMute');
+        sendIframeCommand('setVolume', [100]);
+        sendIframeCommand('playVideo');
+      } catch {}
+    }, 250);
   };
 
   // Handler native share
@@ -383,7 +531,19 @@ export default function MobileYoutubeLiveViewer({
                   <div className="relative z-10 pt-1 flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={onRestoreFromMiniPlayer}
+                      onClick={() => {
+                        try {
+                          window.dispatchEvent(new CustomEvent('peta-kajian:stop-mini-player'));
+                        } catch {}
+                        onRestoreFromMiniPlayer();
+                        setTimeout(() => {
+                          try {
+                            sendIframeCommand('unMute');
+                            sendIframeCommand('setVolume', [100]);
+                            sendIframeCommand('playVideo');
+                          } catch {}
+                        }, 250);
+                      }}
                       className="px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary/90 text-on-primary text-[11px] font-bold inline-flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[14px]">fullscreen</span>
@@ -421,11 +581,22 @@ export default function MobileYoutubeLiveViewer({
             ) : (
               <iframe
                 ref={iframeRef}
+                key={activeVideo.videoId}
                 src={`https://www.youtube.com/embed/${activeVideo.videoId}?autoplay=1&mute=1&enablejsapi=1&playsinline=1&rel=0`}
                 title={activeVideo.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
                 className="w-full h-full border-0"
+                onLoad={() => {
+                  try {
+                    iframeRef.current?.contentWindow?.postMessage(
+                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
+                      '*'
+                    );
+                    setTimeout(tryUnmute, 300);
+                  } catch {}
+                }}
               />
             )}
 
@@ -437,6 +608,26 @@ export default function MobileYoutubeLiveViewer({
                   onClick={(e) => {
                     e.stopPropagation();
                     if (onPlayGlobalMiniPlayer && activeVideo) {
+                      try {
+                        if (iframeRef.current?.contentWindow) {
+                          iframeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+                            '*'
+                          );
+                          iframeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+                            '*'
+                          );
+                          iframeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+                            '*'
+                          );
+                        }
+                        if (iframeRef.current) {
+                          iframeRef.current.src = 'about:blank';
+                        }
+                      } catch {}
+
                       onPlayGlobalMiniPlayer({
                         videoId: activeVideo.videoId,
                         title: activeVideo.title,
@@ -450,26 +641,6 @@ export default function MobileYoutubeLiveViewer({
                   aria-label="Kecilkan ke Mini Player"
                 >
                   <span className="material-symbols-outlined text-[20px]">expand_more</span>
-                </button>
-              </div>
-            )}
-
-            {/* Tap-to-Unmute Overlay Button */}
-            {isMuted && !playerError && !isMiniPlayerActive && (
-              <div
-                onClick={handleUnmute}
-                className="absolute bottom-3 left-3 z-20 cursor-pointer select-none animate-in fade-in duration-200"
-              >
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleUnmute();
-                  }}
-                  className="px-3 py-1.5 rounded-full bg-black/80 hover:bg-black/95 backdrop-blur-md text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xl border border-white/20 active:scale-95 transition-all cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[15px] text-amber-400 animate-pulse">volume_off</span>
-                  <span>Ketuk untuk Suara</span>
                 </button>
               </div>
             )}
