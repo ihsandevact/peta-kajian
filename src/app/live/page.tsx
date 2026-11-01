@@ -135,7 +135,8 @@ export default function LiveStreamingPage() {
       });
       return;
     }
-    openStudyMode(sessionData);
+    // Di halaman live desktop, buka catatan tanpa memunculkan mini player
+    openStudyMode(sessionData, { autoPlayMiniPlayer: false });
   };
 
   // Infinite Scroll state untuk tab Rekaman Selesai (Ended Streams)
@@ -536,7 +537,10 @@ export default function LiveStreamingPage() {
             liveChannels={liveChannels}
             upcomingStreams={upcomingStreams}
             endedStreams={endedStreams}
+            currentUser={currentUser}
             onOpenStudyMode={handleOpenStudyNotes}
+            isMiniPlayerActive={isLivePlayerOpen && !!activeStream}
+            onRestoreFromMiniPlayer={() => closePlayer()}
             onSelectVideo={() => {
               if (isLivePlayerOpen) {
                 closePlayer();
@@ -674,9 +678,11 @@ export default function LiveStreamingPage() {
              ======================================================== */
           <DesktopYoutubeWatchView
             currentVideo={selectedVideo}
-            liveChannels={liveChannels}
-            upcomingStreams={upcomingStreams}
-            endedStreams={endedStreams}
+            liveChannels={filteredLiveChannels}
+            upcomingStreams={filteredUpcomingStreams}
+            endedStreams={filteredEndedStreams}
+            searchQuery={searchQuery}
+            onClearSearch={() => setSearchQuery('')}
             isMiniPlayerActive={isMiniPlayerActive}
             onRestoreFromMiniPlayer={() => closePlayer()}
             onSelectVideo={(v) => {

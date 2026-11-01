@@ -41,6 +41,9 @@ interface MobileYoutubeLiveViewerProps {
   }) => void;
   onSelectVideo?: (stream: PlayingVideoInfo) => void;
   initialVideo?: PlayingVideoInfo | null;
+  isMiniPlayerActive?: boolean;
+  onRestoreFromMiniPlayer?: () => void;
+  currentUser?: any;
 }
 
 export default function MobileYoutubeLiveViewer({
@@ -51,6 +54,9 @@ export default function MobileYoutubeLiveViewer({
   onPlayGlobalMiniPlayer,
   onSelectVideo,
   initialVideo,
+  isMiniPlayerActive = false,
+  onRestoreFromMiniPlayer,
+  currentUser,
 }: MobileYoutubeLiveViewerProps) {
   // Video yang saat ini aktif diputar di Top Player (Prioritas: Live -> Rekaman Terbaru)
   const [activeVideo, setActiveVideo] = useState<PlayingVideoInfo | null>(() => {
@@ -356,7 +362,37 @@ export default function MobileYoutubeLiveViewer({
         <div className="sticky top-0 z-30 w-full bg-black shadow-lg">
           {/* 16:9 Video Box */}
           <div className="relative aspect-video w-full bg-neutral-950 overflow-hidden">
-            {playerError ? (
+            {isMiniPlayerActive ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-neutral-900 via-neutral-950 to-black text-center select-none space-y-2 relative overflow-hidden">
+                <div
+                  className="absolute inset-0 bg-cover bg-center opacity-15 filter blur-lg scale-110 pointer-events-none"
+                  style={{ backgroundImage: `url(https://i.ytimg.com/vi/${activeVideo.videoId}/hqdefault.jpg)` }}
+                />
+                <div className="relative z-10 w-11 h-11 rounded-2xl bg-red-600/15 text-red-500 flex items-center justify-center border border-red-500/25 shadow-lg animate-pulse">
+                  <span className="material-symbols-outlined text-[24px]">picture_in_picture_alt</span>
+                </div>
+                <div className="relative z-10 space-y-0.5 max-w-xs">
+                  <p className="text-xs font-extrabold text-white">
+                    Sedang Diputar di Mini Player
+                  </p>
+                  <p className="text-[10px] text-neutral-300 leading-snug">
+                    Video utama dijeda agar audio tidak bertumpuk.
+                  </p>
+                </div>
+                {onRestoreFromMiniPlayer && (
+                  <div className="relative z-10 pt-1 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onRestoreFromMiniPlayer}
+                      className="px-3.5 py-1.5 rounded-full bg-primary hover:bg-primary/90 text-on-primary text-[11px] font-bold inline-flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">fullscreen</span>
+                      <span>Kembalikan Pemutar ke Sini</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : playerError ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-gradient-to-b from-neutral-900 to-black text-center text-white space-y-2">
                 <span className="material-symbols-outlined text-[24px] text-amber-400">lock</span>
                 <p className="text-xs font-bold">Siaran Tidak Dapat Diputar di Aplikasi</p>
@@ -394,33 +430,32 @@ export default function MobileYoutubeLiveViewer({
             )}
 
             {/* Quick Header Overlay Button (Minimize / Floating Mini Player) */}
-            <div className="absolute top-2 left-2 pointer-events-none z-20">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onPlayGlobalMiniPlayer && activeVideo) {
-                    onPlayGlobalMiniPlayer({
-                      videoId: activeVideo.videoId,
-                      title: activeVideo.title,
-                      channelName: activeVideo.channelName,
-                      speakerName: activeVideo.speakerName,
-                    });
-                    setActiveVideo(null);
-                  } else {
-                    setIsPlayerMinimized(true);
-                  }
-                }}
-                className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center pointer-events-auto hover:bg-black/80 transition-all shadow-md active:scale-95 cursor-pointer"
-                title="Putar di Floating Mini Player"
-                aria-label="Kecilkan ke Mini Player"
-              >
-                <span className="material-symbols-outlined text-[20px]">expand_more</span>
-              </button>
-            </div>
+            {!isMiniPlayerActive && (
+              <div className="absolute top-2 left-2 pointer-events-none z-20">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onPlayGlobalMiniPlayer && activeVideo) {
+                      onPlayGlobalMiniPlayer({
+                        videoId: activeVideo.videoId,
+                        title: activeVideo.title,
+                        channelName: activeVideo.channelName,
+                        speakerName: activeVideo.speakerName,
+                      });
+                    }
+                  }}
+                  className="w-8 h-8 rounded-full bg-black/60 backdrop-blur-md text-white flex items-center justify-center pointer-events-auto hover:bg-black/80 transition-all shadow-md active:scale-95 cursor-pointer"
+                  title="Putar di Floating Mini Player"
+                  aria-label="Kecilkan ke Mini Player"
+                >
+                  <span className="material-symbols-outlined text-[20px]">expand_more</span>
+                </button>
+              </div>
+            )}
 
             {/* Tap-to-Unmute Overlay Button */}
-            {isMuted && !playerError && (
+            {isMuted && !playerError && !isMiniPlayerActive && (
               <div
                 onClick={handleUnmute}
                 className="absolute bottom-3 left-3 z-20 cursor-pointer select-none animate-in fade-in duration-200"
@@ -526,17 +561,18 @@ export default function MobileYoutubeLiveViewer({
               {onOpenStudyMode && (
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    window.scrollTo({ top: 0, behavior: 'instant' });
                     onOpenStudyMode({
                       videoId: activeVideo.videoId,
                       title: activeVideo.title,
                       channelName: activeVideo.channelName,
                       speakerName: activeVideo.speakerName,
                       sessionId: activeVideo.sessionId,
-                    })
-                  }
+                    });
+                  }}
                   className="w-9 h-9 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs active:scale-95 transition-all cursor-pointer"
-                  title="Catat Faidah Kajian (Mode Belajar)"
+                  title="Catat Faidah Kajian"
                   aria-label="Catat Faidah Kajian"
                 >
                   <span className="material-symbols-outlined text-[19px]">edit_note</span>
@@ -611,7 +647,7 @@ export default function MobileYoutubeLiveViewer({
       )}
 
       {/* ====================================================================== */}
-      {/* 3. MULTITASKING SCROLLABLE FEED (DAFTAR KAJIAN LAIN DI BAWAH PLAYER)  */}
+      {/* 3. SCROLLABLE FEED (SEARCH, FILTER & LIST VIDEO)                       */}
       {/* ====================================================================== */}
       <div className="flex-1 flex flex-col p-3.5 space-y-3 pb-[100px]">
         {/* Search Bar Mobile */}

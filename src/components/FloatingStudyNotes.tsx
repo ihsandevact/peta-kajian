@@ -106,7 +106,9 @@ export default function FloatingStudyNotes() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Status apakah pemutar video sedang memutar video dari sesi catatan ini
-  const isCurrentVideoPlaying = isPlayerOpen && activeStream?.videoId === studySession?.videoId;
+  const isLivePage = pathname === '/live' || pathname?.startsWith('/live');
+  const isCurrentVideoPlaying =
+    (isPlayerOpen && activeStream?.videoId === studySession?.videoId) || isLivePage;
 
   // Apakah sedang dalam mode Mobile Split Atas-Bawah ala YouTube (Selalu aktif di mobile saat tidak diminimize)
   const isMobileSplitMode = isMobileViewport && !isStudyNotesMinimized;
@@ -821,7 +823,7 @@ export default function FloatingStudyNotes() {
 
   // Hitung posisi top untuk Mobile Split Mode (di bawah video 16:9 + bar kontrol 38px)
   const isVideoDockedOnTopMobile =
-    isMobileSplitMode && isPlayerOpen && !isPlayerMinimized;
+    isMobileSplitMode && ((isPlayerOpen && !isPlayerMinimized) || isLivePage);
 
   const containerStyle: React.CSSProperties = isStudyNotesMinimized
     ? {
@@ -1061,7 +1063,7 @@ export default function FloatingStudyNotes() {
                     <span className="material-symbols-outlined text-[13px]">play_circle</span>
                     <span className="hidden xs:inline">Video</span>
                   </button>
-                ) : isMobileSplitMode ? (
+                ) : isMobileSplitMode && !isLivePage ? (
                   <button
                     type="button"
                     onClick={minimizePlayer}

@@ -33,6 +33,8 @@ interface DesktopYoutubeWatchViewProps {
   onShare?: (video: WatchVideoData) => void;
   isMiniPlayerActive?: boolean;
   onRestoreFromMiniPlayer?: () => void;
+  searchQuery?: string;
+  onClearSearch?: () => void;
 }
 
 export default function DesktopYoutubeWatchView({
@@ -47,15 +49,16 @@ export default function DesktopYoutubeWatchView({
   onShare,
   isMiniPlayerActive = false,
   onRestoreFromMiniPlayer,
+  searchQuery = '',
+  onClearSearch,
 }: DesktopYoutubeWatchViewProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isMuted, setIsMuted] = useState(true);
   const [playerError, setPlayerError] = useState(false);
   const [sidebarFilter, setSidebarFilter] = useState<'live' | 'upcoming' | 'ended'>(() => {
-    const hasOtherLive = liveChannels.some(
-      (c) => Boolean(c.current_video_id) && c.current_video_id !== currentVideo.videoId
-    );
-    return hasOtherLive ? 'live' : 'ended';
+    if (liveChannels.length > 0) return 'live';
+    if (endedStreams.length > 0) return 'ended';
+    return 'upcoming';
   });
   const [isDescExpanded, setIsDescExpanded] = useState(false);
 
@@ -104,7 +107,7 @@ export default function DesktopYoutubeWatchView({
     // 1. Sedang Live
     if (sidebarFilter === 'live') {
       liveChannels.forEach((c) => {
-        if (c.current_video_id && c.current_video_id !== currentVideo.videoId) {
+        if (c.current_video_id) {
           list.push({
             videoId: c.current_video_id,
             title: c.current_video_title || `Live Streaming ${c.channel_name}`,
@@ -122,7 +125,7 @@ export default function DesktopYoutubeWatchView({
     // 2. Terjadwal Mendatang
     if (sidebarFilter === 'upcoming') {
       upcomingStreams.forEach((u) => {
-        if (u.videoId && u.videoId !== currentVideo.videoId) {
+        if (u.videoId) {
           list.push({
             videoId: u.videoId,
             title: u.title,
@@ -140,7 +143,7 @@ export default function DesktopYoutubeWatchView({
     // 3. Rekaman Selesai
     if (sidebarFilter === 'ended') {
       endedStreams.forEach((e) => {
-        if (e.videoId && e.videoId !== currentVideo.videoId) {
+        if (e.videoId) {
           list.push({
             videoId: e.videoId,
             title: e.title,
@@ -155,8 +158,19 @@ export default function DesktopYoutubeWatchView({
       });
     }
 
+    // Filter berdasarkan kata kunci pencarian (searchQuery)
+    const q = searchQuery.toLowerCase().trim();
+    if (q) {
+      return list.filter(
+        (v) =>
+          v.title.toLowerCase().includes(q) ||
+          v.channelName.toLowerCase().includes(q) ||
+          (v.speakerName && v.speakerName.toLowerCase().includes(q))
+      );
+    }
+
     return list;
-  }, [liveChannels, upcomingStreams, endedStreams, sidebarFilter, currentVideo.videoId]);
+  }, [liveChannels, upcomingStreams, endedStreams, sidebarFilter, currentVideo.videoId, searchQuery]);
 
   return (
     <div className="w-full font-geist">
@@ -407,10 +421,13 @@ export default function DesktopYoutubeWatchView({
           </div>
 
           {/* 4. KOTAK DESKRIPSI (YOUTUBE DESCRIPTION BOX) */}
-          <div className="mt-3.5 p-3.5 sm:p-4 rounded-2xl bg-surface-container-low border border-surface-container-high/60 text-xs text-on-surface-variant space-y-2">
+          <div
+            onClick={() => setIsDescExpanded((prev) => !prev)}
+            className="mt-3.5 p-3.5 sm:p-4 rounded-xl bg-surface-container-low hover:bg-surface-container border border-surface-container-high/40 text-xs text-on-surface-variant space-y-2 cursor-pointer transition-colors"
+          >
             <div className="flex items-center gap-2 font-bold text-on-surface text-[11px] sm:text-xs">
               {currentVideo.isLive ? (
-                <span className="inline-flex items-center gap-1 text-red-600 font-extrabold">
+                <span className="inline-flex items-center gap-1.5 text-red-600 font-extrabold">
                   <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
                   <span>Sedang Tayang Langsung</span>
                 </span>
@@ -430,10 +447,9 @@ export default function DesktopYoutubeWatchView({
 
             <button
               type="button"
-              onClick={() => setIsDescExpanded((prev) => !prev)}
-              className="font-bold text-on-surface hover:text-primary transition-colors cursor-pointer text-[11px] pt-1 block"
+              className="font-bold text-on-surface hover:text-primary transition-colors cursor-pointer text-[11px] pt-0.5 block"
             >
-              {isDescExpanded ? 'Tampilkan Lebih Sedikit' : 'Selengkapnya...'}
+              {isDescExpanded ? 'Tampilkan Lebih Sedikit' : '...selengkapnya'}
             </button>
           </div>
         </div>
@@ -446,27 +462,49 @@ export default function DesktopYoutubeWatchView({
           <div className="flex items-center justify-between gap-1 pb-1">
             <h2 className="font-extrabold text-sm text-on-surface flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[17px] text-red-600">video_library</span>
-              <span>Kajian Lainnya</span>
+              <span>Kajian Terkait</span>
             </h2>
             <span className="text-[11px] text-outline font-semibold">
               {relatedVideos.length} Video
             </span>
           </div>
 
-          {/* Filter Chips Horizontal Mini */}
+          {/* Indikator Pencarian Aktif */}
+          {searchQuery && (
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-surface-container border border-surface-container-high text-xs animate-in fade-in duration-200">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="material-symbols-outlined text-[15px] text-primary shrink-0">search</span>
+                <span className="truncate text-on-surface-variant">
+                  Hasil: <strong className="text-on-surface font-bold">"{searchQuery}"</strong>
+                </span>
+              </div>
+              {onClearSearch && (
+                <button
+                  type="button"
+                  onClick={onClearSearch}
+                  className="text-[11px] text-primary hover:underline font-bold ml-2 shrink-0 cursor-pointer"
+                  title="Hapus filter pencarian"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Filter Chips Horizontal Mini Khas YouTube */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
             {[
-              { id: 'live', label: '🔴 Live' },
-              { id: 'upcoming', label: '⏰ Mendatang' },
-              { id: 'ended', label: '📼 Rekaman' },
+              { id: 'live', label: `🔴 Live (${liveChannels.length})` },
+              { id: 'upcoming', label: `⏰ Mendatang (${upcomingStreams.length})` },
+              { id: 'ended', label: `📼 Rekaman (${endedStreams.length})` },
             ].map((chip) => (
               <button
                 key={chip.id}
                 type="button"
                 onClick={() => setSidebarFilter(chip.id as any)}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
                   sidebarFilter === chip.id
-                    ? 'bg-on-surface text-surface'
+                    ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-xs'
                     : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
                 }`}
               >
@@ -478,19 +516,61 @@ export default function DesktopYoutubeWatchView({
           {/* List Kartu Compact Khas YouTube Sidebar */}
           <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
             {relatedVideos.length === 0 ? (
-              <div className="p-6 text-center rounded-2xl bg-surface-container-low border border-surface-container-high/60 text-outline text-xs space-y-1">
-                <span className="material-symbols-outlined text-[24px]">videocam_off</span>
-                <p>Tidak ada siaran lain dalam kategori ini.</p>
+              <div className="p-6 text-center rounded-2xl bg-surface-container-low border border-surface-container-high/60 text-outline text-xs space-y-2">
+                <span className="material-symbols-outlined text-[28px] text-on-surface-variant">
+                  {searchQuery ? 'search_off' : 'videocam_off'}
+                </span>
+                <p className="font-bold text-on-surface">
+                  {searchQuery ? 'Tidak Ada Kajian yang Cocok' : 'Belum Ada Siaran dalam Kategori Ini'}
+                </p>
+                <p className="text-[11px] text-on-surface-variant max-w-xs mx-auto">
+                  {searchQuery
+                    ? `Tidak ditemukan kajian untuk "${searchQuery}". Silakan coba kata kunci ustadz, saluran, atau judul lain.`
+                    : sidebarFilter === 'live'
+                    ? 'Saat ini belum ada saluran yang sedang menyiarkan kajian langsung. Silakan jelajahi tab Rekaman.'
+                    : 'Belum ada siaran kajian dakwah pada filter yang dipilih.'}
+                </p>
+                {sidebarFilter === 'live' && !searchQuery && endedStreams.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSidebarFilter('ended')}
+                    className="mt-2 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary cursor-pointer inline-flex items-center gap-1 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">video_library</span>
+                    <span>Lihat Rekaman Kajian</span>
+                  </button>
+                )}
+                {searchQuery && onClearSearch && (
+                  <button
+                    type="button"
+                    onClick={onClearSearch}
+                    className="mt-1 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary cursor-pointer inline-flex items-center gap-1"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">refresh</span>
+                    <span>Reset Pencarian</span>
+                  </button>
+                )}
               </div>
             ) : (
               relatedVideos.map((video) => {
                 const posterUrl = `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
+                const isPlaying = video.videoId === currentVideo.videoId;
 
                 return (
                   <div
                     key={video.videoId}
-                    onClick={() => onSelectVideo(video)}
-                    className="flex items-start gap-2.5 p-1.5 rounded-xl hover:bg-surface-container-low cursor-pointer transition-colors group select-none"
+                    onClick={() => {
+                      if (!isPlaying) {
+                        onSelectVideo(video);
+                      } else {
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }
+                    }}
+                    className={`flex items-start gap-2.5 p-2 rounded-xl transition-all select-none ${
+                      isPlaying
+                        ? 'bg-red-500/10 dark:bg-red-500/15 border border-red-500/35 shadow-xs cursor-default'
+                        : 'hover:bg-surface-container-low cursor-pointer border border-transparent'
+                    }`}
                   >
                     {/* Thumbnail 16:9 Compact */}
                     <div className="w-36 sm:w-40 aspect-video rounded-xl overflow-hidden bg-surface-container shrink-0 relative shadow-2xs">
@@ -498,30 +578,48 @@ export default function DesktopYoutubeWatchView({
                         src={posterUrl}
                         alt={video.title}
                         loading="lazy"
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className={`w-full h-full object-cover transition-transform duration-300 ${
+                          isPlaying ? '' : 'group-hover:scale-105'
+                        }`}
                         onError={(e) => {
                           (e.target as HTMLElement).style.display = 'none';
                         }}
                       />
 
-                      {/* Badge Status */}
-                      <div className="absolute bottom-1 right-1 pointer-events-none">
-                        {video.isLive ? (
-                          <span className="px-1.5 py-0.2 rounded bg-red-600 text-white text-[9px] font-black uppercase tracking-wider shadow">
-                            LIVE
-                          </span>
-                        ) : video.timeText ? (
-                          <span className="px-1.5 py-0.2 rounded bg-black/80 text-white text-[9px] font-semibold shadow">
-                            {video.timeText}
-                          </span>
-                        ) : null}
-                      </div>
+                      {/* Equalizer overlay jika video sedang diputar */}
+                      {isPlaying ? (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white">
+                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/80 border border-red-500/40 text-[10px] font-bold text-red-500 shadow-md">
+                            <span className="material-symbols-outlined text-[14px] animate-pulse">
+                              equalizer
+                            </span>
+                            <span className="text-white text-[9px]">Sedang Diputar</span>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Badge Status (LIVE / Waktu) */
+                        <div className="absolute bottom-1 right-1 pointer-events-none">
+                          {video.isLive ? (
+                            <span className="px-1.5 py-0.2 rounded bg-red-600 text-white text-[9px] font-black uppercase tracking-wider shadow">
+                              LIVE
+                            </span>
+                          ) : video.timeText ? (
+                            <span className="px-1.5 py-0.2 rounded bg-black/80 text-white text-[9px] font-semibold shadow">
+                              {video.timeText}
+                            </span>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
 
                     {/* Informasi Detail Teks */}
                     <div className="flex-1 min-w-0 py-0.5">
                       <h4
-                        className="font-bold text-xs text-on-surface line-clamp-2 leading-snug group-hover:text-red-600 transition-colors"
+                        className={`font-bold text-xs line-clamp-2 leading-snug transition-colors ${
+                          isPlaying
+                            ? 'text-red-600 dark:text-red-400 font-extrabold'
+                            : 'text-on-surface hover:text-red-600'
+                        }`}
                         title={video.title}
                       >
                         {video.title}
@@ -534,6 +632,12 @@ export default function DesktopYoutubeWatchView({
                         <p className="text-[10px] text-outline font-medium truncate mt-0.5">
                           {video.speakerName}
                         </p>
+                      )}
+                      {isPlaying && (
+                        <div className="inline-flex items-center gap-1 text-[10px] font-extrabold text-red-600 dark:text-red-400 mt-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
+                          <span>Sedang Ditonton</span>
+                        </div>
                       )}
                     </div>
                   </div>

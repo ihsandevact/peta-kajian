@@ -90,7 +90,7 @@ interface LivePlayerContextType {
   studyLayoutMode: StudyLayoutMode;
   setStudyLayoutMode: (mode: StudyLayoutMode) => void;
   toggleStudyLayoutMode: () => void;
-  openStudyMode: (session: ActiveStudySession) => void;
+  openStudyMode: (session: ActiveStudySession, options?: { autoPlayMiniPlayer?: boolean }) => void;
   closeStudyMode: () => void;
   closeStudyNotes: () => void;
   toggleMinimizeStudyNotes: () => void;
@@ -231,7 +231,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     });
   }, []);
 
-  const openStudyMode = useCallback((session: ActiveStudySession) => {
+  const openStudyMode = useCallback((session: ActiveStudySession, options?: { autoPlayMiniPlayer?: boolean }) => {
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
     if (!FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES && isMobile) {
       playStream({
@@ -256,22 +256,26 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       channelName: session.channelName || '',
     };
 
-    // Otomatis nyalakan floating video player jika belum memutar video ini
-    setActiveStream((current) => {
-      if (!current || current.videoId !== session.videoId) {
-        return streamData;
-      }
-      return current;
-    });
-    setIsOpen(true);
+    // Nyalakan floating mini video player HANYA jika autoPlayMiniPlayer !== false
+    // (default true untuk tempat lain seperti peta/beranda, tetapi false saat di live watch view)
+    const shouldOpenMiniPlayer = options?.autoPlayMiniPlayer ?? true;
+    if (shouldOpenMiniPlayer) {
+      setActiveStream((current) => {
+        if (!current || current.videoId !== session.videoId) {
+          return streamData;
+        }
+        return current;
+      });
+      setIsOpen(true);
+    }
 
     saveSessionToStorage({
       studySession: session,
       isStudyNotesOpen: true,
       isStudyNotesMinimized: false,
-      isOpen: true,
+      isOpen: shouldOpenMiniPlayer ? true : undefined,
       isMinimized: false,
-      activeStream: streamData,
+      activeStream: shouldOpenMiniPlayer ? streamData : undefined,
     });
   }, [playStream]);
 
