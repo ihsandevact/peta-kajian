@@ -23,3 +23,15 @@ _Avoid_: Real-time event, online meeting
 **Masjid Mitra / Venue**:
 Titik fisik tempat diselenggarakannya kajian tatap muka (offline atau hybrid), dilengkapi koordinat geospasial dan informasi fasilitas.
 _Avoid_: Lokasi, tempat, point of interest (POI)
+
+**Mode Pemutar Siaran (Live Player Presentation Mode)**:
+Status tampilan diskrit (`closed`, `floating`, `minimized`, `modal`, `pip`) yang dikelola secara deterministik oleh mesin status pemutar siaran.
+_Avoid_: Player state boolean flags, visual toggle
+
+**Pengendali Siaran (Live Stream Presentation Controller)**:
+Modul mesin status penentu siklus hidup pemutaran siaran langsung, persistence sesi, dan adapter perintah iframe YouTube.
+_Avoid_: Video player service, stream manager
+
+**Catatan Faedah (Study Notes Session)**:
+Konteks pencatatan faedah ilmu dan sketsa canvas yang terikat pada suatu kajian atau video siaran langsung.
+_Avoid_: Note widget, sticky pad

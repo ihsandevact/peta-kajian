@@ -9,6 +9,14 @@ import type {
 import { formatUpcomingTime, formatEndedTime } from '@/lib/services/youtubeTracker';
 import { YoutubeCompactCardSkeleton } from '@/components/live/EndedStreamSkeleton';
 import { ChannelVerifiedBadge } from './ChannelVerifiedBadge';
+import {
+  sendMute,
+  sendStopVideo,
+  sendPlayVideo,
+  sendPauseVideo,
+  sendListening,
+  sendYouTubeCommand,
+} from '@/lib/domain/youtubeIframe';
 
 export interface PlayingVideoInfo {
   videoId: string;
@@ -179,15 +187,9 @@ export default function MobileYoutubeLiveViewer({
   useEffect(() => {
     return () => {
       try {
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-            '*'
-          );
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-            '*'
-          );
+        if (iframeRef.current) {
+          sendMute(iframeRef.current);
+          sendStopVideo(iframeRef.current);
         }
       } catch {}
     };
@@ -218,11 +220,8 @@ export default function MobileYoutubeLiveViewer({
   // Handler interaksi iframe YouTube via PostMessage API
   const sendIframeCommand = useCallback((func: string, args: any[] = []) => {
     try {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func, args }),
-          '*'
-        );
+      if (iframeRef.current) {
+        sendYouTubeCommand(iframeRef.current, { func: func as any, args: args as any });
       }
     } catch {}
   }, []);
@@ -455,17 +454,9 @@ export default function MobileYoutubeLiveViewer({
       if (!isRestoringRef.current) {
         // Mini player ditutup pengguna (tombol X), bukan dikembalikan (restore)
         try {
-          if (iframeRef.current?.contentWindow) {
-            iframeRef.current.contentWindow.postMessage(
-              JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-              '*'
-            );
-            iframeRef.current.contentWindow.postMessage(
-              JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-              '*'
-            );
-          }
           if (iframeRef.current) {
+            sendMute(iframeRef.current);
+            sendStopVideo(iframeRef.current);
             iframeRef.current.src = 'about:blank';
           }
         } catch {}
@@ -703,10 +694,9 @@ export default function MobileYoutubeLiveViewer({
                 onLoad={() => {
                   try {
                     const postListening = () => {
-                      iframeRef.current?.contentWindow?.postMessage(
-                        JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-                        '*'
-                      );
+                      if (iframeRef.current) {
+                        sendListening(iframeRef.current);
+                      }
                     };
                     postListening();
                     setTimeout(postListening, 250);
@@ -744,21 +734,10 @@ export default function MobileYoutubeLiveViewer({
                     e.stopPropagation();
                     if (onPlayGlobalMiniPlayer && activeVideo) {
                       try {
-                        if (iframeRef.current?.contentWindow) {
-                          iframeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-                            '*'
-                          );
-                          iframeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
-                            '*'
-                          );
-                          iframeRef.current.contentWindow.postMessage(
-                            JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-                            '*'
-                          );
-                        }
                         if (iframeRef.current) {
+                          sendMute(iframeRef.current);
+                          sendPauseVideo(iframeRef.current);
+                          sendStopVideo(iframeRef.current);
                           iframeRef.current.src = 'about:blank';
                         }
                       } catch {}

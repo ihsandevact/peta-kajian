@@ -8,6 +8,14 @@ import type {
 } from '@/lib/services/youtubeTracker';
 import { formatUpcomingTime, formatEndedTime } from '@/lib/services/youtubeTracker';
 import { ChannelVerifiedBadge } from './ChannelVerifiedBadge';
+import {
+  sendPlayVideo,
+  sendPauseVideo,
+  sendStopVideo,
+  sendMute,
+  sendUnmute as sendYouTubeUnmute,
+  sendListening,
+} from '@/lib/domain/youtubeIframe';
 
 export interface WatchVideoData {
   videoId: string;
@@ -80,15 +88,9 @@ export default function DesktopYoutubeWatchView({
   useEffect(() => {
     return () => {
       try {
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-            '*'
-          );
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-            '*'
-          );
+        if (iframeRef.current) {
+          sendMute(iframeRef.current);
+          sendStopVideo(iframeRef.current);
         }
       } catch {}
     };
@@ -97,30 +99,16 @@ export default function DesktopYoutubeWatchView({
   // Helper picu playVideo & unMute
   const sendPlay = useCallback(() => {
     try {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-          '*'
-        );
+      if (iframeRef.current) {
+        sendPlayVideo(iframeRef.current);
       }
     } catch {}
   }, []);
 
   const sendUnmute = useCallback(() => {
     try {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-          '*'
-        );
+      if (iframeRef.current) {
+        sendYouTubeUnmute(iframeRef.current, 100);
         setIsMuted(false);
       }
     } catch {}
@@ -283,14 +271,13 @@ export default function DesktopYoutubeWatchView({
                 className="w-full h-full border-0"
                 onLoad={() => {
                   try {
-                    iframeRef.current?.contentWindow?.postMessage(
-                      JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-                      '*'
-                    );
-                    setTimeout(() => {
-                      sendPlay();
-                      sendUnmute();
-                    }, 400);
+                    if (iframeRef.current) {
+                      sendListening(iframeRef.current);
+                      setTimeout(() => {
+                        sendPlay();
+                        sendUnmute();
+                      }, 400);
+                    }
                   } catch {}
                 }}
               />
@@ -417,21 +404,10 @@ export default function DesktopYoutubeWatchView({
                   type="button"
                   onClick={() => {
                     try {
-                      if (iframeRef.current?.contentWindow) {
-                        iframeRef.current.contentWindow.postMessage(
-                          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-                          '*'
-                        );
-                        iframeRef.current.contentWindow.postMessage(
-                          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
-                          '*'
-                        );
-                        iframeRef.current.contentWindow.postMessage(
-                          JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-                          '*'
-                        );
-                      }
                       if (iframeRef.current) {
+                        sendMute(iframeRef.current);
+                        sendPauseVideo(iframeRef.current);
+                        sendStopVideo(iframeRef.current);
                         iframeRef.current.src = 'about:blank';
                       }
                     } catch {}

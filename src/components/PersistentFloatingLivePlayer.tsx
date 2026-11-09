@@ -3,6 +3,16 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { usePathname } from 'next/navigation';
 import { useLivePlayer } from '@/context/LivePlayerContext';
+import {
+  sendMute,
+  sendPauseVideo,
+  sendStopVideo,
+  sendPlayVideo,
+  sendUnmute,
+  sendSeekTo,
+  sendListening,
+  parseYouTubeIframeMessage,
+} from '@/lib/domain/youtubeIframe';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
 import { createClient } from '@/utils/supabase/client';
 import { FEATURE_FLAGS } from '@/config/features';
@@ -90,21 +100,10 @@ export default function PersistentFloatingLivePlayer() {
   const stopAndDestroyPlayer = useCallback(() => {
     isShuttingDownRef.current = true;
     try {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
-          '*'
-        );
-      }
       if (iframeRef.current) {
+        sendMute(iframeRef.current);
+        sendPauseVideo(iframeRef.current);
+        sendStopVideo(iframeRef.current);
         iframeRef.current.src = 'about:blank';
       }
     } catch {}
@@ -138,19 +137,9 @@ export default function PersistentFloatingLivePlayer() {
   // Helper untuk membuka suara (unMute) & memastikan pemutaran video aktif
   const sendUnmuteMiniPlayer = useCallback(() => {
     try {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'setVolume', args: [100] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-          '*'
-        );
+      if (iframeRef.current) {
+        sendUnmute(iframeRef.current, 100);
+        sendPlayVideo(iframeRef.current);
         setIsPlayerMuted(false);
       }
     } catch {}
@@ -442,11 +431,8 @@ export default function PersistentFloatingLivePlayer() {
 
     const interval = setInterval(() => {
       try {
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-            '*'
-          );
+        if (iframeRef.current) {
+          sendListening(iframeRef.current);
         }
       } catch {}
     }, 600);
@@ -479,21 +465,12 @@ export default function PersistentFloatingLivePlayer() {
     }
 
     try {
-      if (iframeRef.current?.contentWindow) {
+      if (iframeRef.current) {
         if (typeof resolvedTime === 'number' && resolvedTime > 0) {
-          iframeRef.current.contentWindow.postMessage(
-            JSON.stringify({ event: 'command', func: 'seekTo', args: [resolvedTime, true] }),
-            '*'
-          );
+          sendSeekTo(iframeRef.current, resolvedTime, true);
         }
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-          '*'
-        );
+        sendUnmute(iframeRef.current);
+        sendPlayVideo(iframeRef.current);
       }
     } catch {}
 
@@ -573,16 +550,14 @@ export default function PersistentFloatingLivePlayer() {
           // Tangani event onReady dari YouTube widget -> segera picu playVideo
           if (data?.event === 'onReady') {
             try {
-              iframeRef.current?.contentWindow?.postMessage(
-                JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-                '*'
-              );
-              setTimeout(() => {
-                iframeRef.current?.contentWindow?.postMessage(
-                  JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-                  '*'
-                );
-              }, 350);
+              if (iframeRef.current) {
+                sendPlayVideo(iframeRef.current);
+                setTimeout(() => {
+                  if (iframeRef.current) {
+                    sendUnmute(iframeRef.current);
+                  }
+                }, 350);
+              }
             } catch {}
           }
 
@@ -638,31 +613,19 @@ export default function PersistentFloatingLivePlayer() {
 
     const handleVisibilityResume = () => {
       if (isShuttingDownRef.current) return;
-      if (document.visibilityState === 'visible' || !document.hidden) {
-        try {
-          iframeRef.current?.contentWindow?.postMessage(
-            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-            '*'
-          );
-        } catch {}
-      } else {
-        // Coba pertahankan pemutaran saat tab disembunyikan
-        try {
-          iframeRef.current?.contentWindow?.postMessage(
-            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-            '*'
-          );
-        } catch {}
-      }
+      try {
+        if (iframeRef.current) {
+          sendPlayVideo(iframeRef.current);
+        }
+      } catch {}
     };
 
     const handleFocusResume = () => {
       if (isShuttingDownRef.current) return;
       try {
-        iframeRef.current?.contentWindow?.postMessage(
-          JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-          '*'
-        );
+        if (iframeRef.current) {
+          sendPlayVideo(iframeRef.current);
+        }
       } catch {}
     };
 
@@ -737,15 +700,9 @@ export default function PersistentFloatingLivePlayer() {
     // Minimalkan player di jendela utama dan jeda audio di tab ini agar tidak bentrok suara ganda (double audio)
     minimizePlayer();
     try {
-      if (iframeRef.current?.contentWindow) {
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
-          '*'
-        );
-        iframeRef.current.contentWindow.postMessage(
-          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
-          '*'
-        );
+      if (iframeRef.current) {
+        sendPauseVideo(iframeRef.current);
+        sendMute(iframeRef.current);
       }
     } catch {}
 
@@ -795,14 +752,8 @@ export default function PersistentFloatingLivePlayer() {
         // Teruskan klik atau interaksi apapun pada jendela PiP untuk mengaktifkan audio & autoplay
         const forwardInteraction = () => {
           try {
-            iframe.contentWindow?.postMessage(
-              JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-              '*'
-            );
-            iframe.contentWindow?.postMessage(
-              JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-              '*'
-            );
+            sendUnmute(iframe);
+            sendPlayVideo(iframe);
           } catch {}
         };
         pipWindow.addEventListener('pointerdown', forwardInteraction, { once: true });
@@ -1390,22 +1341,15 @@ export default function PersistentFloatingLivePlayer() {
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
                     try {
-                      iframeRef.current?.contentWindow?.postMessage(
-                        JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }),
-                        '*'
-                      );
-                      setTimeout(() => {
-                        try {
-                          iframeRef.current?.contentWindow?.postMessage(
-                            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-                            '*'
-                          );
-                          iframeRef.current?.contentWindow?.postMessage(
-                            JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-                            '*'
-                          );
-                        } catch {}
-                      }, 400);
+                      if (iframeRef.current) {
+                        sendListening(iframeRef.current);
+                        setTimeout(() => {
+                          if (iframeRef.current) {
+                            sendPlayVideo(iframeRef.current);
+                            sendUnmute(iframeRef.current);
+                          }
+                        }, 400);
+                      }
                     } catch {}
                   }}
                   className="w-full h-full border-0"
