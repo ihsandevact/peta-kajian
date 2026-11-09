@@ -61,6 +61,28 @@ export function isTestVenueRecord(v: { name?: string; is_test?: boolean; facilit
 }
 
 /**
+ * Koordinat acuan pusat kota dan radius metropolitan untuk validasi GPS
+ */
+export const CITY_COORDINATES: Record<string, { lat: number; lng: number; maxRadiusKm: number }> = {
+  jakarta: { lat: -6.2088, lng: 106.8456, maxRadiusKm: 40 },
+  bekasi: { lat: -6.2383, lng: 106.9756, maxRadiusKm: 35 },
+  depok: { lat: -6.4025, lng: 106.7942, maxRadiusKm: 25 },
+  tangerang: { lat: -6.1783, lng: 106.6319, maxRadiusKm: 35 },
+  bogor: { lat: -6.5971, lng: 106.8060, maxRadiusKm: 35 },
+  bandung: { lat: -6.9175, lng: 107.6191, maxRadiusKm: 35 },
+  yogyakarta: { lat: -7.7956, lng: 110.3695, maxRadiusKm: 40 },
+  surabaya: { lat: -7.2575, lng: 112.7521, maxRadiusKm: 40 },
+  makassar: { lat: -5.1477, lng: 119.4327, maxRadiusKm: 50 },
+  palembang: { lat: -2.9909, lng: 104.7566, maxRadiusKm: 50 },
+  medan: { lat: 3.5952, lng: 98.6722, maxRadiusKm: 50 },
+  semarang: { lat: -6.9932, lng: 110.4203, maxRadiusKm: 35 },
+  solo: { lat: -7.5695, lng: 110.8250, maxRadiusKm: 35 },
+  malang: { lat: -7.9797, lng: 112.6304, maxRadiusKm: 35 },
+  tasikmalaya: { lat: -7.3274, lng: 108.2207, maxRadiusKm: 30 },
+  magelang: { lat: -7.4706, lng: 110.2178, maxRadiusKm: 30 },
+};
+
+/**
  * Daftar alias kata kunci pencarian kota/kabupaten
  */
 export const CITY_ALIASES: Record<string, string[]> = {
@@ -79,7 +101,7 @@ export const CITY_ALIASES: Record<string, string[]> = {
   ],
   bekasi: [
     'bekasi', 'cikarang', 'tambun', 'pondok gede', 'jatiasih', 'mustika jaya', 'rawabebek',
-    'harapan indah', 'pekayon', 'summarecon bekasi', 'cibitung', 'padurenan', 'babelan', 'tarumajaya'
+    'harapan indah', 'pekayon', 'summarecon bekasi', 'cibitung', 'padurenan', 'babelan', 'tarumajaya', 'medan satria'
   ],
   depok: [
     'depok', 'cinere', 'sawangan', 'sukmajaya', 'cimanggis', 'beji', 'bojongsari', 'cilodong', 'tapos', 'margonda'
@@ -96,16 +118,16 @@ export const CITY_ALIASES: Record<string, string[]> = {
     'bandung', 'cimahi', 'lembang', 'soreang', 'padalarang', 'buahbatu', 'dago'
   ],
   surabaya: [
-    'surabaya', 'sidoarjo', 'gresik', 'rungkut', 'wonokromo', 'gubeng', 'candi'
+    'surabaya', 'sidoarjo', 'gresik', 'rungkut', 'wonokromo', 'gubeng', 'candi sidoarjo'
   ],
   makassar: [
-    'makassar', 'gowa', 'maros', 'panakkukang', 'tamalanrea', 'rappocini', 'bontoala', 'tamalate', 'daya'
+    'makassar', 'gowa', 'maros', 'panakkukang', 'tamalanrea', 'rappocini', 'bontoala', 'tamalate', 'manggala', 'biringkanaya', 'somba opu'
   ],
   palembang: [
-    'palembang', 'ilir', 'ulu', 'sako', 'kemuning', 'sukarami', 'al-jihad'
+    'palembang', 'ilir barat', 'ilir timur', 'seberang ulu', 'seberang ilir', 'kertapati', 'plaju', 'sako', 'sukarami', 'kalidoni', 'bukit kecil', 'gandus'
   ],
   medan: [
-    'medan', 'deli serdang', 'binjai', 'belawan'
+    'medan', 'deli serdang', 'binjai', 'belawan', 'sunggal', 'marelan', 'helvetia', 'amplas'
   ],
   semarang: [
     'semarang', 'tembalang', 'banyumanik', 'ungaran', 'mijen', 'pedurungan', 'ngaliyan'
@@ -124,12 +146,11 @@ export const CITY_ALIASES: Record<string, string[]> = {
   ]
 };
 
-function hasShortWordBoundary(text: string, word: string): boolean {
-  const idx = text.indexOf(word);
-  if (idx === -1) return false;
-  const before = idx === 0 ? ' ' : text[idx - 1];
-  const after = idx + word.length >= text.length ? ' ' : text[idx + word.length];
-  return !/[a-z0-9]/i.test(before) && !/[a-z0-9]/i.test(after);
+function hasWordBoundary(text: string, word: string): boolean {
+  if (!text || !word) return false;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i');
+  return regex.test(text);
 }
 
 const PRIORITY_CITIES: { label: string; key: string }[] = [
@@ -153,10 +174,10 @@ const PRIORITY_CITIES: { label: string; key: string }[] = [
 
 /**
  * Mencocokkan apakah suatu masjid berada di kota yang dipilih, dengan memeriksa
- * kolom city, name, dan address menggunakan alias kota / kabupaten sekitarnya.
+ * koordinat GPS (bila ada), kolom city, name, dan address menggunakan alias kota / kabupaten sekitarnya.
  */
 export function matchCityFilter(
-  venue: { name?: string; address?: string; city?: string | null },
+  venue: { name?: string; address?: string; city?: string | null; lat?: number | null; lng?: number | null },
   cityFilter: string
 ): boolean {
   if (!cityFilter || cityFilter.toLowerCase() === 'semua') {
@@ -164,31 +185,82 @@ export function matchCityFilter(
   }
 
   const key = cityFilter.toLowerCase().trim();
-  const aliases = CITY_ALIASES[key] || [key];
-  const textToSearch = `${venue.city || ''} ${venue.name || ''} ${venue.address || ''}`.toLowerCase();
+  const targetCoord = CITY_COORDINATES[key];
 
-  return aliases.some((alias) => {
-    if (alias.length <= 3) {
-      return hasShortWordBoundary(textToSearch, alias);
+  // 1. Verifikasi Geografis Berdasarkan Koordinat GPS (jika ada)
+  if (
+    targetCoord &&
+    typeof venue.lat === 'number' &&
+    typeof venue.lng === 'number' &&
+    !isNaN(venue.lat) &&
+    !isNaN(venue.lng)
+  ) {
+    const dist = calculateDistance(venue.lat, venue.lng, targetCoord.lat, targetCoord.lng);
+    // Jika koordinat jelas berada di dalam area metropolitan (<= maxRadiusKm), pasti cocok!
+    if (dist <= targetCoord.maxRadiusKm) {
+      return true;
     }
-    return textToSearch.includes(alias);
-  });
+    // Jika koordinat jelas berada di luar area (> 60 km), tolak agar false-positive teks (misal 1400 km) dicegah!
+    if (dist > 60) {
+      return false;
+    }
+  }
+
+  const rawCity = (venue.city || '').toLowerCase().trim();
+  const rawAddress = (venue.address || '').toLowerCase();
+  const rawName = (venue.name || '').toLowerCase();
+  const combined = `${rawCity} ${rawName} ${rawAddress}`;
+
+  // 2. Disambiguasi untuk kata ambigu umum (misal Medan Satria di Bekasi, Medan Merdeka di Jakarta Pusat)
+  if (key === 'medan') {
+    if (combined.includes('medan satria') || combined.includes('medan merdeka')) {
+      return false;
+    }
+  }
+
+  // 3. Cocokkan kolom city secara langsung terlebih dahulu
+  const aliases = CITY_ALIASES[key] || [key];
+  if (rawCity && rawCity !== 'indonesia') {
+    if (aliases.some((alias) => hasWordBoundary(rawCity, alias))) {
+      return true;
+    }
+  }
+
+  // 4. Cocokkan gabungan nama dan alamat dengan batas kata (word boundary)
+  return aliases.some((alias) => hasWordBoundary(combined, alias));
 }
 
 /**
  * Mendeteksi nama kota dari teks nama masjid atau alamat jika kolom city bernilai null
  */
-export function detectCityFromVenue(name?: string, address?: string): string | null {
+export function detectCityFromVenue(
+  name?: string,
+  address?: string,
+  coords?: { lat?: number | null; lng?: number | null }
+): string | null {
+  // Cek GPS terlebih dahulu jika tersedia
+  if (coords && typeof coords.lat === 'number' && typeof coords.lng === 'number') {
+    for (const item of PRIORITY_CITIES) {
+      const targetCoord = CITY_COORDINATES[item.key];
+      if (targetCoord) {
+        const dist = calculateDistance(coords.lat, coords.lng, targetCoord.lat, targetCoord.lng);
+        if (dist <= targetCoord.maxRadiusKm) {
+          return item.label;
+        }
+      }
+    }
+  }
+
   const combined = `${name || ''} ${address || ''}`.toLowerCase();
 
   for (const item of PRIORITY_CITIES) {
-    const aliases = CITY_ALIASES[item.key] || [item.key];
-    const match = aliases.some((alias) => {
-      if (alias.length <= 3) {
-        return hasShortWordBoundary(combined, alias);
+    if (item.key === 'medan') {
+      if (combined.includes('medan satria') || combined.includes('medan merdeka')) {
+        continue;
       }
-      return combined.includes(alias);
-    });
+    }
+    const aliases = CITY_ALIASES[item.key] || [item.key];
+    const match = aliases.some((alias) => hasWordBoundary(combined, alias));
     if (match) {
       return item.label;
     }

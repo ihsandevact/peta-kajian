@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ConfirmDialogProvider } from "@/context/ConfirmDialogContext";
 import { BottomNavProvider } from "@/context/BottomNavContext";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import NavigationHistoryTracker from "@/components/navigation/NavigationHistoryTracker";
@@ -12,6 +13,7 @@ import FloatingStudyNotes from "@/components/FloatingStudyNotes";
 import LoginNudgePrompt from "@/components/LoginNudgePrompt";
 import QueryProvider from "@/components/providers/QueryProvider";
 import PWASplashScreen from "@/components/PWASplashScreen";
+import { Analytics } from '@vercel/analytics/next';
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,7 +29,9 @@ export const viewport: Viewport = {
   themeColor: "#047857",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 5,
+  maximumScale: 1,
+  userScalable: false,
+  interactiveWidget: "resizes-content",
 };
 
 export const metadata: Metadata = {
@@ -66,7 +70,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <QueryProvider>
           <ThemeProvider>
-            <PWASplashScreen />
+            <ConfirmDialogProvider>
+              <PWASplashScreen />
             <LivePlayerProvider>
               <BottomNavProvider>
                 <NavigationHistoryTracker />
@@ -78,8 +83,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <PWAInstallPrompt />
               </BottomNavProvider>
             </LivePlayerProvider>
+            </ConfirmDialogProvider>
           </ThemeProvider>
         </QueryProvider>
+        <Analytics />
       </body>
     </html>
   );

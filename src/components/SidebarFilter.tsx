@@ -5,7 +5,7 @@ import { type StudySession } from '@/lib/services/kajian';
 import { type EvaluatedStudySession, evaluateSession } from '@/lib/domain/kajianQuery';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
-import RegionPickerModal, { KAJIAN_FACILITY_OPTIONS } from './RegionPickerModal';
+import RegionPickerModal from './RegionPickerModal';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
@@ -340,7 +340,7 @@ export default function SidebarFilter({
     </button>
   );
 
-  const hasActiveModalFilters = Boolean(filters.region || filters.facilities.length > 0);
+  const hasActiveModalFilters = Boolean(filters.region);
 
   return (
     <div className="h-full flex flex-col">
@@ -350,16 +350,6 @@ export default function SidebarFilter({
           <div className="flex items-center">
             <h1 className="font-semibold text-base text-on-surface tracking-tight">Peta Kajian</h1>
             <span className="w-2 h-2 rounded-full bg-primary-container inline-block ml-1.5 align-middle"></span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/faq"
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:bg-primary/10 px-2.5 py-0.5 rounded-full transition-colors border border-primary/20"
-              title="Pusat Bantuan & Tanya Jawab"
-            >
-              <span className="material-symbols-outlined text-[13px]">help</span>
-              <span>FAQ</span>
-            </Link>
           </div>
         </div>
         
@@ -391,7 +381,7 @@ export default function SidebarFilter({
             )}
           </div>
 
-          {/* Tombol Filter Wilayah & Fasilitas (Modal di Desktop / Bottom Sheet di Mobile) */}
+          {/* Tombol Filter Wilayah (Modal di Desktop / Bottom Sheet di Mobile) */}
           <button
             type="button"
             onClick={() => setIsRegionModalOpen(true)}
@@ -400,12 +390,12 @@ export default function SidebarFilter({
                 ? 'bg-primary text-white border-primary shadow-xs'
                 : 'bg-surface-container-low hover:bg-surface-container border-surface-container-high/80 text-on-surface'
             }`}
-            title="Filter Wilayah & Fasilitas Kajian"
-            aria-label="Filter Wilayah & Fasilitas Kajian"
+            title="Filter Wilayah Kajian"
+            aria-label="Filter Wilayah Kajian"
           >
             <span className="material-symbols-outlined text-[18px]">tune</span>
             <span className="hidden xs:inline max-w-[96px] truncate">
-              {filters.region ? filters.region.name : 'Filter'}
+              {filters.region ? filters.region.name : 'Wilayah'}
             </span>
             {hasActiveModalFilters && (
               <span className="w-2 h-2 rounded-full bg-amber-300 shrink-0" />
@@ -413,57 +403,28 @@ export default function SidebarFilter({
           </button>
         </div>
 
-        {/* Active Region / Facility Chips (Hanya muncul saat ada filter aktif agar hemat ruang) */}
-        {hasActiveModalFilters && (
+        {/* Active Region Chip (Hanya muncul saat ada filter wilayah aktif agar hemat ruang) */}
+        {hasActiveModalFilters && filters.region && (
           <div className="flex flex-wrap items-center gap-1.5">
-            {filters.region && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold">
-                <button
-                  type="button"
-                  onClick={() => setIsRegionModalOpen(true)}
-                  className="inline-flex items-center gap-1 hover:underline cursor-pointer"
-                  title="Ubah wilayah kajian"
-                >
-                  <span className="material-symbols-outlined text-[14px]">location_on</span>
-                  <span>{filters.region.name}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilters((p) => ({ ...p, region: null }))}
-                  className="ml-0.5 hover:opacity-75 flex items-center cursor-pointer"
-                  title="Reset wilayah ke Seluruh Indonesia"
-                >
-                  <span className="material-symbols-outlined text-[14px]">close</span>
-                </button>
-              </span>
-            )}
-
-            {filters.facilities.map((facId) => {
-              const facMeta = KAJIAN_FACILITY_OPTIONS.find((f) => f.id === facId);
-              if (!facMeta) return null;
-              return (
-                <span
-                  key={facId}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold"
-                >
-                  <span className="material-symbols-outlined text-[14px]">{facMeta.icon}</span>
-                  <span>{facMeta.label}</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFilters((p) => ({
-                        ...p,
-                        facilities: p.facilities.filter((f) => f !== facId),
-                      }))
-                    }
-                    className="ml-0.5 hover:opacity-75 flex items-center cursor-pointer"
-                    title={`Hapus filter ${facMeta.label}`}
-                  >
-                    <span className="material-symbols-outlined text-[14px]">close</span>
-                  </button>
-                </span>
-              );
-            })}
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/30 text-primary text-[11px] font-bold">
+              <button
+                type="button"
+                onClick={() => setIsRegionModalOpen(true)}
+                className="inline-flex items-center gap-1 hover:underline cursor-pointer"
+                title="Ubah wilayah kajian"
+              >
+                <span className="material-symbols-outlined text-[14px]">location_on</span>
+                <span>{filters.region.name}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilters((p) => ({ ...p, region: null }))}
+                className="ml-0.5 hover:opacity-75 flex items-center cursor-pointer"
+                title="Reset wilayah ke Seluruh Indonesia"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            </span>
           </div>
         )}
 
@@ -560,7 +521,7 @@ export default function SidebarFilter({
               </p>
               <div className="mt-2">
                 <Link
-                  href="/login?next=/?tab=tersimpan"
+                  href="/login?next=/peta?tab=tersimpan"
                   className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-amber-600 dark:bg-amber-500 text-white text-[11px] font-semibold hover:opacity-90 transition-all shadow-2xs active:scale-95"
                 >
                   <span className="material-symbols-outlined text-[14px]">login</span>
@@ -690,27 +651,17 @@ export default function SidebarFilter({
         )}
       </div>
 
-      {/* Modal Filter & Wilayah Kajian */}
+      {/* Modal Filter Wilayah Kajian */}
       <RegionPickerModal
         isOpen={isRegionModalOpen}
         onClose={() => setIsRegionModalOpen(false)}
         selectedRegion={filters.region}
         onSelectRegion={(r) => setFilters((p) => ({ ...p, region: r }))}
         sessions={allSessions || sessions}
-        selectedFacilities={filters.facilities}
-        onToggleFacility={(facId) =>
-          setFilters((p) => ({
-            ...p,
-            facilities: p.facilities.includes(facId)
-              ? p.facilities.filter((f) => f !== facId)
-              : [...p.facilities, facId],
-          }))
-        }
         onResetAll={() =>
           setFilters((p) => ({
             ...p,
             region: null,
-            facilities: [],
           }))
         }
       />

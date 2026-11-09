@@ -529,3 +529,54 @@ export async function syncAndFetchAdminUsers() {
     return { success: false, error: err.message || 'Gagal menyinkronkan data pengguna.' };
   }
 }
+
+
+/**
+ * Menyetujui banyak kajian sekaligus (Bulk Approve -> status 'confirmed')
+ */
+export async function bulkApproveSessions(sessionIds: string[]) {
+  try {
+    if (!Array.isArray(sessionIds) || sessionIds.length === 0) {
+      return { success: false, count: 0, error: 'Tidak ada kajian yang dipilih.' };
+    }
+
+    const { supabase, user } = await verifyAdminAuth();
+
+    let { error } = await supabase
+      .from('study_sessions')
+      .update({
+        status: 'confirmed',
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+        rejection_reason: null,
+      })
+      .in('id', sessionIds);
+
+    if (error) {
+      console.warn('Bulk approve with review metadata failed, trying status-only fallback:', error.message);
+      const fallback = await supabase
+        .from('study_sessions')
+        .update({
+          status: 'confirmed',
+        })
+        .in('id', sessionIds);
+
+      if (fallback.error) {
+        console.error('Fallback bulk approve failed:', fallback.error);
+        return {
+          success: false,
+          count: 0,
+          error: `Gagal menyetujui kajian secara massal: ${fallback.error.message || error.message}`,
+        };
+      }
+    }
+
+    revalidatePath('/');
+    revalidatePath('/peta');
+    revalidatePath('/admin');
+    revalidatePath('/kontributor/profile');
+    return { success: true, count: sessionIds.length };
+  } catch (err: any) {
+    return { success: false, count: 0, error: err.message || 'Terjadi kesalahan sistem.' };
+  }
+}

@@ -3,13 +3,20 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { fetchSessionsByStatus, fetchAdminStats } from '@/lib/services/admin';
-import { approveSession, rejectSession, togglePublishSession, toggleTestSession } from '@/app/actions/admin';
+import {
+  approveSession,
+  rejectSession,
+  togglePublishSession,
+  toggleTestSession,
+  bulkApproveSessions,
+} from '@/app/actions/admin';
 import type { StudySession } from '@/lib/services/kajian';
 import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useAttendance } from '@/utils/attendance';
 import AdminScraperModal from '@/components/AdminScraperModal';
 import { fetchActiveTelegramChannels, type TelegramChannel } from '@/lib/services/telegram';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useConfirm } from '@/context/ConfirmDialogContext';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -42,6 +49,7 @@ function SessionPosterThumbnail({ url, title }: { url?: string | null; title: st
 }
 
 export default function AdminModerationPage() {
+  const confirmDialog = useConfirm();
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'rejected' | 'all'>('pending');
@@ -54,8 +62,10 @@ export default function AdminModerationPage() {
     return sessions.reduce((acc, s) => acc + Math.max(0, (s.attendees_count || 0) + getExtraCount(s.id)), 0);
   }, [sessions, getExtraCount]);
 
-  // Moderation state
+  // Moderation & Bulk Selection state
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [rejectingSession, setRejectingSession] = useState<StudySession | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [editingSession, setEditingSession] = useState<StudySession | null>(null);
@@ -178,6 +188,79 @@ export default function AdminModerationPage() {
       return true;
     });
   }, [sessions, activeTab, debouncedSearchQuery]);
+
+  // Daftar kajian berstatus 'pending' di tampilan saat ini (untuk Multiple Select / Select All)
+  const pendingSessionsInView = useMemo(
+    () => filteredList.filter((s) => s.status === 'pending'),
+    [filteredList]
+  );
+
+  // Bersihkan pilihan saat berpindah tab
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [activeTab]);
+
+  const selectedPendingIds = useMemo(
+    () => pendingSessionsInView.filter((s) => selectedIds.has(s.id)).map((s) => s.id),
+    [pendingSessionsInView, selectedIds]
+  );
+
+  const isAllPendingSelected =
+    pendingSessionsInView.length > 0 &&
+    selectedPendingIds.length === pendingSessionsInView.length;
+
+  const handleToggleSelectOne = (sessionId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) {
+        next.delete(sessionId);
+      } else {
+        next.add(sessionId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (isAllPendingSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(pendingSessionsInView.map((s) => s.id)));
+    }
+  };
+
+  const handleBulkApprove = async (targetIds: string[]) => {
+    if (targetIds.length === 0) return;
+
+    const confirmed = await confirmDialog({
+      title: `Setujui & Tayangkan ${targetIds.length} Kajian?`,
+      description: `Sebanyak ${targetIds.length} kajian yang dipilih akan langsung disetujui dan dipublikasikan ke Peta Kajian.`,
+      confirmText: `Ya, Setujui ${targetIds.length} Kajian`,
+      cancelText: 'Batal',
+      variant: 'primary',
+      icon: 'done_all',
+    });
+
+    if (!confirmed) return;
+
+    setIsBulkProcessing(true);
+    try {
+      const res = await bulkApproveSessions(targetIds);
+      if (res.success) {
+        setToastMessage(
+          `Alhamdulillah, ${res.count} kajian berhasil disetujui & ditayangkan secara bersamaan!`
+        );
+        setSelectedIds(new Set());
+        await loadData();
+      } else {
+        alert(res.error || 'Gagal menyetujui kajian secara massal.');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Terjadi kesalahan sistem.');
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  };
 
   return (
     <div className="w-full font-geist text-on-surface">
@@ -357,6 +440,71 @@ export default function AdminModerationPage() {
           </div>
         </div>
 
+        {/* BAR AKSI MASSAL (MULTIPLE SELECT / SELECT ALL UNTUK MENUNGGU KURASI) */}
+        {!loading && pendingSessionsInView.length > 0 && (
+          <div className="bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/35 rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isAllPendingSelected}
+                  onChange={handleToggleSelectAll}
+                  className="w-4 h-4 rounded border-amber-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                />
+                <span className="text-xs font-bold text-on-surface">
+                  Pilih Semua ({pendingSessionsInView.length} kajian menunggu kurasi)
+                </span>
+              </label>
+
+              {selectedPendingIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-bold">
+                    {selectedPendingIds.length} dipilih
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-[11px] font-semibold text-outline hover:text-on-surface underline cursor-pointer"
+                  >
+                    Batal Pilih
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {selectedPendingIds.length > 0 ? (
+                <button
+                  type="button"
+                  disabled={isBulkProcessing}
+                  onClick={() => handleBulkApprove(selectedPendingIds)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[16px]">
+                    {isBulkProcessing ? 'sync' : 'done_all'}
+                  </span>
+                  <span>
+                    {isBulkProcessing
+                      ? 'Menyetujui...'
+                      : `Setujui & Tayangkan (${selectedPendingIds.length})`}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isBulkProcessing}
+                  onClick={() => handleBulkApprove(pendingSessionsInView.map((s) => s.id))}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600/15 hover:bg-emerald-600 text-emerald-800 dark:text-emerald-300 hover:text-white border border-emerald-500/40 text-xs font-bold transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                  title="Setujui seluruh kajian yang sedang menunggu kurasi di daftar ini"
+                >
+                  <span className="material-symbols-outlined text-[16px]">done_all</span>
+                  <span>Setujui Semua ({pendingSessionsInView.length})</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* List of Sessions in Queue */}
         <div className="flex flex-col gap-4">
           {loading ? (
@@ -386,12 +534,37 @@ export default function AdminModerationPage() {
                 const isPending = session.status === 'pending';
                 const isConfirmed = session.status === 'confirmed';
                 const isRejected = session.status === 'rejected';
+                const isSelected = isPending && selectedIds.has(session.id);
 
                 return (
                   <div
                     key={session.id}
-                    className="bg-surface-container-lowest border border-surface-container-high/80 rounded-2xl p-4 sm:p-5 shadow-xs hover:border-purple-300 transition-all flex flex-col sm:flex-row gap-4 sm:gap-5"
+                    className={`bg-surface-container-lowest border rounded-2xl p-4 sm:p-5 shadow-xs transition-all flex flex-col sm:flex-row gap-4 sm:gap-5 ${
+                      isSelected
+                        ? 'border-emerald-500 ring-2 ring-emerald-500/30 bg-emerald-500/[0.02]'
+                        : 'border-surface-container-high/80 hover:border-purple-300'
+                    }`}
                   >
+                    {/* Checkbox Multiple Select (Tampil untuk kajian Menunggu Kurasi) */}
+                    {isPending && (
+                      <div className="flex sm:flex-col items-center justify-between sm:justify-start pt-0.5 shrink-0">
+                        <label
+                          className="inline-flex items-center gap-2 cursor-pointer select-none"
+                          title="Pilih kajian ini untuk disetujui bersamaan"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleSelectOne(session.id)}
+                            className="w-4.5 h-4.5 rounded border-surface-container-high text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <span className="sm:hidden text-xs font-bold text-on-surface-variant">
+                            Pilih Kajian Ini
+                          </span>
+                        </label>
+                      </div>
+                    )}
+
                     {/* Poster Thumbnail */}
                     <SessionPosterThumbnail url={session.poster_url} title={session.title} />
 

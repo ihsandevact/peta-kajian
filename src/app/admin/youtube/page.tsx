@@ -12,8 +12,10 @@ import {
   deleteYoutubeChannelAction,
 } from '@/app/actions/youtube';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useConfirm } from '@/context/ConfirmDialogContext';
 
 export default function AdminYoutubeChannelsPage() {
+  const confirmDialog = useConfirm();
   const [channels, setChannels] = useState<YoutubeChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -128,9 +130,15 @@ export default function AdminYoutubeChannelsPage() {
   };
 
   const handleDelete = async (channel: YoutubeChannel) => {
-    if (!confirm(`Hapus channel "${channel.channel_name}" (${channel.channel_handle}) dari daftar pemantauan?`)) {
-      return;
-    }
+    const confirmed = await confirmDialog({
+      title: 'Hapus Channel YouTube?',
+      description: `Hapus channel "${channel.channel_name}" (${channel.channel_handle}) dari daftar pemantauan live streaming?`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+      icon: 'delete',
+    });
+    if (!confirmed) return;
     setProcessingId(channel.id);
     const res = await deleteYoutubeChannelAction(channel.id);
     if (res.success) {

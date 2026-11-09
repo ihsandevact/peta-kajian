@@ -2,45 +2,39 @@
 
 import React from 'react';
 
-interface EndedStreamSkeletonProps {
+interface SkeletonProps {
   count?: number;
+  className?: string;
 }
 
-export function EndedStreamCardSkeleton() {
+/**
+ * Skeleton Kartu Video YouTube Desktop (Grid 3-4 Kolom)
+ * Struktur: Thumbnail 16:9 + Avatar bulat di kiri + Judul & Info di kanan
+ */
+export function YoutubeCardSkeleton() {
   return (
-    <div className="rounded-2xl bg-surface-container-lowest border-2 border-surface-container-high/60 shadow-xs flex flex-col overflow-hidden animate-pulse font-geist">
-      {/* Video Thumbnail Skeleton Area */}
-      <div className="relative aspect-video w-full bg-surface-container flex items-center justify-center">
-        {/* Placeholder Tombol Play */}
-        <div className="w-12 h-12 rounded-full bg-surface-container-high/70" />
-        {/* Placeholder Badge Waktu Selesai */}
-        <div className="absolute top-3 left-3 w-24 h-5 rounded-md bg-surface-container-high/80" />
-        {/* Placeholder Label Rekaman */}
-        <div className="absolute bottom-3 right-3 w-14 h-4 rounded bg-surface-container-high/70" />
+    <div className="flex flex-col gap-3 font-geist animate-pulse">
+      {/* Thumbnail 16:9 */}
+      <div className="relative aspect-video w-full rounded-2xl bg-surface-container overflow-hidden">
+        {/* Placeholder Badge Pojok Kanan Bawah */}
+        <div className="absolute bottom-2.5 right-2.5 w-16 h-4 rounded-md bg-surface-container-high/80" />
       </div>
 
-      {/* Video Details Skeleton Area */}
-      <div className="p-4 flex-1 flex flex-col justify-between gap-3">
-        <div>
-          {/* Baris Channel & Avatar */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-4 h-4 rounded-full bg-surface-container-high shrink-0" />
-            <div className="w-28 h-3 rounded bg-surface-container-high" />
-          </div>
+      {/* Info Baris: Avatar + Text Details */}
+      <div className="flex items-start gap-3">
+        {/* Avatar Bulat Saluran */}
+        <div className="w-9 h-9 rounded-full bg-surface-container shrink-0 mt-0.5" />
 
-          {/* Baris Judul Video */}
-          <div className="space-y-1.5 mt-2">
-            <div className="w-full h-4 rounded bg-surface-container-high" />
-            <div className="w-3/4 h-4 rounded bg-surface-container-high" />
-          </div>
-        </div>
+        {/* Kolom Teks Judul & Meta */}
+        <div className="flex-1 space-y-2">
+          {/* Judul Baris 1 & 2 */}
+          <div className="w-full h-4 rounded-md bg-surface-container" />
+          <div className="w-3/4 h-3.5 rounded-md bg-surface-container" />
 
-        {/* Baris Footer: Asatidzah & Aksi */}
-        <div className="pt-3 border-t border-surface-container-high/50 flex items-center justify-between">
-          <div className="w-24 h-3.5 rounded bg-surface-container-high" />
-          <div className="flex items-center gap-1.5">
-            <div className="w-7 h-7 rounded-lg bg-surface-container-high" />
-            <div className="w-7 h-7 rounded-lg bg-surface-container-high" />
+          {/* Saluran & Pemateri */}
+          <div className="pt-1 space-y-1">
+            <div className="w-32 h-3 rounded bg-surface-container-high" />
+            <div className="w-24 h-2.5 rounded bg-surface-container-high/70" />
           </div>
         </div>
       </div>
@@ -48,12 +42,64 @@ export function EndedStreamCardSkeleton() {
   );
 }
 
-export default function EndedStreamSkeleton({ count = 6 }: EndedStreamSkeletonProps) {
+/**
+ * Skeleton Kartu Video YouTube Compact (Sidebar Rekomendasi Kanan pada Watch View)
+ * Struktur: Thumbnail 16:9 compact di kiri + Teks di kanan
+ */
+export function YoutubeCompactCardSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="flex items-start gap-2.5 font-geist animate-pulse p-1.5 rounded-xl">
+      {/* Thumbnail 16:9 Compact */}
+      <div className="w-36 sm:w-40 aspect-video rounded-xl bg-surface-container shrink-0 overflow-hidden relative">
+        <div className="absolute bottom-1.5 right-1.5 w-10 h-3 rounded bg-surface-container-high/80" />
+      </div>
+
+      {/* Kolom Teks Kanan */}
+      <div className="flex-1 min-w-0 space-y-1.5 py-0.5">
+        <div className="w-full h-3.5 rounded bg-surface-container" />
+        <div className="w-2/3 h-3 rounded bg-surface-container" />
+        <div className="w-24 h-2.5 rounded bg-surface-container-high mt-1" />
+        <div className="w-16 h-2 rounded bg-surface-container-high/70" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Grid Skeleton YouTube Desktop (3-4 Kolom)
+ */
+export function YoutubeGridSkeleton({ count = 8, className = '' }: SkeletonProps) {
+  return (
+    <div
+      className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-6 ${className}`}
+    >
       {Array.from({ length: count }).map((_, idx) => (
-        <EndedStreamCardSkeleton key={idx} />
+        <YoutubeCardSkeleton key={idx} />
       ))}
     </div>
   );
+}
+
+/**
+ * Sidebar Skeleton YouTube Desktop
+ */
+export function YoutubeSidebarSkeleton({ count = 6 }: SkeletonProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      {Array.from({ length: count }).map((_, idx) => (
+        <YoutubeCompactCardSkeleton key={idx} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * Backward compatibility: EndedStreamCardSkeleton & EndedStreamSkeleton
+ */
+export function EndedStreamCardSkeleton() {
+  return <YoutubeCardSkeleton />;
+}
+
+export default function EndedStreamSkeleton({ count = 6 }: SkeletonProps) {
+  return <YoutubeGridSkeleton count={count} />;
 }

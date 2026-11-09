@@ -92,7 +92,7 @@ export default function LiveStreamFloatingPill({
 
   return (
     <div
-      className={`absolute top-3 sm:top-4 left-1/2 -translate-x-1/2 md:left-auto md:right-6 md:translate-x-0 z-30 transition-all duration-300 w-max max-w-[calc(100vw-24px)] ${
+      className={`hidden md:block absolute top-3 sm:top-4 md:left-auto md:right-6 md:translate-x-0 z-30 transition-all duration-300 w-max max-w-[calc(100vw-24px)] ${
         hasSelectedSession ? 'hidden md:block' : 'block'
       }`}
     >

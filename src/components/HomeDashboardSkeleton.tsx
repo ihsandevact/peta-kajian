@@ -7,13 +7,13 @@ export function HomeKajianCardSkeleton({ className = '' }: { className?: string 
   return (
     <div
       aria-hidden="true"
-      className={`p-3.5 sm:p-4 rounded-xl sm:rounded-2xl border border-outline-variant/40 bg-surface-container-low shadow-2xs pointer-events-none select-none flex flex-col justify-between space-y-2.5 sm:space-y-3 ${className}`}
+      className={`p-4 rounded-2xl border border-outline-variant/40 bg-surface-container-low shadow-2xs pointer-events-none select-none flex flex-col justify-between gap-3 ${className}`}
     >
       <div className="space-y-2 animate-pulse">
-        {/* Baris Badges Tanggal & Jarak */}
+        {/* Baris Badges Tanggal & Bookmark */}
         <div className="flex items-center justify-between gap-1.5">
           <div className="h-5 bg-emerald-600/15 rounded-full w-28 sm:w-32" />
-          <div className="h-5 bg-surface-container-high rounded-full w-16 sm:w-20" />
+          <div className="w-7 h-7 rounded-full bg-surface-container-high" />
         </div>
 
         {/* Judul Kajian (2 Baris) */}
@@ -33,12 +33,9 @@ export function HomeKajianCardSkeleton({ className = '' }: { className?: string 
       </div>
 
       {/* Tombol Aksi Bawah */}
-      <div className="flex items-center justify-between gap-1.5 pt-2 border-t border-outline-variant/30 animate-pulse">
-        <div className="flex items-center gap-1.5">
-          <div className="h-7 w-20 sm:w-24 rounded-lg sm:rounded-xl bg-surface-container-high" />
-          <div className="w-7 h-7 rounded-lg sm:rounded-xl bg-surface-container-high" />
-        </div>
-        <div className="h-4 w-20 rounded bg-emerald-600/20" />
+      <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-outline-variant/30 animate-pulse">
+        <div className="h-7 w-24 rounded-xl bg-surface-container-high" />
+        <div className="h-7 w-24 rounded-xl bg-emerald-600/20" />
       </div>
     </div>
   );
@@ -110,6 +107,50 @@ export function DailyHadithSkeleton() {
         <div className="h-3 w-36 rounded bg-emerald-600/15 mt-2" />
       </div>
     </section>
+  );
+}
+
+/**
+ * Skeleton untuk kartu Artikel Islam di Beranda (Horizontal Snap di Mobile & 3-Kolom Grid di Desktop)
+ */
+export function HomeArticleCardSkeleton({ className = '' }: { className?: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0 rounded-2xl sm:rounded-3xl bg-surface-container-low border border-outline-variant/40 flex flex-col justify-between overflow-hidden shadow-2xs pointer-events-none select-none ${className}`}
+    >
+      {/* Banner Thumbnail Placeholder (Aspect 16/9) */}
+      <div className="relative aspect-[16/9] w-full bg-surface-container-high shrink-0 animate-pulse">
+        <div className="absolute top-2.5 left-2.5">
+          <div className="h-4 w-20 rounded-full bg-emerald-600/20" />
+        </div>
+        <div className="absolute bottom-2 right-2.5">
+          <div className="h-4 w-16 rounded-full bg-surface/60" />
+        </div>
+      </div>
+
+      {/* Konten Teks Placeholder */}
+      <div className="p-3.5 sm:p-4 flex flex-col justify-between flex-1 gap-2.5 animate-pulse">
+        <div className="space-y-2">
+          {/* Judul (2 Baris) */}
+          <div className="space-y-1.5">
+            <div className="h-3.5 sm:h-4 bg-surface-container-high rounded w-11/12" />
+            <div className="h-3.5 sm:h-4 bg-surface-container-high rounded w-3/4" />
+          </div>
+          {/* Ringkasan (2 Baris) */}
+          <div className="space-y-1 pt-0.5">
+            <div className="h-2.5 sm:h-3 bg-surface-container-high rounded w-full" />
+            <div className="h-2.5 sm:h-3 bg-surface-container-high rounded w-4/5" />
+          </div>
+        </div>
+
+        {/* Footer Penulis & Tombol Baca */}
+        <div className="pt-2 border-t border-outline-variant/30 flex items-center justify-between">
+          <div className="h-3 w-28 rounded bg-surface-container-high" />
+          <div className="h-3 w-12 rounded bg-emerald-600/20" />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -233,6 +274,25 @@ export default function HomeDashboardSkeleton() {
               <div className="h-3.5 w-20 rounded bg-emerald-600/20 mt-2.5 sm:mt-4" />
             </div>
           ))}
+        </div>
+      </section>
+
+      {/* 3.6 SEKSI ARTIKEL ISLAM SKELETON */}
+      <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
+        <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs space-y-3 sm:space-y-4">
+          <div className="flex items-center justify-between gap-2 px-1 animate-pulse">
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 rounded bg-emerald-600/20" />
+              <div className="h-4 w-28 rounded bg-surface-container-high" />
+            </div>
+            <div className="h-3.5 w-20 rounded bg-emerald-600/20" />
+          </div>
+
+          <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-3 gap-3 sm:gap-4 no-scrollbar">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <HomeArticleCardSkeleton key={idx} />
+            ))}
+          </div>
         </div>
       </section>
 

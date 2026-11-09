@@ -20,10 +20,12 @@ import {
 import AdminScraperModal from '@/components/AdminScraperModal';
 import { runBatchTelegramScraperAction } from '@/app/actions/scraper';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useConfirm } from '@/context/ConfirmDialogContext';
 
 type FilterTab = 'all' | 'pending' | 'approved' | 'rejected';
 
 export default function AdminTelegramChannelsPage() {
+  const confirmDialog = useConfirm();
   const [channels, setChannels] = useState<TelegramChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -59,7 +61,15 @@ export default function AdminTelegramChannelsPage() {
   const [pendingScraperKajianCount, setPendingScraperKajianCount] = useState(0);
 
   const handleBatchScrape = async () => {
-    if (!confirm('Jalankan bot scraper ke seluruh channel telegram yang aktif secara otomatis?')) return;
+    const confirmed = await confirmDialog({
+      title: 'Jalankan Batch Scraper?',
+      description: 'Bot scraper akan memindai seluruh channel Telegram yang aktif secara otomatis untuk mencari jadwal kajian terbaru.',
+      confirmText: 'Jalankan Sekarang',
+      cancelText: 'Batal',
+      variant: 'primary',
+      icon: 'smart_toy',
+    });
+    if (!confirmed) return;
     setIsBatchScraping(true);
     try {
       const res = await runBatchTelegramScraperAction(5);
@@ -199,9 +209,14 @@ export default function AdminTelegramChannelsPage() {
 
   // Handler: Hapus Channel
   const handleDelete = async (channel: TelegramChannel) => {
-    const confirmDelete = window.confirm(
-      `Apakah Anda yakin ingin menghapus channel @${channel.channel_username} ("${channel.channel_title}")?`
-    );
+    const confirmDelete = await confirmDialog({
+      title: 'Hapus Channel Telegram?',
+      description: `Apakah Anda yakin ingin menghapus channel @${channel.channel_username} ("${channel.channel_title}") dari daftar?`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+      icon: 'delete',
+    });
     if (!confirmDelete) return;
 
     setProcessingId(channel.id);

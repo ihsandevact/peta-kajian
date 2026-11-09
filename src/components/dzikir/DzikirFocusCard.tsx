@@ -211,7 +211,7 @@ export default function DzikirFocusCard({
       </div>
 
       {/* Tombol Reset Counter untuk Dzikir Ini */}
-      {currentCount > 0 && !isCompleted && (
+      {currentCount > 0 && (
         <button
           type="button"
           onClick={onReset}

@@ -2,6 +2,7 @@ import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { fetchSessionById } from '@/lib/services/kajian';
 import HomeClient, { type FilterState } from '@/components/HomeClient';
+import PetaPageSkeleton from '@/components/PetaPageSkeleton';
 
 export type { FilterState };
 
@@ -82,14 +83,7 @@ export async function generateMetadata({ searchParams }: PageProps): Promise<Met
 
 export default function PetaPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="w-full h-screen bg-surface flex flex-col items-center justify-center font-geist gap-3">
-          <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-          <p className="text-xs text-on-surface-variant font-medium">Memuat Peta Kajian...</p>
-        </div>
-      }
-    >
+    <Suspense fallback={<PetaPageSkeleton />}>
       <HomeClient />
     </Suspense>
   );

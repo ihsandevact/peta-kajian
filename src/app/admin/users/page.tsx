@@ -11,6 +11,7 @@ import {
 } from '@/app/actions/admin';
 import { ADMIN_EMAILS, type AppUserRole, type ContributorRequestStatus } from '@/lib/services/admin';
 import { useDebounce } from '@/lib/hooks/useDebounce';
+import { useConfirm } from '@/context/ConfirmDialogContext';
 
 interface ContributorItem {
   userId?: string;
@@ -31,6 +32,7 @@ interface ContributorItem {
 type FilterTab = 'all' | 'pending' | 'kontributor' | 'admin' | 'user';
 
 export default function AdminUsersPage() {
+  const confirmDialog = useConfirm();
   const [users, setUsers] = useState<ContributorItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -238,9 +240,14 @@ export default function AdminUsersPage() {
 
     if (userItem.role === newRole) return;
 
-    const confirmChange = window.confirm(
-      `Apakah Anda yakin ingin mengubah peran ${userItem.name} menjadi ${newRole.toUpperCase()}?`
-    );
+    const confirmChange = await confirmDialog({
+      title: 'Ubah Peran Pengguna?',
+      description: `Apakah Anda yakin ingin mengubah peran ${userItem.name} menjadi ${newRole.toUpperCase()}?`,
+      confirmText: 'Ya, Ubah Peran',
+      cancelText: 'Batal',
+      variant: 'warning',
+      icon: 'manage_accounts',
+    });
     if (!confirmChange) return;
 
     setProcessingId(userItem.userId);

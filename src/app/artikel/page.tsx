@@ -427,7 +427,7 @@ export default function ArtikelIndexPage() {
           <div className="flex items-center gap-2.5 min-w-0">
             <button
               type="button"
-              onClick={() => router.back()}
+              onClick={() => { if (window.history.length > 1) router.back(); else router.push('/'); }}
               className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-container hover:bg-surface-container-high text-on-surface-variant hover:text-on-surface transition-colors cursor-pointer shrink-0"
               aria-label="Kembali"
             >

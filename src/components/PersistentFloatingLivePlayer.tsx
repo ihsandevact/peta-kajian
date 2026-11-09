@@ -26,11 +26,36 @@ export default function PersistentFloatingLivePlayer() {
     openStudyMode,
     isStudyModeOpen,
     isStudyNotesOpen,
+    isStudyNotesMinimized,
+    studyLayoutMode,
+    toggleStudyLayoutMode,
     toggleMinimizeStudyNotes,
   } = useLivePlayer();
 
   const pathname = usePathname();
   const isPipRoute = pathname === '/live/pip' || pathname?.startsWith('/live/pip');
+  const isLiveRoute = (pathname === '/live' || pathname?.startsWith('/live')) && !isPipRoute;
+
+  const [isMobileViewport, setIsMobileViewport] = useState<boolean>(false);
+  useEffect(() => {
+    const checkViewport = () => setIsMobileViewport(window.innerWidth < 768);
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
+
+  const isMobileDockedTop =
+    isMobileViewport &&
+    isStudyNotesOpen &&
+    !isStudyNotesMinimized &&
+    !isMinimized &&
+    !isModalExpanded;
+
+  const isFocusOverlayMode =
+    !isMobileViewport &&
+    isStudyNotesOpen &&
+    !isStudyNotesMinimized &&
+    studyLayoutMode === 'focus';
 
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -40,12 +65,75 @@ export default function PersistentFloatingLivePlayer() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [resumeTime, setResumeTime] = useState<number>(0);
   const [isPlayerMuted, setIsPlayerMuted] = useState(false);
+  const [playbackError, setPlaybackError] = useState<{
+    code: number;
+    message: string;
+    reason: 'private' | 'unembeddable' | 'not_found' | 'generic';
+  } | null>(null);
   const currentPlaybackTimeRef = useRef<number>(0);
   const playbackStartEpochRef = useRef<number>(Date.now());
   const lastStorageSyncRef = useRef<number>(Date.now());
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
+  const isShuttingDownRef = useRef(false);
+
+  const [origin, setOrigin] = useState<string>('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin);
+    }
+  }, []);
+
+  // Helper untuk mematikan dan memutuskan streaming audio iframe seketika
+  const stopAndDestroyPlayer = useCallback(() => {
+    isShuttingDownRef.current = true;
+    try {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'mute', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }),
+          '*'
+        );
+        iframeRef.current.contentWindow.postMessage(
+          JSON.stringify({ event: 'command', func: 'stopVideo', args: [] }),
+          '*'
+        );
+      }
+      if (iframeRef.current) {
+        iframeRef.current.src = 'about:blank';
+      }
+    } catch {}
+  }, []);
+
+  // Reset status shutdown saat player dibuka dengan stream baru
+  useEffect(() => {
+    if (isOpen && activeStream) {
+      isShuttingDownRef.current = false;
+    }
+  }, [isOpen, activeStream?.videoId]);
+
+  // Listener event global untuk mematikan audio seketika jika closePlayer dipicu dari luar
+  useEffect(() => {
+    const handleGlobalStop = () => {
+      stopAndDestroyPlayer();
+    };
+    window.addEventListener('peta-kajian:stop-mini-player', handleGlobalStop);
+    return () => {
+      window.removeEventListener('peta-kajian:stop-mini-player', handleGlobalStop);
+    };
+  }, [stopAndDestroyPlayer]);
+
+  // Cleanup saat komponen unmount
+  useEffect(() => {
+    return () => {
+      stopAndDestroyPlayer();
+    };
+  }, [stopAndDestroyPlayer]);
 
   // Helper untuk membuka suara (unMute) & memastikan pemutaran video aktif
   const sendUnmuteMiniPlayer = useCallback(() => {
@@ -103,14 +191,16 @@ export default function PersistentFloatingLivePlayer() {
   const clampPosition = useCallback(
     (x: number, y: number, customWidth?: number) => {
       if (typeof window === 'undefined') return { x, y };
-      const rect = containerRef.current?.getBoundingClientRect();
-      const width = customWidth || (isMinimized ? 280 : playerWidth) || rect?.width || 360;
-      const height = isMinimized ? 48 : width * (9 / 16) + 90;
-
-      const padding = 12;
-      // Beri ruang ekstra 72px di mobile agar tidak menutupi bottom navigation bar jika digeser ke bawah
       const isMobile = window.innerWidth < 768;
-      const bottomPadding = isMobile ? 72 : 16;
+      const rect = containerRef.current?.getBoundingClientRect();
+      const defaultW = isMobile && isFocusOverlayMode ? Math.min(playerWidth, 210) : playerWidth;
+      const width = customWidth || (isMinimized ? 260 : defaultW) || rect?.width || 360;
+      const chromeHeight = isMobile && isFocusOverlayMode ? 32 : 90;
+      const height = isMinimized ? 48 : width * (9 / 16) + chromeHeight;
+
+      const padding = 8;
+      // Beri ruang ekstra 72px di mobile jika bukan Mode Fokus
+      const bottomPadding = isMobile && !isFocusOverlayMode ? 72 : 12;
 
       const minX = padding;
       const maxX = Math.max(padding, window.innerWidth - width - padding);
@@ -122,7 +212,7 @@ export default function PersistentFloatingLivePlayer() {
         y: Math.min(Math.max(y, minY), maxY),
       };
     },
-    [isMinimized, playerWidth]
+    [isMinimized, playerWidth, isFocusOverlayMode]
   );
 
   // Tutup modal (kembali ke mini player) saat tombol ESC ditekan
@@ -139,8 +229,8 @@ export default function PersistentFloatingLivePlayer() {
 
   // Handler Pointer Drag
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Abaikan jika sedang dalam mode modal layar penuh
-    if (isModalExpanded) return;
+    // Abaikan jika sedang dalam mode modal layar penuh atau docked di atas layar mobile
+    if (isModalExpanded || isMobileDockedTop) return;
 
     // Hanya proses sentuhan atau klik tombol utama mouse
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -414,6 +504,11 @@ export default function PersistentFloatingLivePlayer() {
     pipWindowRef.current = null;
   }, [activeStream?.videoId, setIsPipActive, maximizePlayer]);
 
+  // Reset error state saat video yang diputar berganti
+  useEffect(() => {
+    setPlaybackError(null);
+  }, [activeStream?.videoId]);
+
   // Sinkronisasi status & timestamp PiP dengan jendela pop-out / Document PiP
   useEffect(() => {
     let broadcast: BroadcastChannel | null = null;
@@ -445,6 +540,36 @@ export default function PersistentFloatingLivePlayer() {
         try {
           const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
 
+          // Tangani event onError dari YouTube IFrame API (video private, unlisted, dilarang embed, atau not found)
+          const isErrorEvent =
+            data?.event === 'onError' ||
+            typeof data?.info?.errorCode !== 'undefined' ||
+            (data?.event === 'infoDelivery' && typeof data?.info?.errorCode !== 'undefined');
+
+          if (isErrorEvent) {
+            const rawCode = data?.data ?? data?.info?.errorCode ?? data?.info;
+            const errCode = Number(rawCode);
+            let errorReason: 'private' | 'unembeddable' | 'not_found' | 'generic' = 'generic';
+            let errorMsg = 'Video tidak dapat dimuat atau sedang tidak tersedia.';
+
+            if (errCode === 100) {
+              errorReason = 'private';
+              errorMsg = 'Saluran telah mengubah siaran ini menjadi privat (biasanya sedang proses editing untuk rilis ulang rekaman resmi).';
+            } else if (errCode === 101 || errCode === 150) {
+              errorReason = 'unembeddable';
+              errorMsg = 'Pemilik video membatasi pemutaran hanya di situs resmi YouTube.';
+            } else if (errCode === 2) {
+              errorReason = 'not_found';
+              errorMsg = 'Video tidak ditemukan atau telah dihapus oleh saluran.';
+            }
+
+            setPlaybackError({
+              code: errCode || 100,
+              message: errorMsg,
+              reason: errorReason,
+            });
+          }
+
           // Tangani event onReady dari YouTube widget -> segera picu playVideo
           if (data?.event === 'onReady') {
             try {
@@ -464,16 +589,6 @@ export default function PersistentFloatingLivePlayer() {
           // Sinkronkan status muted dari YouTube player
           if (typeof data?.info?.muted === 'boolean') {
             setIsPlayerMuted(data.info.muted);
-          }
-
-          const playerState = data?.info?.playerState;
-          if (playerState === 5 || playerState === -1 || playerState === 2) {
-            try {
-              iframeRef.current?.contentWindow?.postMessage(
-                JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-                '*'
-              );
-            } catch {}
           }
 
           const time = data?.info?.currentTime ?? data?.currentTime;
@@ -522,6 +637,7 @@ export default function PersistentFloatingLivePlayer() {
     if (isPipRoute || !isOpen || !activeStream || isPipActive) return;
 
     const handleVisibilityResume = () => {
+      if (isShuttingDownRef.current) return;
       if (document.visibilityState === 'visible' || !document.hidden) {
         try {
           iframeRef.current?.contentWindow?.postMessage(
@@ -541,6 +657,7 @@ export default function PersistentFloatingLivePlayer() {
     };
 
     const handleFocusResume = () => {
+      if (isShuttingDownRef.current) return;
       try {
         iframeRef.current?.contentWindow?.postMessage(
           JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
@@ -753,6 +870,7 @@ export default function PersistentFloatingLivePlayer() {
 
   // Handler Tutup Pemutar & Tutup PiP jika terbuka
   const handleClosePlayer = useCallback(() => {
+    stopAndDestroyPlayer();
     try {
       if (pipWindowRef.current && !pipWindowRef.current.closed) {
         pipWindowRef.current.close();
@@ -764,7 +882,50 @@ export default function PersistentFloatingLivePlayer() {
       pipCheckIntervalRef.current = null;
     }
     closePlayer();
-  }, [closePlayer]);
+  }, [closePlayer, stopAndDestroyPlayer]);
+
+  // Handler Pintar Maximize: Jika berada di halaman /live, kembalikan video ke pemutar atas (berlaku Desktop & Mobile)
+  const handleSmartMaximize = useCallback(() => {
+    if (isLiveRoute && activeStream) {
+      stopAndDestroyPlayer();
+      window.dispatchEvent(
+        new CustomEvent('peta-kajian:restore-live-video', {
+          detail: {
+            videoId: activeStream.videoId,
+            title: activeStream.title,
+            channelName: activeStream.channelName,
+            speakerName: activeStream.speakerName,
+            isLive: activeStream.isLive,
+          },
+        })
+      );
+      closePlayer();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    expandToModal();
+  }, [isLiveRoute, activeStream, closePlayer, expandToModal, stopAndDestroyPlayer]);
+
+  const handleSmartUnminimize = useCallback(() => {
+    if (isLiveRoute && activeStream) {
+      stopAndDestroyPlayer();
+      window.dispatchEvent(
+        new CustomEvent('peta-kajian:restore-live-video', {
+          detail: {
+            videoId: activeStream.videoId,
+            title: activeStream.title,
+            channelName: activeStream.channelName,
+            speakerName: activeStream.speakerName,
+            isLive: activeStream.isLive,
+          },
+        })
+      );
+      closePlayer();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+    maximizePlayer();
+  }, [isLiveRoute, activeStream, closePlayer, maximizePlayer, stopAndDestroyPlayer]);
 
   if (isPipRoute || !isOpen || !activeStream) {
     return null;
@@ -799,25 +960,42 @@ export default function PersistentFloatingLivePlayer() {
         style={
           isModalExpanded
             ? undefined
+            : isMobileDockedTop
+            ? {
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                width: '100%',
+                zIndex: 56,
+              }
             : {
-                width: isMinimized ? undefined : `${playerWidth}px`,
+                width: isMinimized
+                  ? undefined
+                  : `${isMobileViewport && isFocusOverlayMode ? Math.min(playerWidth, 210) : playerWidth}px`,
+                zIndex: isFocusOverlayMode || isMinimized ? 60 : 50,
                 ...(position ? {
                   position: 'fixed',
                   left: `${position.x}px`,
                   top: `${position.y}px`,
                   right: 'auto',
                   bottom: 'auto',
-                  zIndex: 50,
                 } : {}),
               }
         }
         className={
           isModalExpanded
             ? "fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 animate-in fade-in duration-200"
-            : `fixed z-50 max-w-[calc(100vw-24px)] ${
+            : isMobileDockedTop
+            ? "fixed top-0 left-0 right-0 z-[56] w-full bg-black shadow-md"
+            : `fixed ${isFocusOverlayMode || isMinimized ? 'z-[60]' : 'z-50'} max-w-[calc(100vw-16px)] ${
                 isResizing ? 'transition-none select-none' : 'transition-shadow duration-200'
               } ${
-                !position ? 'bottom-[72px] md:bottom-4 right-3 sm:right-4' : ''
+                !position
+                  ? isFocusOverlayMode && isMobileViewport
+                    ? 'bottom-10 right-3'
+                    : 'bottom-[72px] md:bottom-4 right-3 sm:right-4'
+                  : ''
               } ${isDragging || isResizing ? 'shadow-2xl scale-[1.01]' : ''}`
         }
       >
@@ -935,31 +1113,38 @@ export default function PersistentFloatingLivePlayer() {
                 <span className="material-symbols-outlined text-[18px]">picture_in_picture_alt</span>
               </button>
 
-              <button
-                type="button"
-                onClick={maximizePlayer}
-                className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-                title="Perbesar Tampilan Video"
-                aria-label="Perbesar Video"
-              >
-                <span className="material-symbols-outlined text-[16px]">expand_less</span>
-              </button>
+              {/* Tombol Maximize / Restore (Hanya muncul saat berada di halaman /live) */}
+              {isLiveRoute && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleSmartUnminimize}
+                    className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                    title="Kembalikan ke Pemutar Utama"
+                    aria-label="Kembalikan ke Pemutar Utama"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">expand_less</span>
+                  </button>
 
-              {/* Tombol Maximize ke Modal Layar Penuh dari Bar Audio */}
-              <button
-                type="button"
-                onClick={expandToModal}
-                className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
-                title="Perbesar Penuh (Modal)"
-                aria-label="Perbesar Penuh"
-              >
-                <span className="material-symbols-outlined text-[16px]">open_in_full</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={handleSmartMaximize}
+                    className="w-7 h-7 rounded-full bg-surface-container hover:bg-surface-container-high text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                    title="Kembalikan ke Pemutar Utama"
+                    aria-label="Kembalikan ke Pemutar Utama"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">open_in_full</span>
+                  </button>
+                </>
+              )}
 
+              {/* Tombol Tutup Player (Dihide di mobile saat berada di halaman /live) */}
               <button
                 type="button"
                 onClick={handleClosePlayer}
-                className="w-7 h-7 rounded-full hover:bg-surface-container text-outline hover:text-on-surface flex items-center justify-center transition-colors cursor-pointer"
+                className={`${
+                  isLiveRoute ? 'hidden md:flex' : 'flex'
+                } w-7 h-7 rounded-full hover:bg-surface-container text-outline hover:text-on-surface items-center justify-center transition-colors cursor-pointer`}
                 title="Tutup Player"
                 aria-label="Tutup Player"
               >
@@ -981,7 +1166,13 @@ export default function PersistentFloatingLivePlayer() {
               ? "absolute bottom-0 right-0 w-[240px] h-[135px] opacity-0 pointer-events-none -z-50 overflow-hidden"
               : isModalExpanded
               ? "bg-surface-container-lowest rounded-2xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col border border-surface-container-high animate-in zoom-in-95 duration-200 max-h-[92vh]"
-              : "relative w-full rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border border-surface-container-high/80 dark:border-neutral-800 shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300"
+              : isMobileDockedTop
+              ? "relative w-full bg-surface-container-lowest dark:bg-neutral-900 overflow-hidden flex flex-col"
+              : `relative w-full rounded-2xl bg-surface-container-lowest/95 dark:bg-neutral-900/95 backdrop-blur-md border ${
+                  isFocusOverlayMode
+                    ? 'border-indigo-500/50 ring-2 ring-indigo-500/20'
+                    : 'border-surface-container-high/80 dark:border-neutral-800'
+                } shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 duration-300`
           }
         >
           {isModalExpanded ? (
@@ -1010,11 +1201,13 @@ export default function PersistentFloatingLivePlayer() {
                 >
                   <span className="material-symbols-outlined text-[19px]">close_fullscreen</span>
                 </button>
-                {/* Tombol Tutup Pemutar */}
+                {/* Tombol Tutup Pemutar (Dihide di mobile saat berada di halaman /live) */}
                 <button
                   type="button"
                   onClick={handleClosePlayer}
-                  className="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest flex items-center justify-center text-outline hover:text-red-500 transition-colors shrink-0 cursor-pointer"
+                  className={`${
+                    isLiveRoute ? 'hidden md:flex' : 'flex'
+                  } w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-container-highest items-center justify-center text-outline hover:text-red-500 transition-colors shrink-0 cursor-pointer`}
                   title="Tutup Pemutar"
                   aria-label="Tutup Pemutar"
                 >
@@ -1022,7 +1215,7 @@ export default function PersistentFloatingLivePlayer() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : isMobileDockedTop ? null : (
             <>
               {/* HUD Dimensi Realtime saat Resize */}
               {isResizing && (
@@ -1041,7 +1234,9 @@ export default function PersistentFloatingLivePlayer() {
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 style={{ touchAction: 'none' }}
-                className="px-3.5 py-2.5 bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-2 cursor-move transition-colors select-none relative"
+                className={`${
+                  isFocusOverlayMode && isMobileViewport ? 'px-2.5 py-1.5' : 'px-3.5 py-2.5'
+                } bg-surface-container-low/95 dark:bg-neutral-800/90 hover:bg-surface-container border-b border-surface-container-high/60 flex items-center justify-between gap-1.5 cursor-move transition-colors select-none relative`}
                 title="Klik dan tahan di sini untuk menggeser posisi video"
               >
                 {/* Gagang Resize Sudut Kiri-Atas (Top-Left) */}
@@ -1090,22 +1285,26 @@ export default function PersistentFloatingLivePlayer() {
                     <span className="material-symbols-outlined text-[18px]">expand_more</span>
                   </button>
 
-                  {/* Tombol Maximize / Perbesar ke Modal */}
-                  <button
-                    type="button"
-                    onClick={expandToModal}
-                    className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
-                    title="Perbesar Tampilan (Modal)"
-                    aria-label="Perbesar Tampilan Modal"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">open_in_full</span>
-                  </button>
+                  {/* Tombol Maximize / Perbesar ke Modal (Hanya muncul saat berada di halaman /live) */}
+                  {isLiveRoute && (
+                    <button
+                      type="button"
+                      onClick={handleSmartMaximize}
+                      className="w-7 h-7 rounded-lg text-outline hover:text-on-surface hover:bg-surface-container flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                      title="Kembalikan ke Pemutar Utama"
+                      aria-label="Kembalikan ke Pemutar Utama"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">open_in_full</span>
+                    </button>
+                  )}
 
-                  {/* Tombol Tutup */}
+                  {/* Tombol Tutup (Dihide di mobile saat berada di halaman /live) */}
                   <button
                     type="button"
                     onClick={handleClosePlayer}
-                    className="w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                    className={`${
+                      isLiveRoute ? 'hidden md:flex' : 'flex'
+                    } w-7 h-7 rounded-lg text-outline hover:text-red-500 hover:bg-red-500/10 items-center justify-center transition-colors cursor-pointer shrink-0`}
                     title="Tutup Pemutar"
                     aria-label="Tutup Pemutar"
                   >
@@ -1118,7 +1317,48 @@ export default function PersistentFloatingLivePlayer() {
 
           {/* Frame Video YouTube 16:9 */}
           <div className="relative aspect-video w-full bg-black">
-            {isPipActive ? (
+            {playbackError ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-3 sm:p-4 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950 text-center select-none space-y-2 z-20">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+                  <span className="material-symbols-outlined text-[20px] sm:text-[22px]">
+                    {playbackError.reason === 'private' ? 'lock' : 'videocam_off'}
+                  </span>
+                </div>
+
+                <div className="space-y-0.5 max-w-[90%]">
+                  <p className="text-xs sm:text-sm font-extrabold text-white leading-tight">
+                    {playbackError.reason === 'private'
+                      ? 'Rekaman Diatur Privat oleh Saluran'
+                      : playbackError.reason === 'unembeddable'
+                      ? 'Pemutaran Dibatasi di Luar YouTube'
+                      : 'Video Tidak Dapat Diputar'}
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-white/70 line-clamp-2 leading-relaxed">
+                    {playbackError.message}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <a
+                    href={`https://www.youtube.com/watch?v=${activeStream.videoId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[13px] sm:text-[14px]">open_in_new</span>
+                    <span>Buka di YouTube</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={handleClosePlayer}
+                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white/90 text-[11px] font-semibold transition-colors cursor-pointer"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              </div>
+            ) : isPipActive ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-4 bg-neutral-950 text-center gap-2.5 select-none">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center animate-pulse">
                   <span className="material-symbols-outlined text-[24px]">picture_in_picture_alt</span>
@@ -1143,7 +1383,7 @@ export default function PersistentFloatingLivePlayer() {
                 <iframe
                   ref={iframeRef}
                   key={`${activeStream.videoId}-${resumeTime}`}
-                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1`}
+                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&controls=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
                   title={activeStream.title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -1262,7 +1502,7 @@ export default function PersistentFloatingLivePlayer() {
                 </button>
               </div>
             </div>
-          ) : (
+          ) : isMobileDockedTop || (isFocusOverlayMode && isMobileViewport) ? null : (
             /* Footer Info Judul & Tombol Audio Floating Biasa */
             <div 
               onPointerDown={handlePointerDown}

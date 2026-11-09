@@ -623,6 +623,14 @@ export default function FAQPage() {
               href="/"
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
             >
+              <span className="material-symbols-outlined text-[18px]">home</span>
+              <span>Beranda</span>
+            </Link>
+
+            <Link
+              href="/peta"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-on-surface-variant hover:text-primary hover:bg-surface-container transition-colors"
+            >
               <span className="material-symbols-outlined text-[18px]">map</span>
               <span>Peta Kajian</span>
             </Link>
@@ -913,7 +921,7 @@ export default function FAQPage() {
 
           <div className="flex items-center gap-2.5 shrink-0 flex-wrap justify-center">
             <Link
-              href="/"
+              href="/peta"
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold bg-primary hover:bg-primary/90 text-white dark:bg-emerald-600 dark:hover:bg-emerald-500 dark:text-white shadow-xs transition-transform active:scale-95"
             >
               <span className="material-symbols-outlined text-[18px]">map</span>

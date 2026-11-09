@@ -283,7 +283,7 @@ export default function DashboardPage() {
 
       if (!mounted) return
       if (!currentUser) {
-        router.push('/kontributor/login')
+        router.push('/login?next=/kontributor/dashboard')
         setLoading(false)
         return
       }
@@ -404,7 +404,7 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-surface p-3 sm:p-6 md:p-8 font-geist text-on-surface flex flex-col justify-between">
         <header className="max-w-4xl mx-auto w-full flex items-center justify-between gap-4 mb-6">
           <Link
-            href="/"
+            href="/peta"
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-on-surface-variant hover:text-primary transition-colors py-1.5 px-2 rounded-lg hover:bg-surface-container"
           >
             <span className="material-symbols-outlined text-[18px]">arrow_back</span>
@@ -468,7 +468,7 @@ export default function DashboardPage() {
           )}
 
           <Link
-            href="/"
+            href="/peta"
             className="inline-flex items-center gap-1 text-xs font-semibold text-outline hover:text-on-surface transition-colors mt-2"
           >
             <span>Eksplorasi Peta Kajian</span>
@@ -566,7 +566,7 @@ export default function DashboardPage() {
             <span>Leaderboard</span>
           </Link>
           <Link
-            href="/"
+            href="/peta"
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-full text-xs font-medium transition-colors"
           >
             <span className="material-symbols-outlined text-[17px]">map</span>
@@ -1120,7 +1120,7 @@ export default function DashboardPage() {
             {/* Tombol Aksi */}
             <div className="w-full flex flex-col gap-2.5">
               <Link
-                href={submittedData.sessionId ? `/?session=${submittedData.sessionId}` : '/'}
+                href={submittedData.sessionId ? `/peta?session=${submittedData.sessionId}` : '/peta'}
                 className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-semibold rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 shadow-xs"
               >
                 <span className="material-symbols-outlined text-[18px]">map</span>

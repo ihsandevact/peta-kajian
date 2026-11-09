@@ -24,6 +24,7 @@ import {
   type StudyNote,
 } from '@/utils/studyNotes';
 import { useLivePlayer } from '@/context/LivePlayerContext';
+import { useConfirm } from '@/context/ConfirmDialogContext';
 
 const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), {
   ssr: false,
@@ -31,6 +32,7 @@ const EditSessionModal = dynamic(() => import('@/components/EditSessionModal'), 
 
 export default function ContributorProfilePage() {
   const router = useRouter();
+  const confirmDialog = useConfirm();
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [roleInfo, setRoleInfo] = useState<UserRoleInfo | null>(null);
@@ -91,7 +93,15 @@ export default function ContributorProfilePage() {
 
   const handleDeleteStudyNote = async (noteId: string) => {
     if (!user?.id) return;
-    if (!confirm('Apakah Anda yakin ingin menghapus catatan faidah ini?')) return;
+    const confirmed = await confirmDialog({
+      title: 'Hapus Catatan Faidah?',
+      description: 'Apakah Anda yakin ingin menghapus catatan faidah ini? Tindakan ini tidak dapat dibatalkan.',
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+      icon: 'delete',
+    });
+    if (!confirmed) return;
     setDeletingNoteId(noteId);
     const ok = await deleteStudyNote(user.id, noteId);
     setDeletingNoteId(null);
@@ -238,7 +248,14 @@ export default function ContributorProfilePage() {
   };
 
   const handleDelete = async (sessionId: string, title: string) => {
-    const confirmDelete = window.confirm(`Apakah Anda yakin ingin menghapus kajian "${title}"?`);
+    const confirmDelete = await confirmDialog({
+      title: 'Hapus Jadwal Kajian?',
+      description: `Apakah Anda yakin ingin menghapus kajian "${title}"? Data yang dihapus tidak dapat dikembalikan.`,
+      confirmText: 'Ya, Hapus',
+      cancelText: 'Batal',
+      variant: 'danger',
+      icon: 'delete',
+    });
     if (!confirmDelete) return;
 
     setDeletingId(sessionId);
@@ -415,7 +432,7 @@ export default function ContributorProfilePage() {
               </Link>
             )}
             <Link
-              href="/"
+              href="/peta"
               className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-semibold text-on-surface-variant hover:text-primary px-2.5 sm:px-3 py-1.5 rounded-full hover:bg-surface-container transition-colors"
             >
               <span className="material-symbols-outlined text-[15px] sm:text-[16px]">map</span>
@@ -788,7 +805,7 @@ export default function ContributorProfilePage() {
                     <span>Siaran Live</span>
                   </Link>
                   <Link
-                    href="/"
+                    href="/peta"
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold transition-colors"
                   >
                     <span className="material-symbols-outlined text-[16px]">map</span>
@@ -916,7 +933,7 @@ export default function ContributorProfilePage() {
                       <span>Aktivitas & Riwayat Saya</span>
                     </h2>
                     <Link
-                      href="/"
+                      href="/peta"
                       className="text-[11px] sm:text-xs font-semibold text-primary hover:underline flex items-center gap-1 whitespace-nowrap self-start xs:self-auto shrink-0"
                     >
                       <span>Buka di Peta</span>
@@ -927,7 +944,7 @@ export default function ContributorProfilePage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     {/* Card Bookmark */}
                     <Link
-                      href="/"
+                      href="/peta"
                       className="p-4 sm:p-5 rounded-3xl bg-surface-container-lowest border border-surface-container-high/70 shadow-xs flex items-center justify-between gap-3 hover:border-primary/40 transition-all group"
                     >
                       <div className="flex items-center gap-3">

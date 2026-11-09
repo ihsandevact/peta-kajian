@@ -197,6 +197,7 @@ interface AppMapProps {
   savedParkingSpot?: SavedParkingSpot | null;
   onClearParkingSpot?: () => void;
   onSelectAlternativeRoute?: (route: RouteResult) => void;
+  mobileView?: 'map' | 'list';
 }
 
 export default function AppMap({
@@ -216,6 +217,7 @@ export default function AppMap({
   savedParkingSpot,
   onClearParkingSpot,
   onSelectAlternativeRoute,
+  mobileView = 'list',
 }: AppMapProps) {
   const mapRef = React.useRef<MapRef>(null);
   const { resolvedTheme, toggleTheme } = useTheme();
@@ -376,6 +378,13 @@ export default function AppMap({
     }
   }, [isMapLoaded, resolvedTheme, isSatelliteMode, add3DBuildings]);
 
+  // Saat beralih ke tampilan peta di mobile, pastikan canvas WebGL ter-resize rapi
+  React.useEffect(() => {
+    if (isMapLoaded && mobileView === 'map' && mapRef.current) {
+      mapRef.current.resize();
+    }
+  }, [isMapLoaded, mobileView]);
+
   // Reset mode mengikuti pengguna saat navigasi dimulai
   React.useEffect(() => {
     if (isNavigating) {
@@ -505,8 +514,9 @@ export default function AppMap({
         // Desktop: offset Y positif (200px - 260px) agar card & poster berada aman di bawah pill info live
         offsetY = Math.min(260, Math.max(200, Math.round(window.innerHeight * 0.28)));
       } else {
-        // Mobile: naikkan posisi card secara adaptif (45px - 85px) agar berada di tengah area pandang aktif dan aman di atas bottom sheet (224px)
-        offsetY = Math.min(85, Math.max(45, Math.round(window.innerHeight * 0.085)));
+        // Mobile: posisikan card utuh tepat di tengah layar secara vertikal
+        // Anchor popup di bagian bawah (titik marker), sehingga marker diposisikan ~180px - 220px di bawah tengah viewport
+        offsetY = Math.min(220, Math.max(180, Math.round(window.innerHeight * 0.25)));
       }
     }
 
@@ -516,7 +526,7 @@ export default function AppMap({
       zoom: 14,
       pitch: 0,
       bearing: 0,
-      duration: 1200,
+      duration: 1000,
       essential: true,
     });
   }, []);
@@ -532,12 +542,18 @@ export default function AppMap({
     }
   }, [isMapLoaded, isNavigating, selectedSession]);
 
-  // Terbang ke kajian terpilih saat diklik atau saat peta pertama kali selesai dimuat
+  // Terbang ke kajian terpilih saat diklik, saat peta selesai dimuat, atau saat beralih tab di mobile
   React.useEffect(() => {
     if (isMapLoaded && selectedSession && hasPhysicalLocation(selectedSession)) {
-      flyToSession(selectedSession);
+      if (mapRef.current) {
+        mapRef.current.resize();
+      }
+      const timer = setTimeout(() => {
+        flyToSession(selectedSession);
+      }, 50);
+      return () => clearTimeout(timer);
     }
-  }, [isMapLoaded, selectedSession, flyToSession]);
+  }, [isMapLoaded, selectedSession, mobileView, flyToSession]);
 
   // Terbang ke area bulatan wilayah/lokasi yang dipilih dari filter (ketika tidak sedang memilih 1 kajian spesifik)
   React.useEffect(() => {
