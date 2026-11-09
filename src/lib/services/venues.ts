@@ -329,6 +329,10 @@ export async function fetchAllMosques(options: FetchMosquesOptions = {}): Promis
     }
 
     // 2. Ambil seluruh halaman `venues` per 1.000 baris secara paralel (batch 8 koneksi sekaligus agar cepat & stabil)
+    // Proyeksikan hanya kolom-kolom esensial untuk memangkas ukuran transfer payload network hingga ~50-60%
+    const VENUE_DIRECTORY_COLUMNS =
+      'id, name, slug, address, city, province, lat, lng, facilities, cover_image_url, contact_wa, youtube_channel, is_verified, is_test, updated_at';
+
     const pageIndices = Array.from({ length: totalPages }, (_, i) => i);
     const allVenueRows: any[] = [];
     const CONCURRENCY = 8;
@@ -341,7 +345,7 @@ export async function fetchAllMosques(options: FetchMosquesOptions = {}): Promis
           const to = Math.min(from + PAGE_SIZE - 1, limit - 1);
           const { data, error } = await supabaseClient
             .from('venues')
-            .select('*')
+            .select(VENUE_DIRECTORY_COLUMNS)
             .order('name', { ascending: true })
             .range(from, to);
 

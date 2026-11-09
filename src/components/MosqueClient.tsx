@@ -40,7 +40,7 @@ const MosqueRegionPickerModal = dynamic(() => import('./MosqueRegionPickerModal'
 const InAppRoutePanel = dynamic(() => import('./InAppRoutePanel'), { ssr: false });
 const LiveNavigationHUD = dynamic(() => import('./LiveNavigationHUD'), { ssr: false });
 
-const PAGE_BATCH_SIZE = 40;
+const PAGE_BATCH_SIZE = 20;
 const MASJID_STATE_STORAGE_KEY = 'peta_kajian_masjid_state';
 
 const QUICK_CITIES = [
