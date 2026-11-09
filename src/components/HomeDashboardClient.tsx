@@ -7,9 +7,8 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
-import { calculateDistance } from '@/utils/distance';
+import { getTodayKajian } from '@/lib/domain/kajianQuery';
 import { getPrayerScheduleAndNext, type DailyPrayerTimes } from '@/utils/prayerTimes';
-import { getEffectiveSessionInfo } from '@/utils/recurring';
 import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
 import { useLivePlayer } from '@/context/LivePlayerContext';
@@ -308,29 +307,7 @@ export default function HomeDashboardClient() {
 
   // Kajian Hari Ini (Prioritaskan yang berlangsung hari ini dan belum lewat)
   const todayKajianList = useMemo(() => {
-    if (!sessions || sessions.length === 0) return [];
-    const now = new Date();
-
-    const list = sessions.map((s) => {
-      const info = getEffectiveSessionInfo(s, now);
-      let dist: number | null = null;
-      if (userLocation && typeof s.venues?.lat === 'number' && typeof s.venues?.lng === 'number') {
-        dist = calculateDistance(
-          userLocation.lat,
-          userLocation.lng,
-          s.venues.lat,
-          s.venues.lng
-        );
-      }
-      return { session: s, info, distance: dist };
-    });
-
-    const todayItems = list.filter((item) => item.info.isToday && !item.info.isPast);
-    if (todayItems.length > 0) {
-      return todayItems.slice(0, 8);
-    }
-    // Fallback ke kajian mendatang terdekat jika belum ada yang hari ini
-    return list.filter((item) => !item.info.isPast).slice(0, 4);
+    return getTodayKajian(sessions, { userLocation });
   }, [sessions, userLocation]);
 
   // 2. Data Live Streaming (TanStack Query)
@@ -1085,11 +1062,11 @@ export default function HomeDashboardClient() {
             </div>
           ) : (
             <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
-              {todayKajianList.map(({ session, info, distance }) => {
+              {todayKajianList.map(({ session, effectiveDate, formattedSchedule, distanceKm, distanceLabel }) => {
                 const booked = isBookmarked(session.id);
                 const attend = isAttending(session.id);
-                const timeStr = info.effectiveDate
-                  ? info.effectiveDate.toLocaleTimeString('id-ID', {
+                const timeStr = effectiveDate
+                  ? effectiveDate.toLocaleTimeString('id-ID', {
                       hour: '2-digit',
                       minute: '2-digit',
                     }) + ' WIB'
@@ -1104,14 +1081,14 @@ export default function HomeDashboardClient() {
                       {/* Badge Tanggal & Jarak */}
                       <div className="flex items-center justify-between gap-1.5">
                         <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-600/10 px-2 py-0.5 rounded-full truncate">
-                          <span>{info.dateLabel}</span>
+                          <span>{formattedSchedule}</span>
                           {timeStr && <span>• {timeStr}</span>}
                         </span>
 
-                        {distance !== null && (
+                        {distanceKm !== null && (
                           <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full shrink-0">
                             <span className="material-symbols-outlined text-[11px]">near_me</span>
-                            <span>{distance.toFixed(1)} km</span>
+                            <span>{distanceLabel || `${distanceKm.toFixed(1)} km`}</span>
                           </span>
                         )}
                       </div>

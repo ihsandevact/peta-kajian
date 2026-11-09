@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import type { FilterState } from '@/components/HomeClient';
 import { type StudySession } from '@/lib/services/kajian';
+import { type EvaluatedStudySession, evaluateSession } from '@/lib/domain/kajianQuery';
 import SkeletonCard from './SkeletonCard';
 import { calculateDistance } from '@/utils/distance';
 import RegionPickerModal, { KAJIAN_FACILITY_OPTIONS } from './RegionPickerModal';
@@ -14,6 +15,7 @@ interface SidebarFilterProps {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   sessions: StudySession[];
+  evaluatedSessions?: EvaluatedStudySession[];
   allSessions?: StudySession[];
   selectedSession: StudySession | null;
   onSelectSession: (s: StudySession | null) => void;
@@ -29,6 +31,7 @@ interface SidebarFilterProps {
 
 interface KajianSidebarCardProps {
   session: StudySession;
+  evaluated?: EvaluatedStudySession;
   isSelected: boolean;
   isBookmarked: boolean;
   distanceLabel: string | null;
@@ -42,6 +45,7 @@ interface KajianSidebarCardProps {
 const KajianSidebarCard = React.memo(
   function KajianSidebarCard({
     session,
+    evaluated,
     isSelected,
     isBookmarked,
     distanceLabel,
@@ -52,8 +56,23 @@ const KajianSidebarCard = React.memo(
     lastElementRef,
   }: KajianSidebarCardProps) {
     const info = React.useMemo(() => {
-      return getEffectiveSessionInfo(session, new Date());
-    }, [session]);
+      if (evaluated) {
+        return {
+          dateLabel: evaluated.formattedSchedule,
+          isLive: evaluated.isLive,
+          isPast: evaluated.isPast && !session.is_recurring,
+          isToday: (evaluated.isToday || evaluated.isLive) && !(evaluated.isPast && !session.is_recurring),
+        };
+      }
+      const rawInfo = getEffectiveSessionInfo(session, new Date());
+      const isPast = rawInfo.isPast && !session.is_recurring;
+      return {
+        dateLabel: rawInfo.dateLabel,
+        isLive: rawInfo.isLive,
+        isPast,
+        isToday: (rawInfo.isToday || rawInfo.isLive) && !isPast,
+      };
+    }, [session, evaluated]);
 
     const [imgError, setImgError] = React.useState(false);
 
@@ -62,8 +81,8 @@ const KajianSidebarCard = React.memo(
     }, [session.id, session.poster_url]);
 
     const isLive = info.isLive;
-    const isPast = info.isPast && !session.is_recurring;
-    const isToday = (info.isToday || info.isLive) && !isPast;
+    const isPast = info.isPast;
+    const isToday = info.isToday;
     const isRutin = session.is_recurring;
     const isAkhwatOnly = session.audience_type === 'akhwat';
 
@@ -233,6 +252,7 @@ const KajianSidebarCard = React.memo(
       prev.isSelected === next.isSelected &&
       prev.isBookmarked === next.isBookmarked &&
       prev.session === next.session &&
+      prev.evaluated === next.evaluated &&
       prev.distanceLabel === next.distanceLabel &&
       prev.isLast === next.isLast &&
       prev.currentUser === next.currentUser
@@ -244,6 +264,7 @@ export default function SidebarFilter({
   filters,
   setFilters,
   sessions,
+  evaluatedSessions,
   allSessions,
   selectedSession,
   onSelectSession,
@@ -630,10 +651,13 @@ export default function SidebarFilter({
             )}
           </div>
         ) : (
-          sessions.slice(0, visibleCount).map((session, index) => {
-            // Haversine Distance Calculation
-            let distanceLabel: string | null = null;
-            if (userLocation && session.venues?.lat && session.venues?.lng) {
+          (evaluatedSessions || sessions).slice(0, visibleCount).map((item, index) => {
+            const isEvaluated = Boolean(evaluatedSessions && 'session' in item);
+            const session = isEvaluated ? (item as EvaluatedStudySession).session : (item as StudySession);
+            const evaluated = isEvaluated ? (item as EvaluatedStudySession) : undefined;
+
+            let distanceLabel: string | null = evaluated ? evaluated.distanceLabel : null;
+            if (!evaluated && userLocation && session.venues?.lat && session.venues?.lng) {
               const dist = calculateDistance(userLocation.lat, userLocation.lng, session.venues.lat, session.venues.lng);
               distanceLabel = dist < 1 ? `${(dist * 1000).toFixed(0)} m` : `${dist.toFixed(1)} km`;
             }
@@ -645,6 +669,7 @@ export default function SidebarFilter({
               <KajianSidebarCard
                 key={session.id}
                 session={session}
+                evaluated={evaluated}
                 isSelected={isSelected}
                 isBookmarked={isBookmarked(session.id)}
                 distanceLabel={distanceLabel}

@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import SidebarFilter from '@/components/SidebarFilter';
 import { hasPhysicalLocation, type StudySession } from '@/lib/services/kajian';
+import { evaluateAndQuerySessions } from '@/lib/domain/kajianQuery';
 import { calculateDistance } from '@/utils/distance';
 import { createClient } from '@/utils/supabase/client';
 import { type SelectedRegion, sessionMatchesRegion } from '@/utils/regions';
@@ -581,123 +582,28 @@ export default function HomeClient() {
     };
   }, []);
 
-  const filteredSessions = useMemo(() => {
-    return sessions.filter(s => {
-      // Hanya tampilkan kajian yang memiliki lokasi fisik di peta (offline atau hybrid)
-      // Kajian online murni difokuskan di halaman /live
-      if (!hasPhysicalLocation(s)) return false;
-      
-      // Filter Wilayah / Provinsi / Kota
-      if (filters.region && !sessionMatchesRegion(s, filters.region)) {
-        return false;
-      }
-
-      // Search Query (judul, pemateri, masjid, dan alamat)
-      if (filters.searchQuery) {
-        const query = filters.searchQuery.toLowerCase();
-        const matchTitle = s.title.toLowerCase().includes(query);
-        const matchSpeaker = s.speaker_name.toLowerCase().includes(query);
-        const matchVenue = s.venues?.name?.toLowerCase().includes(query);
-        const matchAddress = s.venues?.address?.toLowerCase().includes(query);
-        if (!matchTitle && !matchSpeaker && !matchVenue && !matchAddress) return false;
-      }
-
-      // Kategori
-      if (!filters.audience.includes(s.audience_type)) return false;
-
-      // Fasilitas
-      if (filters.facilities.length > 0 && s.venues?.facilities) {
-        const hasAllFacilities = filters.facilities.every(
-          (fac) => s.venues!.facilities[fac as keyof typeof s.venues.facilities] === true
-        );
-        if (!hasAllFacilities) return false;
-      }
-
-      // Status Filter: Berlangsung, Tersimpan, Selesai, Rutin, Online
-      const now = new Date();
-      const info = getEffectiveSessionInfo(s, now);
-      const isRutin = !!s.is_recurring;
-      
-      // Smart Filtering: Sembunyikan kajian tematik yang sudah lewat dari tampilan utama
-      // kecuali pengguna secara sengaja memilih filter 'selesai' atau melihat 'tersimpan'
-      if (filters.time !== 'selesai' && filters.time !== 'tersimpan' && info.isPast && !isRutin) {
-        return false;
-      }
-
-      if (filters.time === 'tersimpan' && !bookmarks.includes(s.id)) return false;
-      if ((filters.time === 'hari_ini' || filters.time === 'berlangsung') && (!info.isToday && !info.isLive)) return false;
-      if (filters.time === 'terbaru' && (info.isPast && !isRutin)) return false;
-      if (filters.time === 'selesai' && (!info.isPast || isRutin)) return false;
-      if (filters.time === 'rutin' && !isRutin) return false;
-      if (filters.time === 'online' && !s.is_online && !s.stream_url) return false;
-      if (filters.time === 'akhwat' && s.audience_type !== 'akhwat') return false;
-      
-      return true;
+  // Mesin Pencarian & Pemeringkatan Kajian (Kajian Schedule & Query Engine)
+  const evaluatedSessions = useMemo(() => {
+    return evaluateAndQuerySessions(sessions, {
+      filter: {
+        placement: 'map',
+        region: filters.region,
+        searchQuery: filters.searchQuery,
+        audience: filters.audience,
+        facilities: filters.facilities,
+        time: filters.time,
+        bookmarkedIds: bookmarks,
+      },
+      sort: {
+        userLocation,
+        mode: filters.time === 'terdekat' ? 'distance' : 'auto',
+      },
     });
-  }, [sessions, filters, bookmarks]);
+  }, [sessions, filters, bookmarks, userLocation]);
 
-  // SMART SORTING: Live -> Upcoming/Rutin di atas, Selesai di bawah (Dioptimasi dengan Schwartzian Transform O(N))
   const sortedSessions = useMemo(() => {
-    const isNearby = filters.time === 'terdekat' && !!userLocation;
-    const now = new Date();
-
-    // 1. Decorate: Hitung info & jarak hanya 1x per sesi
-    const decorated = filteredSessions.map((session) => {
-      const hasLoc = hasPhysicalLocation(session);
-      const dist =
-        isNearby && hasLoc
-          ? calculateDistance(userLocation.lat, userLocation.lng, session.venues!.lat, session.venues!.lng)
-          : null;
-      const info = !isNearby ? getEffectiveSessionInfo(session, now) : null;
-      return {
-        session,
-        hasLoc,
-        dist,
-        info,
-      };
-    });
-
-    // 2. Sort: Komparator murni operasi numerik/boolean cepat tanpa re-parsing
-    decorated.sort((itemA, itemB) => {
-      if (isNearby) {
-        if (itemA.hasLoc && !itemB.hasLoc) return -1;
-        if (!itemA.hasLoc && itemB.hasLoc) return 1;
-        if (!itemA.hasLoc && !itemB.hasLoc) return 0;
-        return (itemA.dist ?? 0) - (itemB.dist ?? 0);
-      }
-
-      const infoA = itemA.info!;
-      const infoB = itemB.info!;
-
-      // 1. Prioritas Tertinggi: Sedang Berlangsung (Live)
-      if (infoA.isLive && !infoB.isLive) return -1;
-      if (!infoA.isLive && infoB.isLive) return 1;
-
-      // 2. Upcoming / Future vs Selesai / Past
-      const aIsFuture = !infoA.isPast;
-      const bIsFuture = !infoB.isPast;
-
-      if (aIsFuture && !bIsFuture) return -1;
-      if (!aIsFuture && bIsFuture) return 1;
-
-      // 3. Kronologis waktu sesi
-      const timeA = infoA.effectiveDate ? infoA.effectiveDate.getTime() : null;
-      const timeB = infoB.effectiveDate ? infoB.effectiveDate.getTime() : null;
-
-      if (aIsFuture && bIsFuture) {
-        if (timeA !== null && timeB !== null) return timeA - timeB;
-        if (timeA !== null && timeB === null) return -1;
-        if (timeA === null && timeB !== null) return 1;
-        return 0;
-      } else {
-        if (timeA !== null && timeB !== null) return timeB - timeA;
-        return 0;
-      }
-    });
-
-    // 3. Undecorate: Kembalikan daftar sesi asli
-    return decorated.map((d) => d.session);
-  }, [filteredSessions, filters.time, userLocation]);
+    return evaluatedSessions.map((e) => e.session);
+  }, [evaluatedSessions]);
 
   // Deep-linking: auto-select session from ?session=<id>, ?q=<search>, ?time=<filter> in URL
   useEffect(() => {
@@ -1163,6 +1069,7 @@ export default function HomeClient() {
                 filters={filters} 
                 setFilters={setFilters} 
                 sessions={sortedSessions} 
+                evaluatedSessions={evaluatedSessions}
                 allSessions={sessions}
                 selectedSession={selectedSession}
                 onSelectSession={handleSelectSession}
@@ -1209,6 +1116,7 @@ export default function HomeClient() {
                         filters={filters} 
                         setFilters={setFilters} 
                         sessions={sortedSessions} 
+                        evaluatedSessions={evaluatedSessions}
                         allSessions={sessions}
                         selectedSession={selectedSession}
                         onSelectSession={handleSelectSession}
