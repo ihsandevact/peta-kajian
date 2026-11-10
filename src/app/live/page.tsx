@@ -10,6 +10,7 @@ import {
   type EndedStreamItem,
   formatUpcomingTime,
   formatEndedTime,
+  pinActiveVideoToTop,
 } from '@/lib/services/youtubeTracker';
 import { checkIsAdmin } from '@/lib/services/admin';
 import { useLivePlayer } from '@/context/LivePlayerContext';
@@ -59,6 +60,7 @@ export default function LiveStreamingPage() {
 
   // Status apakah floating mini player sedang aktif memutar siaran live
   const isMiniPlayerActive = isLivePlayerOpen && Boolean(activeStream);
+  const playingVideoId = selectedVideo?.videoId || (isMiniPlayerActive ? activeStream?.videoId : undefined);
 
   // Deteksi reaktif layar mobile (< 640px)
   const [isMobileScreen, setIsMobileScreen] = useState<boolean>(() => {
@@ -296,7 +298,7 @@ export default function LiveStreamingPage() {
 
   // Filter pencarian khusus untuk siaran live yang sedang tayang (debounced 300ms)
   const filteredLiveChannels = useMemo(() => {
-    return liveChannels.filter((c) => {
+    const list = liveChannels.filter((c) => {
       const q = debouncedSearchQuery.toLowerCase().trim();
       if (!q) return true;
       return (
@@ -306,7 +308,10 @@ export default function LiveStreamingPage() {
         (c.current_video_title && c.current_video_title.toLowerCase().includes(q))
       );
     });
-  }, [liveChannels, debouncedSearchQuery]);
+
+    if (!playingVideoId) return list;
+    return pinActiveVideoToTop(list, (c) => c.current_video_id === playingVideoId);
+  }, [liveChannels, debouncedSearchQuery, playingVideoId]);
 
   // Filter pencarian untuk siaran mendatang (debounced 300ms)
   const filteredUpcomingStreams = useMemo(() => {
@@ -360,7 +365,7 @@ export default function LiveStreamingPage() {
 
   // Filter pencarian dan channel untuk rekaman siaran yang telah berakhir (debounced 300ms)
   const filteredEndedStreams = useMemo(() => {
-    return endedStreams.filter((item) => {
+    const list = endedStreams.filter((item) => {
       if (selectedEndedChannelId !== 'all' && item.channel.id !== selectedEndedChannelId) {
         return false;
       }
@@ -373,7 +378,10 @@ export default function LiveStreamingPage() {
         item.channel.channel_handle.toLowerCase().includes(q)
       );
     });
-  }, [endedStreams, debouncedSearchQuery, selectedEndedChannelId]);
+
+    if (!playingVideoId) return list;
+    return pinActiveVideoToTop(list, (item) => item.videoId === playingVideoId);
+  }, [endedStreams, debouncedSearchQuery, selectedEndedChannelId, playingVideoId]);
 
   // Daftar channel yang memiliki setidaknya 1 rekaman live selesai
   const endedChannelsList = useMemo(() => {
@@ -899,6 +907,7 @@ export default function LiveStreamingPage() {
                         avatarUrl={channel.avatar_url || undefined}
                         speakerName={channel.default_speaker_name || undefined}
                         isLive={true}
+                        isPlaying={channel.current_video_id === playingVideoId}
                         onWatch={() =>
                           handleWatchVideo({
                             videoId: channel.current_video_id!,
@@ -1047,6 +1056,7 @@ export default function LiveStreamingPage() {
                           speakerName={item.speakerName || item.channel.default_speaker_name || undefined}
                           isLive={false}
                           timeText={item.endedAt ? formatEndedTime(item.endedAt) : undefined}
+                          isPlaying={item.videoId === playingVideoId}
                           onWatch={() =>
                             handleWatchVideo({
                               videoId: item.videoId,

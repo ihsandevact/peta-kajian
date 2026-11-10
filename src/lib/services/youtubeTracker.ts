@@ -311,6 +311,19 @@ export function formatEndedTime(isoDate: string): string {
 }
 
 /**
+ * Memindahkan video yang sedang aktif/diputar ke posisi paling atas (index 0) dalam sebuah list.
+ * Jika item tidak ditemukan atau sudah berada di index 0, urutan list asli tetap dipertahankan tanpa mutasi.
+ */
+export function pinActiveVideoToTop<T>(items: T[], isMatch: (item: T) => boolean): T[] {
+  if (!items || items.length <= 1) return items;
+  const activeIndex = items.findIndex(isMatch);
+  if (activeIndex <= 0) return items;
+  const activeItem = items[activeIndex];
+  const rest = items.filter((_, idx) => idx !== activeIndex);
+  return [activeItem, ...rest];
+}
+
+/**
  * Mengecek status live sebuah video ID secara presisi menggunakan YouTube InnerTube Player API (JSON).
  * Endpoint ini tidak membutuhkan API key, sangat cepat (~200ms), dan tidak pernah dicegat
  * oleh Bot Captcha di datacenter cloud (seperti server Vercel/AWS).

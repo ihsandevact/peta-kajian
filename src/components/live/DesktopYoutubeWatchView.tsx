@@ -6,7 +6,7 @@ import type {
   UpcomingStreamItem,
   EndedStreamItem,
 } from '@/lib/services/youtubeTracker';
-import { formatUpcomingTime, formatEndedTime } from '@/lib/services/youtubeTracker';
+import { formatUpcomingTime, formatEndedTime, pinActiveVideoToTop } from '@/lib/services/youtubeTracker';
 import { ChannelVerifiedBadge } from './ChannelVerifiedBadge';
 import {
   sendPlayVideo,
@@ -174,16 +174,17 @@ export default function DesktopYoutubeWatchView({
 
     // Filter berdasarkan kata kunci pencarian (searchQuery)
     const q = searchQuery.toLowerCase().trim();
-    if (q) {
-      return list.filter(
-        (v) =>
-          v.title.toLowerCase().includes(q) ||
-          v.channelName.toLowerCase().includes(q) ||
-          (v.speakerName && v.speakerName.toLowerCase().includes(q))
-      );
-    }
+    const filtered = q
+      ? list.filter(
+          (v) =>
+            v.title.toLowerCase().includes(q) ||
+            v.channelName.toLowerCase().includes(q) ||
+            (v.speakerName && v.speakerName.toLowerCase().includes(q))
+        )
+      : list;
 
-    return list;
+    if (!currentVideo?.videoId) return filtered;
+    return pinActiveVideoToTop(filtered, (v) => v.videoId === currentVideo.videoId);
   }, [liveChannels, upcomingStreams, endedStreams, sidebarFilter, currentVideo.videoId, searchQuery]);
 
   return (

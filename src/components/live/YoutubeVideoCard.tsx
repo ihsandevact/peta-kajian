@@ -12,6 +12,7 @@ export interface YoutubeVideoCardProps {
   speakerName?: string;
   isLive?: boolean;
   timeText?: string;
+  isPlaying?: boolean;
   onWatch: () => void;
   onOpenStudyMode?: () => void;
   onShare?: () => void;
@@ -27,6 +28,7 @@ export default function YoutubeVideoCard({
   speakerName,
   isLive = false,
   timeText,
+  isPlaying = false,
   onWatch,
   onOpenStudyMode,
   onShare,
@@ -40,7 +42,7 @@ export default function YoutubeVideoCard({
       {/* 1. THUMBNAIL 16:9 DENGAN HOVER EFFECT & STATUS BADGES */}
       <div
         onClick={onWatch}
-        className="relative aspect-video w-full rounded-2xl overflow-hidden bg-surface-container cursor-pointer shadow-xs group-hover:shadow-md transition-all duration-300 group-hover:-translate-y-0.5"
+        className={`relative aspect-video w-full rounded-2xl overflow-hidden bg-surface-container cursor-pointer shadow-xs group-hover:shadow-md transition-all duration-300 group-hover:-translate-y-0.5 ${isPlaying ? "ring-2 ring-emerald-500/70" : ""}`}
       >
         {!imgError ? (
           <img
@@ -59,12 +61,21 @@ export default function YoutubeVideoCard({
           </div>
         )}
 
-        {/* Hover Dark Gradient Overlay */}
-        <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <div className="w-11 h-11 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
-            <span className="material-symbols-outlined text-[24px]">play_arrow</span>
+        {/* Overlay Pemutaran / Hover Effect */}
+        {isPlaying ? (
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-[1px] flex items-center justify-center text-white z-10 pointer-events-none">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/85 border border-emerald-500/50 text-xs font-bold text-emerald-400 shadow-lg">
+              <span className="material-symbols-outlined text-[16px] animate-pulse">equalizer</span>
+              <span className="text-white text-[11px]">Sedang Diputar</span>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <div className="w-11 h-11 rounded-full bg-red-600/90 text-white flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-transform">
+              <span className="material-symbols-outlined text-[24px]">play_arrow</span>
+            </div>
+          </div>
+        )}
 
         {/* Badge Status (Pojok Kanan Bawah Khas YouTube) */}
         <div className="absolute bottom-2 right-2 z-10 pointer-events-none">
@@ -100,6 +111,12 @@ export default function YoutubeVideoCard({
 
         {/* Kolom Teks: Judul, Saluran, Pemateri, Status */}
         <div className="flex-1 min-w-0">
+          {isPlaying && (
+            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 mb-1 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+              <span className="material-symbols-outlined text-[12px] animate-pulse">equalizer</span>
+              <span>Sedang Diputar</span>
+            </div>
+          )}
           {/* Judul Kajian 2 Baris */}
           <h3
             onClick={onWatch}

@@ -28,7 +28,7 @@ export default function DzikirPage() {
   const [activeTab, setActiveTab] = useState<DzikirTimeTab>(initialTimeTab);
   const [viewMode, setViewMode] = useState<'focus' | 'list'>('focus');
   const [arabicFontSize, setArabicFontSize] = useState<'normal' | 'large' | 'xlarge'>('large');
-  const [showLatin, setShowLatin] = useState<boolean>(true);
+  const [showLatin, setShowLatin] = useState<boolean>(false);
   const [focusIndex, setFocusIndex] = useState<number>(0);
 
   // Ref untuk timer auto-advance agar tidak bentrok atau terpanggil ganda
@@ -75,6 +75,26 @@ export default function DzikirPage() {
     },
     []
   );
+
+  // Muat preferensi showLatin dari localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('dzikir_show_latin');
+      if (stored !== null) {
+        setShowLatin(stored === 'true');
+      }
+    } catch {}
+  }, []);
+
+  const handleToggleLatin = useCallback(() => {
+    setShowLatin((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('dzikir_show_latin', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Muat data tersimpan dari localStorage saat halaman dibuka
   useEffect(() => {
@@ -326,7 +346,7 @@ export default function DzikirPage() {
             onClick={() => handleSelectTab('pagi')}
             className={`py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
               activeTab === 'pagi'
-                ? 'bg-amber-500 text-white shadow-xs'
+                ? 'bg-primary text-on-primary shadow-xs'
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
@@ -339,7 +359,7 @@ export default function DzikirPage() {
             onClick={() => handleSelectTab('petang')}
             className={`py-2 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer ${
               activeTab === 'petang'
-                ? 'bg-indigo-600 text-white shadow-xs'
+                ? 'bg-primary text-on-primary shadow-xs'
                 : 'text-on-surface-variant hover:text-on-surface'
             }`}
           >
@@ -381,7 +401,7 @@ export default function DzikirPage() {
               onClick={() => handleSelectViewMode('focus')}
               className={`px-2.5 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer ${
                 viewMode === 'focus'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-primary text-on-primary shadow-xs'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
@@ -393,7 +413,7 @@ export default function DzikirPage() {
               onClick={() => handleSelectViewMode('list')}
               className={`px-2.5 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-all cursor-pointer ${
                 viewMode === 'list'
-                  ? 'bg-emerald-600 text-white shadow-xs'
+                  ? 'bg-primary text-on-primary shadow-xs'
                   : 'text-on-surface-variant hover:text-on-surface'
               }`}
             >
@@ -406,10 +426,10 @@ export default function DzikirPage() {
             {/* Toggle Transliterasi Latin */}
             <button
               type="button"
-              onClick={() => setShowLatin((prev) => !prev)}
+              onClick={handleToggleLatin}
               className={`px-2 py-1 rounded-xl border text-[11px] font-bold transition-colors cursor-pointer ${
                 showLatin
-                  ? 'bg-emerald-600/10 border-emerald-600/30 text-emerald-700 dark:text-emerald-300'
+                  ? 'bg-primary/10 border-primary/30 text-primary'
                   : 'bg-surface-container border-outline-variant/60 text-on-surface-variant'
               }`}
               title="Tampilkan/Sembunyikan Teks Latin"

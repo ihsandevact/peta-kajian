@@ -6,7 +6,7 @@ import type {
   UpcomingStreamItem,
   EndedStreamItem,
 } from '@/lib/services/youtubeTracker';
-import { formatUpcomingTime, formatEndedTime } from '@/lib/services/youtubeTracker';
+import { formatUpcomingTime, formatEndedTime, pinActiveVideoToTop } from '@/lib/services/youtubeTracker';
 import { YoutubeCompactCardSkeleton } from '@/components/live/EndedStreamSkeleton';
 import { ChannelVerifiedBadge } from './ChannelVerifiedBadge';
 import {
@@ -470,7 +470,7 @@ export default function MobileYoutubeLiveViewer({
   const q = searchQuery.toLowerCase().trim();
 
   const filteredLive = useMemo(() => {
-    return liveChannels.filter((c) => {
+    const list = liveChannels.filter((c) => {
       if (selectedChannelId !== 'all' && c.id !== selectedChannelId) return false;
       if (!q) return true;
       return (
@@ -480,7 +480,10 @@ export default function MobileYoutubeLiveViewer({
         (c.current_video_title && c.current_video_title.toLowerCase().includes(q))
       );
     });
-  }, [liveChannels, q, selectedChannelId]);
+
+    if (!activeVideo?.videoId) return list;
+    return pinActiveVideoToTop(list, (c) => c.current_video_id === activeVideo.videoId);
+  }, [liveChannels, q, selectedChannelId, activeVideo?.videoId]);
 
   const filteredUpcoming = useMemo(() => {
     return upcomingStreams.filter((item) => {
@@ -495,7 +498,7 @@ export default function MobileYoutubeLiveViewer({
   }, [upcomingStreams, q, selectedChannelId]);
 
   const filteredEnded = useMemo(() => {
-    return endedStreams.filter((item) => {
+    const list = endedStreams.filter((item) => {
       if (selectedChannelId !== 'all' && item.channel.id !== selectedChannelId) return false;
       if (!q) return true;
       return (
@@ -504,7 +507,10 @@ export default function MobileYoutubeLiveViewer({
         (item.speakerName && item.speakerName.toLowerCase().includes(q))
       );
     });
-  }, [endedStreams, q, selectedChannelId]);
+
+    if (!activeVideo?.videoId) return list;
+    return pinActiveVideoToTop(list, (item) => item.videoId === activeVideo.videoId);
+  }, [endedStreams, q, selectedChannelId, activeVideo?.videoId]);
 
   // Daftar channel aktif untuk filter chips
   const activeChannelsList = useMemo(() => {
@@ -1198,6 +1204,12 @@ export default function MobileYoutubeLiveViewer({
 
                       {/* Meta Detail */}
                       <div className="flex-1 min-w-0 py-0.5">
+                        {isPlaying && (
+                          <div className="inline-flex items-center gap-1 px-1.5 py-0.5 mb-1 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                            <span className="material-symbols-outlined text-[12px] animate-pulse">equalizer</span>
+                            <span>Sedang Diputar</span>
+                          </div>
+                        )}
                         <h4 className="text-xs font-bold text-on-surface line-clamp-2 leading-snug">
                           {videoInfo.title}
                         </h4>
@@ -1350,6 +1362,12 @@ export default function MobileYoutubeLiveViewer({
                         </div>
 
                         <div className="flex-1 min-w-0 py-0.5">
+                          {isPlaying && (
+                            <div className="inline-flex items-center gap-1 px-1.5 py-0.5 mb-1 rounded bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+                              <span className="material-symbols-outlined text-[12px] animate-pulse">equalizer</span>
+                              <span>Sedang Diputar</span>
+                            </div>
+                          )}
                           <h4 className="text-xs font-bold text-on-surface line-clamp-2 leading-snug">
                             {item.title}
                           </h4>
