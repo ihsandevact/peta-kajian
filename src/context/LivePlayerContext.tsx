@@ -71,6 +71,7 @@ const LivePlayerContext = createContext<LivePlayerContextType | undefined>(undef
 
 export function LivePlayerProvider({ children }: { children: React.ReactNode }) {
   const [playerState, dispatch] = useReducer(livePlayerReducer, initialLivePlayerState);
+  const [sessionStartTime, setSessionStartTime] = useState<number>(0);
 
   const [studySession, setStudySession] = useState<ActiveStudySession | null>(null);
   const [isStudyNotesOpen, setIsStudyNotesOpen] = useState(false);
@@ -115,6 +116,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       const hydrated = hydrateLivePlayerSession(raw);
       if (hydrated) {
         dispatch({ type: 'RESTORE', state: hydrated.playerState });
+        setSessionStartTime(hydrated.playerState.currentTime ?? 0);
         if (hydrated.studySession) {
           setStudySession(hydrated.studySession);
           setIsStudyNotesOpen(hydrated.isStudyNotesOpen);
@@ -145,6 +147,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
   }, [playerState, syncToStorage]);
 
   const playStream = useCallback((stream: ActiveLiveStream, startTime?: number) => {
+    setSessionStartTime(startTime ?? 0);
     dispatch({ type: 'PLAY', stream, startTime });
   }, []);
 
@@ -154,6 +157,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
         window.dispatchEvent(new CustomEvent('peta-kajian:stop-mini-player'));
       }
     } catch {}
+    setSessionStartTime(0);
     dispatch({ type: 'CLOSE' });
     try {
       sessionStorage.removeItem(LIVE_PLAYER_SESSION_STORAGE_KEY);
@@ -273,7 +277,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
       isMinimized,
       isModalExpanded,
       isPipActive,
-      initialResumeTime: playerState.currentTime,
+      initialResumeTime: sessionStartTime,
       playStream,
       closePlayer,
       toggleMinimize,
@@ -300,7 +304,7 @@ export function LivePlayerProvider({ children }: { children: React.ReactNode }) 
     [
       playerState.activeStream,
       playerState.mode,
-      playerState.currentTime,
+      sessionStartTime,
       setMode,
       isOpen,
       isMinimized,

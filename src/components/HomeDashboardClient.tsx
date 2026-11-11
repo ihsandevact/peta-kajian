@@ -17,7 +17,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
 import { HomeKajianCardSkeleton, HomeArticleCardSkeleton } from '@/components/HomeDashboardSkeleton';
 import DailyHadithCard from '@/components/DailyHadithCard';
-import { INITIAL_ARTICLES, type IslamicArticle } from '@/data/initialArticles';
+import { type IslamicArticle } from '@/data/initialArticles';
 
 // Dynamic lazy imports for interactive sheets/modals
 const MoreMenuBottomSheet = dynamic(() => import('@/components/MoreMenuBottomSheet'), { ssr: false });
@@ -44,7 +44,8 @@ function HomeArticleListItem({
   index: number;
 }) {
   const [imgError, setImgError] = useState(false);
-  const safeThumbUrl = CURATED_ARTICLE_THUMBNAILS[index % CURATED_ARTICLE_THUMBNAILS.length];
+  const fallbackThumb = CURATED_ARTICLE_THUMBNAILS[index % CURATED_ARTICLE_THUMBNAILS.length];
+  const displayImage = !imgError && art.imageUrl ? art.imageUrl : fallbackThumb;
 
   return (
     <Link
@@ -53,9 +54,9 @@ function HomeArticleListItem({
     >
       {/* Thumbnail Kecil di Kiri */}
       <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-xl overflow-hidden bg-[#e4eee8] dark:bg-emerald-950/60 shrink-0 relative border border-outline-variant/20">
-        {!imgError ? (
+        {!imgError && displayImage ? (
           <img
-            src={safeThumbUrl}
+            src={displayImage}
             alt={art.title}
             loading="lazy"
             onError={() => setImgError(true)}
@@ -92,7 +93,11 @@ function HomeArticleListItem({
   );
 }
 
-export default function HomeDashboardClient() {
+interface HomeDashboardClientProps {
+  initialArticles?: IslamicArticle[];
+}
+
+export default function HomeDashboardClient({ initialArticles = [] }: HomeDashboardClientProps) {
   const router = useRouter();
   const { playStream } = useLivePlayer();
   const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
@@ -242,16 +247,23 @@ export default function HomeDashboardClient() {
   };
 
   // Artikel Pilihan (3 item list vertikal)
-  const [featuredArticles, setFeaturedArticles] = useState<IslamicArticle[]>([]);
-  const [isArticlesLoading, setIsArticlesLoading] = useState(true);
+  const [featuredArticles, setFeaturedArticles] = useState<IslamicArticle[]>(initialArticles);
+  const [isArticlesLoading, setIsArticlesLoading] = useState(initialArticles.length === 0);
 
   useEffect(() => {
+    // Jika artikel sudah tersedia dari SSR, gunakan langsung
+    if (initialArticles && initialArticles.length > 0) {
+      setFeaturedArticles(initialArticles);
+      setIsArticlesLoading(false);
+      return;
+    }
+
     async function loadLatestArticles() {
       try {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('articles')
-          .select('*')
+          .select('id, title, slug, summary, source_slug, source_name, source_url, author_name, read_time_minutes, published_at, image_url, is_featured')
           .eq('is_published', true)
           .order('published_at', { ascending: false })
           .limit(3);
@@ -269,6 +281,7 @@ export default function HomeDashboardClient() {
             read_time_minutes: number | null;
             published_at: string | null;
             image_url: string | null;
+            is_featured?: boolean;
           }>;
 
           setFeaturedArticles(
@@ -288,17 +301,18 @@ export default function HomeDashboardClient() {
               imageUrl: d.image_url || undefined,
               publishedAt: d.published_at || new Date().toISOString(),
               readTimeMinutes: d.read_time_minutes || 4,
+              isFeatured: Boolean(d.is_featured),
             }))
           );
-        } else {
-          setFeaturedArticles(INITIAL_ARTICLES.slice(0, 3));
         }
-      } catch {
-        setFeaturedArticles(INITIAL_ARTICLES.slice(0, 3));
+      } catch (err) {
+        console.error('Error fetching articles client-side:', err);
+      } finally {
+        setIsArticlesLoading(false);
       }
     }
-    loadLatestArticles().finally(() => setIsArticlesLoading(false));
-  }, []);
+    loadLatestArticles();
+  }, [initialArticles]);
 
   // Data Kajian (TanStack Query)
   const { sessions, isLoading: isSessionsLoading } = useActiveSessionsQuery({

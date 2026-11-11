@@ -87,6 +87,13 @@ export default function PersistentFloatingLivePlayer() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pipWindowRef = useRef<Window | null>(null);
   const isShuttingDownRef = useRef(false);
+  const initialStartSecRef = useRef<number>(0);
+  const currentStreamVideoIdRef = useRef<string | null>(null);
+
+  if (activeStream?.videoId && currentStreamVideoIdRef.current !== activeStream.videoId) {
+    currentStreamVideoIdRef.current = activeStream.videoId;
+    initialStartSecRef.current = initialResumeTime || 0;
+  }
 
   const [origin, setOrigin] = useState<string>('');
 
@@ -526,6 +533,7 @@ export default function PersistentFloatingLivePlayer() {
           if (isErrorEvent) {
             const rawCode = data?.data ?? data?.info?.errorCode ?? data?.info;
             const errCode = Number(rawCode);
+            if (!isNaN(errCode) && errCode > 0) {
             let errorReason: 'private' | 'unembeddable' | 'not_found' | 'generic' = 'generic';
             let errorMsg = 'Video tidak dapat dimuat atau sedang tidak tersedia.';
 
@@ -545,6 +553,7 @@ export default function PersistentFloatingLivePlayer() {
               message: errorMsg,
               reason: errorReason,
             });
+            }
           }
 
           // Tangani event onReady dari YouTube widget -> segera picu playVideo
@@ -613,6 +622,7 @@ export default function PersistentFloatingLivePlayer() {
 
     const handleVisibilityResume = () => {
       if (isShuttingDownRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       try {
         if (iframeRef.current) {
           sendPlayVideo(iframeRef.current);
@@ -622,6 +632,7 @@ export default function PersistentFloatingLivePlayer() {
 
     const handleFocusResume = () => {
       if (isShuttingDownRef.current) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       try {
         if (iframeRef.current) {
           sendPlayVideo(iframeRef.current);
@@ -631,11 +642,11 @@ export default function PersistentFloatingLivePlayer() {
 
     document.addEventListener('visibilitychange', handleVisibilityResume);
     window.addEventListener('focus', handleFocusResume);
-    window.addEventListener('blur', handleVisibilityResume);
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityResume);
       window.removeEventListener('focus', handleFocusResume);
-      window.removeEventListener('blur', handleVisibilityResume);
+
     };
   }, [isPipRoute, isOpen, activeStream, isPipActive]);
 
@@ -1028,6 +1039,7 @@ export default function PersistentFloatingLivePlayer() {
                       speakerName: activeStream.speakerName,
                       channelName: activeStream.channelName,
                     });
+
                   }
                 }}
                 className={`${
@@ -1333,8 +1345,8 @@ export default function PersistentFloatingLivePlayer() {
               <>
                 <iframe
                   ref={iframeRef}
-                  key={`${activeStream.videoId}-${resumeTime}`}
-                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&controls=1&rel=0${resumeTime > 0 ? `&start=${resumeTime}` : ''}&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
+                  key={activeStream.videoId}
+                  src={`https://www.youtube.com/embed/${activeStream.videoId}?autoplay=1&mute=1&controls=1&rel=0${initialStartSecRef.current > 0 ? `&start=${initialStartSecRef.current}` : ''}&enablejsapi=1&playsinline=1${origin ? `&origin=${encodeURIComponent(origin)}` : ''}`}
                   title={activeStream.title}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                   allowFullScreen
@@ -1405,6 +1417,7 @@ export default function PersistentFloatingLivePlayer() {
                       channelName: activeStream.channelName,
                       speakerName: activeStream.speakerName || '',
                     });
+
                     collapseModal();
                   }}
                   className="h-9 sm:h-auto px-3 sm:px-3.5 py-2 sm:py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs active:scale-95 whitespace-nowrap"
@@ -1498,6 +1511,7 @@ export default function PersistentFloatingLivePlayer() {
                         speakerName: activeStream.speakerName,
                         channelName: activeStream.channelName,
                       });
+
                     }
                   }}
                   className={`${
