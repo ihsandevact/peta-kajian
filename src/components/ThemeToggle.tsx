@@ -21,13 +21,13 @@ export default function ThemeToggle({
     setMounted(true);
   }, []);
 
-  const buttonSizeClasses = size === 'sm' ? 'w-7 h-7 rounded-lg' : 'w-8 h-8 rounded-xl';
-  const iconSizeClasses = size === 'sm' ? 'text-[15px]' : 'text-[18px] sm:text-[19px]';
+  const buttonSizeClasses = size === 'sm' ? 'w-7 h-7 rounded-lg' : 'w-9 h-9 rounded-xl';
+  const iconSizeClasses = size === 'sm' ? 'text-[15px]' : 'text-[20px]';
 
   if (!mounted) {
     if (variant === 'segmented') {
       return (
-        <div className={`flex items-center p-1 rounded-xl bg-surface-container border border-surface-container-high/60 ${className}`}>
+        <div className={`flex items-center p-1 rounded-xl bg-surface-container border border-outline-variant/30 ${className}`}>
           <div className="flex-1 py-1 px-2 text-center text-xs opacity-50 font-medium">Terang</div>
           <div className="flex-1 py-1 px-2 text-center text-xs opacity-50 font-medium">Gelap</div>
           <div className="flex-1 py-1 px-2 text-center text-xs opacity-50 font-medium">Sistem</div>
@@ -38,10 +38,10 @@ export default function ThemeToggle({
       <button
         type="button"
         disabled
-        className={`${buttonSizeClasses} flex items-center justify-center text-outline opacity-50 ${className}`}
+        className={`${buttonSizeClasses} flex items-center justify-center text-on-surface opacity-50 ${className}`}
         aria-label="Memuat tema..."
       >
-        <span className={`material-symbols-outlined ${iconSizeClasses}`}>routine</span>
+        <span className={`material-symbols-outlined ${iconSizeClasses}`}>dark_mode</span>
       </button>
     );
   }
@@ -56,7 +56,7 @@ export default function ThemeToggle({
 
     return (
       <div
-        className={`flex items-center p-1 rounded-xl bg-surface-container border border-surface-container-high/60 ${className}`}
+        className={`flex items-center p-1 rounded-xl bg-surface-container border border-outline-variant/30 ${className}`}
         role="group"
         aria-label="Pilih Mode Tema"
       >
@@ -89,15 +89,15 @@ export default function ThemeToggle({
     <button
       type="button"
       onClick={toggleTheme}
-      className={`relative ${buttonSizeClasses} flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container border border-transparent hover:border-surface-container-high/60 transition-all cursor-pointer active:scale-95 group ${className}`}
+      className={`relative ${buttonSizeClasses} flex items-center justify-center text-on-surface hover:bg-surface-container-low border border-transparent transition-all cursor-pointer active:scale-95 group ${className}`}
       title={isDark ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
       aria-label={isDark ? 'Ganti ke Mode Terang' : 'Ganti ke Mode Gelap'}
     >
       <span
         className={`material-symbols-outlined ${iconSizeClasses} transition-transform duration-300 ${
           isDark
-            ? 'text-amber-400 group-hover:rotate-45'
-            : 'text-emerald-600 dark:text-emerald-400 group-hover:-rotate-12'
+            ? 'text-amber-300 group-hover:rotate-45'
+            : 'text-on-surface group-hover:-rotate-12'
         }`}
       >
         {isDark ? 'light_mode' : 'dark_mode'}

@@ -31,7 +31,10 @@
   --spacing-space-lg: 1.25rem;
   --spacing-space-xl: 2rem;
 
-  --font-geist: 'Geist', sans-serif;
+  --font-sans: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-geist: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: 'Lora', var(--font-lora-serif), Georgia, Cambria, 'Times New Roman', serif;
 }
 
 /* Custom sleek scrollbar styles */
@@ -42,7 +45,7 @@
 
 .dark,
 .dark * {
-  scrollbar-color: #334155 transparent;
+  scrollbar-color: #264234 transparent;
 }
 
 ::-webkit-scrollbar {
@@ -64,11 +67,11 @@
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background-color: #334155;
+  background-color: #264234;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  background-color: #475569;
+  background-color: #345947;
 }
 
 @layer utilities {
@@ -107,9 +110,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-geist: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: 'Lora', var(--font-lora-serif), Georgia, Cambria, 'Times New Roman', serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -150,116 +155,121 @@
 
 :root {
   color-scheme: light;
-  --surface: #f7f9fb;
+  /* Abu-hijau netral untuk permukaan (warm sage-neutral) */
+  --surface: #f4f6f3;
   --surface-container-lowest: #ffffff;
-  --surface-container-low: #f2f4f6;
-  --surface-container: #eceef0;
-  --surface-container-high: #e6e8ea;
+  --surface-container-low: #eef1ed;
+  --surface-container: #e5eae4;
+  --surface-container-high: #dbe2da;
   
-  --on-surface: #191c1e;
-  --on-surface-variant: #3f493f;
-  --outline: #6f7a6e;
+  --on-surface: #141a16;
+  --on-surface-variant: #46524a;
+  --outline: #6c7a70;
   
-  --app-primary: #00652c;
+  --app-primary: #126947;
   --on-primary: #ffffff;
   --primary-container: #15803d;
   --on-primary-container: #d3ffd5;
 
-  --secondary-color: #565e74;
+  --secondary-color: #4d5d53;
   --tertiary-color: #48586d;
   --tertiary-container: #607087;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: #00652c;
+  --background: #f4f6f3;
+  --foreground: #141a16;
+  --card: #ffffff;
+  --card-foreground: #141a16;
+  --popover: #ffffff;
+  --popover-foreground: #141a16;
+  --primary: #126947;
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --secondary: #eef1ed;
+  --secondary-foreground: #141a16;
+  --muted: #eef1ed;
+  --muted-foreground: #46524a;
+  --accent: #e4eee8;
+  --accent-foreground: #126947;
+  --destructive: #d92d20;
+  --border: #dfe5de;
+  --input: #dfe5de;
+  --ring: #126947;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #f4f6f3;
+  --sidebar-foreground: #141a16;
+  --sidebar-primary: #126947;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e4eee8;
+  --sidebar-accent-foreground: #126947;
+  --sidebar-border: #dfe5de;
+  --sidebar-ring: #126947;
 }
 
 .dark {
   color-scheme: dark;
-  --surface: #0b0f17;
-  --surface-container-lowest: #131924;
-  --surface-container-low: #18202e;
-  --surface-container: #1e2838;
-  --surface-container-high: #2a374c;
+  /* Hijau gelap pekat, bukan hitam murni, supaya tetap terasa hangat */
+  --surface: #0a1410;
+  --surface-container-lowest: #0f1d17;
+  --surface-container-low: #13251d;
+  --surface-container: #182e24;
+  --surface-container-high: #203b2f;
   
-  --on-surface: #f1f5f9;
-  --on-surface-variant: #94a3b8;
-  --outline: #64748b;
+  --on-surface: #ecf3ee;
+  --on-surface-variant: #9cb0a4;
+  --outline: #62786b;
   
-  --app-primary: #059669;
+  --app-primary: #10b981;
   --on-primary: #ffffff;
-  --primary-container: #166534;
+  --primary-container: #126947;
   --on-primary-container: #dcfce7;
 
-  --secondary-color: #94a3b8;
+  --secondary-color: #9cb0a4;
   --tertiary-color: #cbd5e1;
-  --tertiary-container: #334155;
+  --tertiary-container: #1e382c;
 
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: #059669;
+  --background: #0a1410;
+  --foreground: #ecf3ee;
+  --card: #0f1d17;
+  --card-foreground: #ecf3ee;
+  --popover: #0f1d17;
+  --popover-foreground: #ecf3ee;
+  --primary: #10b981;
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --secondary: #13251d;
+  --secondary-foreground: #ecf3ee;
+  --muted: #13251d;
+  --muted-foreground: #9cb0a4;
+  --accent: #182e24;
+  --accent-foreground: #ecf3ee;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #10b981;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #0f1d17;
+  --sidebar-foreground: #ecf3ee;
+  --sidebar-primary: #10b981;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #182e24;
+  --sidebar-accent-foreground: #ecf3ee;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #10b981;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html, body {
+    font-family: 'Plus Jakarta Sans', var(--font-plus-jakarta-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   }
   body {
     @apply bg-background text-foreground;
@@ -269,6 +279,12 @@
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
+  }
+  button, input, select, textarea {
+    font-family: inherit;
+  }
+  .font-serif {
+    font-family: 'Lora', var(--font-lora-serif), Georgia, Cambria, 'Times New Roman', serif !important;
   }
   /* Cegah auto-zoom bawaan iOS Safari saat fokus mengetik di input / textarea pada layar mobile */
   @media screen and (max-width: 767px) {

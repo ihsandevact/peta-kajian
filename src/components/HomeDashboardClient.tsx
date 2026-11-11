@@ -7,95 +7,86 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 import { useActiveSessionsQuery } from '@/lib/hooks/useActiveSessionsQuery';
 import { useYoutubeChannelsQuery } from '@/lib/hooks/useYoutubeChannelsQuery';
-import { getTodayKajian } from '@/lib/domain/kajianQuery';
+import { evaluateAndQuerySessions, type EvaluatedStudySession } from '@/lib/domain/kajianQuery';
 import { getPrayerScheduleAndNext, type DailyPrayerTimes } from '@/utils/prayerTimes';
+import { getHijriDate } from '@/utils/hijri';
 import { useBookmarks } from '@/utils/bookmarks';
 import { useAttendance } from '@/utils/attendance';
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import ThemeToggle from '@/components/ThemeToggle';
-import { type StudySession } from '@/lib/services/kajian';
 import { getUserRoleAndStatus, type UserRoleInfo } from '@/lib/services/admin';
 import { HomeKajianCardSkeleton, HomeArticleCardSkeleton } from '@/components/HomeDashboardSkeleton';
 import DailyHadithCard from '@/components/DailyHadithCard';
-import type { IslamicArticle } from '@/data/initialArticles';
+import { INITIAL_ARTICLES, type IslamicArticle } from '@/data/initialArticles';
 
-// Dynamic lazy imports for heavy interactive overlays
+// Dynamic lazy imports for interactive sheets/modals
 const MoreMenuBottomSheet = dynamic(() => import('@/components/MoreMenuBottomSheet'), { ssr: false });
 const MobileNavDrawer = dynamic(() => import('@/components/MobileNavDrawer'), { ssr: false });
 const RequestContributorModal = dynamic(() => import('@/components/RequestContributorModal'), { ssr: false });
 
+// Ilustrasi netral & menenangkan untuk thumbnail artikel pilihan di beranda
+const CURATED_ARTICLE_THUMBNAILS = [
+  'https://images.unsplash.com/photo-1584286595398-a59f21d313f5?auto=format&fit=crop&w=320&q=80',
+  'https://images.unsplash.com/photo-1564769625905-50e93615e769?auto=format&fit=crop&w=320&q=80',
+  'https://images.unsplash.com/photo-1507692049790-de58290a4334?auto=format&fit=crop&w=320&q=80',
+];
+
+type HomeKajianChip = 'hari_ini' | 'dekat_saya' | 'online' | 'tersimpan';
+
 /**
- * Kartu Artikel Unggulan Beranda (Gaya A: Banner Cover dengan Horizontal Snap)
+ * Kartu Artikel Pilihan Beranda (List dengan Thumbnail Kecil di Kiri)
  */
-function HomeArticleCard({
+function HomeArticleListItem({
   art,
-  className = '',
+  index,
 }: {
   art: IslamicArticle;
-  className?: string;
+  index: number;
 }) {
   const [imgError, setImgError] = useState(false);
+  const safeThumbUrl = CURATED_ARTICLE_THUMBNAILS[index % CURATED_ARTICLE_THUMBNAILS.length];
 
   return (
     <Link
       href={`/artikel/${art.slug}`}
-      className={`w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0 rounded-2xl sm:rounded-3xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-emerald-500/40 transition-all flex flex-col justify-between group cursor-pointer overflow-hidden shadow-2xs hover:shadow-xs ${className}`}
+      className="p-3 sm:p-3.5 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/25 hover:border-[#126947]/40 transition-all flex items-center gap-3.5 group shadow-2xs"
     >
-      {/* Banner Thumbnail (Gaya A) */}
-      <div className="relative aspect-[16/9] w-full overflow-hidden bg-surface-container-high shrink-0">
-        {!imgError && art.imageUrl ? (
+      {/* Thumbnail Kecil di Kiri */}
+      <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-xl overflow-hidden bg-[#e4eee8] dark:bg-emerald-950/60 shrink-0 relative border border-outline-variant/20">
+        {!imgError ? (
           <img
-            src={art.imageUrl}
+            src={safeThumbUrl}
             alt={art.title}
             loading="lazy"
             onError={() => setImgError(true)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-emerald-600/20 via-teal-600/10 to-surface-container-high flex flex-col items-center justify-center p-3 text-center">
-            <span className="material-symbols-outlined text-3xl text-emerald-600/60 dark:text-emerald-400/60 mb-0.5">
-              auto_stories
-            </span>
-            <span className="text-[10px] font-bold text-emerald-700/80 dark:text-emerald-300/80">
-              {art.sourceName}
+          <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center">
+            <span className="material-symbols-outlined text-2xl text-[#126947] dark:text-emerald-400">
+              menu_book
             </span>
           </div>
         )}
-
-        {/* Overlay Badges */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
-
-        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5 z-10">
-          <span className="px-2 py-0.5 rounded-full bg-surface/90 backdrop-blur-xs text-emerald-700 dark:text-emerald-300 text-[10px] font-bold shadow-xs">
-            {art.sourceName}
-          </span>
-        </div>
-
-        <div className="absolute bottom-2 right-2.5 z-10">
-          <span className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-xs text-white text-[10px] font-medium flex items-center gap-1">
-            <span className="material-symbols-outlined text-[12px]">schedule</span>
-            <span>{art.readTimeMinutes} mnt baca</span>
-          </span>
-        </div>
       </div>
 
-      {/* Konten Teks */}
-      <div className="p-3.5 sm:p-4 flex flex-col justify-between flex-1 gap-2.5">
-        <div className="space-y-1.5">
-          <h3 className="font-bold text-xs sm:text-sm text-on-surface group-hover:text-emerald-600 transition-colors line-clamp-2 leading-snug">
-            {art.title}
-          </h3>
-          <p className="text-[11px] text-on-surface-variant line-clamp-2 leading-relaxed">
-            {art.summary}
-          </p>
-        </div>
-
-        <div className="pt-2 border-t border-outline-variant/30 flex items-center justify-between text-[10px] text-on-surface-variant">
-          <span className="truncate max-w-[170px] font-medium">{art.authorName}</span>
-          <span className="text-emerald-600 font-bold group-hover:translate-x-0.5 transition-transform flex items-center gap-0.5">
-            Baca <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+      {/* Konten Teks di Kanan */}
+      <div className="flex-1 min-w-0 space-y-1">
+        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#126947] dark:text-emerald-400">
+          <span className="truncate max-w-[140px]">{art.sourceName}</span>
+          <span>&middot;</span>
+          <span className="text-on-surface-variant font-medium shrink-0">
+            {art.readTimeMinutes} mnt baca
           </span>
         </div>
+
+        <h3 className="font-bold text-[14px] text-on-surface group-hover:text-[#126947] dark:group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">
+          {art.title}
+        </h3>
+
+        <p className="text-[12px] text-on-surface-variant truncate">
+          {art.authorName}
+        </p>
       </div>
     </Link>
   );
@@ -103,8 +94,8 @@ function HomeArticleCard({
 
 export default function HomeDashboardClient() {
   const router = useRouter();
-  const { playStream, openStudyMode } = useLivePlayer();
-  const { isBookmarked, toggle: toggleBookmark } = useBookmarks();
+  const { playStream } = useLivePlayer();
+  const { bookmarks, isBookmarked, toggle: toggleBookmark } = useBookmarks();
   const { isAttending, toggle: toggleAttendance } = useAttendance();
 
   // Autentikasi Supabase
@@ -114,6 +105,7 @@ export default function HomeDashboardClient() {
   const [isNavDrawerOpen, setIsNavDrawerOpen] = useState(false);
   const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isNotifSheetOpen, setIsNotifSheetOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -168,9 +160,8 @@ export default function HomeDashboardClient() {
   // Lokasi Pengguna
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLocating, setIsLocating] = useState(false);
-  const [locationName, setLocationName] = useState<string>('Indonesia (Pusat)');
+  const [locationName, setLocationName] = useState<string>('Kemenag RI');
 
-  // Ambil lokasi tersimpan dari localStorage atau minta GPS saat interaksi
   useEffect(() => {
     queueMicrotask(() => {
       try {
@@ -179,7 +170,7 @@ export default function HomeDashboardClient() {
           const parsed = JSON.parse(stored);
           if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
             setUserLocation(parsed);
-            setLocationName(parsed.cityName || 'Lokasi Terdeteksi');
+            setLocationName(parsed.cityName || 'Lokasi GPS');
           }
         }
       } catch {}
@@ -196,12 +187,12 @@ export default function HomeDashboardClient() {
       (pos) => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserLocation(coords);
-        setLocationName('Lokasi Saat Ini (GPS)');
+        setLocationName('Lokasi GPS');
         setIsLocating(false);
         try {
           localStorage.setItem(
             'user_last_location',
-            JSON.stringify({ ...coords, cityName: 'Lokasi Saat Ini' })
+            JSON.stringify({ ...coords, cityName: 'Lokasi GPS' })
           );
         } catch {}
       },
@@ -212,21 +203,32 @@ export default function HomeDashboardClient() {
     );
   }, []);
 
-  // Jadwal Waktu Sholat Kemenag RI
+  // Jadwal Waktu Sholat Kemenag RI (Update setiap 1 detik untuk countdown halus)
+  const [nowDate, setNowDate] = useState<Date>(() => new Date());
   const [prayerSchedule, setPrayerSchedule] = useState<DailyPrayerTimes>(() =>
     getPrayerScheduleAndNext(userLocation?.lat || -6.2, userLocation?.lng || 106.816666)
   );
 
   useEffect(() => {
     const updatePrayer = () => {
+      const current = new Date();
+      setNowDate(current);
       const lat = userLocation?.lat ?? -6.2;
       const lng = userLocation?.lng ?? 106.816666;
-      setPrayerSchedule(getPrayerScheduleAndNext(lat, lng));
+      setPrayerSchedule(getPrayerScheduleAndNext(lat, lng, current));
     };
     updatePrayer();
     const interval = setInterval(updatePrayer, 1000);
     return () => clearInterval(interval);
   }, [userLocation]);
+
+  // Konteks Waktu Harian (Pagi vs Petang/Malam)
+  const isAfternoonOrEvening = useMemo(() => {
+    const hour = nowDate.getHours();
+    return hour >= 15 || hour < 3;
+  }, [nowDate]);
+
+  const isNearPrayerTime = prayerSchedule.nextPrayer.minutesRemaining <= 25;
 
   // Pencarian Cepat Global
   const [searchQuery, setSearchQuery] = useState('');
@@ -239,7 +241,7 @@ export default function HomeDashboardClient() {
     }
   };
 
-  // Artikel Islam Terkini (diambil murni dari database Supabase)
+  // Artikel Pilihan (3 item list vertikal)
   const [featuredArticles, setFeaturedArticles] = useState<IslamicArticle[]>([]);
   const [isArticlesLoading, setIsArticlesLoading] = useState(true);
 
@@ -252,7 +254,7 @@ export default function HomeDashboardClient() {
           .select('*')
           .eq('is_published', true)
           .order('published_at', { ascending: false })
-          .limit(5);
+          .limit(3);
 
         if (!error && data && data.length > 0) {
           const typedData = data as unknown as Array<{
@@ -285,33 +287,104 @@ export default function HomeDashboardClient() {
               tags: [],
               imageUrl: d.image_url || undefined,
               publishedAt: d.published_at || new Date().toISOString(),
-              readTimeMinutes: d.read_time_minutes || 5,
+              readTimeMinutes: d.read_time_minutes || 4,
             }))
           );
-        } else if (error) {
-          console.warn('[HomeDashboard] Gagal memuat artikel:', error);
-          setFeaturedArticles([]);
         } else {
-          setFeaturedArticles([]);
+          setFeaturedArticles(INITIAL_ARTICLES.slice(0, 3));
         }
       } catch {
-        setFeaturedArticles([]);
+        setFeaturedArticles(INITIAL_ARTICLES.slice(0, 3));
       }
     }
     loadLatestArticles().finally(() => setIsArticlesLoading(false));
   }, []);
 
-  // 1. Data Kajian (TanStack Query)
+  // Data Kajian (TanStack Query)
   const { sessions, isLoading: isSessionsLoading } = useActiveSessionsQuery({
     currentUserRole: isAdmin ? 'admin' : 'user',
   });
 
-  // Kajian Hari Ini (Prioritaskan yang berlangsung hari ini dan belum lewat)
-  const todayKajianList = useMemo(() => {
-    return getTodayKajian(sessions, { userLocation });
-  }, [sessions, userLocation]);
+  // Filter Chip State untuk Seksi "Kajian untuk Anda hari ini"
+  const [activeKajianChip, setActiveKajianChip] = useState<HomeKajianChip>('hari_ini');
 
-  // 2. Data Live Streaming (TanStack Query)
+  const handleSelectChip = (chip: HomeKajianChip) => {
+    setActiveKajianChip(chip);
+    if (chip === 'dekat_saya' && !userLocation && !isLocating) {
+      requestUserLocation();
+    }
+  };
+
+  // Evaluasi dan prioritas kajian sesuai chip dan konteks waktu
+  const { filteredKajianList, totalTodayCount, isShowingUpcomingFallback } = useMemo(() => {
+    const allEvaluated = evaluateAndQuerySessions(sessions, {
+      filter: { placement: 'all' },
+      sort: { userLocation, mode: 'auto' },
+    });
+
+    const todayActive = allEvaluated.filter((item) => (item.isToday || item.isLive) && !item.isPast);
+
+    // Helper prioritas: kajian yang sudah diikuti (Hadir) atau disimpan (Bookmark) naik ke urutan atas
+    const prioritizePersonal = (list: EvaluatedStudySession[]) => {
+      return [...list].sort((a, b) => {
+        const aPersonal = isAttending(a.session.id) || isBookmarked(a.session.id) ? 1 : 0;
+        const bPersonal = isAttending(b.session.id) || isBookmarked(b.session.id) ? 1 : 0;
+        if (aPersonal !== bPersonal) return bPersonal - aPersonal;
+        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+        return 0;
+      });
+    };
+
+    if (activeKajianChip === 'dekat_saya') {
+      const nearby = evaluateAndQuerySessions(sessions, {
+        filter: { placement: 'map' },
+        sort: { userLocation, mode: 'distance' },
+      }).filter((item) => !item.isPast);
+      return {
+        filteredKajianList: nearby,
+        totalTodayCount: todayActive.length || nearby.length,
+        isShowingUpcomingFallback: false,
+      };
+    }
+
+    if (activeKajianChip === 'online') {
+      const onlineOnly = allEvaluated.filter(
+        (item) => !item.isPast && (item.session.is_online || Boolean(item.session.stream_url))
+      );
+      return {
+        filteredKajianList: prioritizePersonal(onlineOnly),
+        totalTodayCount: todayActive.length || onlineOnly.length,
+        isShowingUpcomingFallback: false,
+      };
+    }
+
+    if (activeKajianChip === 'tersimpan') {
+      const savedOnly = allEvaluated.filter((item) => isBookmarked(item.session.id));
+      return {
+        filteredKajianList: savedOnly,
+        totalTodayCount: todayActive.length,
+        isShowingUpcomingFallback: false,
+      };
+    }
+
+    // Default: 'hari_ini' (Jika malam/kosong, tampilkan kajian esok/mendatang)
+    if (todayActive.length > 0) {
+      return {
+        filteredKajianList: prioritizePersonal(todayActive),
+        totalTodayCount: todayActive.length,
+        isShowingUpcomingFallback: false,
+      };
+    }
+
+    const upcoming = allEvaluated.filter((item) => !item.isPast);
+    return {
+      filteredKajianList: prioritizePersonal(upcoming),
+      totalTodayCount: upcoming.length,
+      isShowingUpcomingFallback: upcoming.length > 0,
+    };
+  }, [sessions, userLocation, activeKajianChip, bookmarks, isAttending, isBookmarked]);
+
+  // Data Live Streaming (TanStack Query)
   const { channels } = useYoutubeChannelsQuery();
 
   const activeLiveStreams = useMemo(() => {
@@ -340,90 +413,106 @@ export default function HomeDashboardClient() {
     return list;
   }, [channels]);
 
-  // Tanggal Hari Ini (Masehi & Estimasi Hijriah)
-  const todayFormatted = useMemo(() => {
+  // Penanggalan Masehi & Hijriah
+  const dateInfo = useMemo(() => {
     const d = new Date();
-    return d.toLocaleDateString('id-ID', {
+    const fullMasehi = d.toLocaleDateString('id-ID', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric',
     });
+    const shortMasehi = d.toLocaleDateString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+    });
+    const hijri = getHijriDate(d);
+    return {
+      fullMasehi,
+      shortMasehi,
+      hijriFormatted: hijri.formatted,
+      fastingInfo: hijri.fastingInfo,
+    };
   }, []);
 
-  return (
-    <div className="min-h-screen bg-background text-on-surface font-geist flex flex-col selection:bg-emerald-500/20 selection:text-emerald-800 dark:selection:text-emerald-200 pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-0">
-      {/* 1. NAVBAR HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE) */}
-      <header className="hidden md:block sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
-        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3 sm:gap-4">
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            <Link href="/" className="flex items-center gap-2 sm:gap-2.5 group">
-              <img
-                src="/logo.png?v=3"
-                alt="Peta Kajian Logo"
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl object-contain shadow-xs group-hover:scale-105 transition-transform"
-              />
-              <div>
-                <span className="font-extrabold text-sm sm:text-base tracking-tight text-on-surface">
-                  Peta Kajian
-                </span>
-                <span className="hidden sm:inline-block ml-1.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 rounded-md">
-                  Indonesia
-                </span>
-              </div>
-            </Link>
-          </div>
+  // Nama sapaan pengguna
+  const greetingName = useMemo(() => {
+    const fullName = currentUser?.user_metadata?.full_name || currentUser?.name;
+    if (fullName && typeof fullName === 'string') {
+      return fullName.trim().split(/\s+/)[0];
+    }
+    if (currentUser?.email) {
+      return currentUser.email.split('@')[0];
+    }
+    return 'Penuntut Ilmu';
+  }, [currentUser]);
 
-          {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1 text-xs font-bold text-on-surface-variant">
+  const primaryLiveStream = activeLiveStreams[0] || null;
+
+  return (
+    <div className="min-h-screen bg-surface text-on-surface font-sans flex flex-col selection:bg-[#126947]/20 selection:text-[#126947] dark:selection:text-emerald-200 pb-[calc(88px+env(safe-area-inset-bottom,16px))] md:pb-12">
+      {/* NAVBAR DESKTOP (Hanya tampil di layar md ke atas) */}
+      <header className="hidden md:block sticky top-0 z-40 w-full bg-surface-container-lowest/90 backdrop-blur-md border-b border-outline-variant/25 transition-colors">
+        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+          <Link href="/" className="flex items-center gap-2.5 group">
+            <img
+              src="/logo.png?v=3"
+              alt="Peta Kajian Logo"
+              className="w-9 h-9 rounded-xl object-contain shadow-2xs group-hover:scale-105 transition-transform"
+            />
+            <span className="font-extrabold text-[16px] tracking-tight text-on-surface">
+              Peta Kajian
+            </span>
+          </Link>
+
+          <nav className="flex items-center gap-1 text-[12px] font-bold text-on-surface-variant">
             <Link
               href="/"
-              className="px-3.5 py-2 rounded-xl bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 font-extrabold"
+              className="px-3.5 py-2 rounded-xl bg-[#e4eee8] dark:bg-emerald-950/70 text-[#126947] dark:text-emerald-300 font-extrabold"
             >
               Beranda
             </Link>
             <Link
               href="/peta"
-              className="px-3.5 py-2 rounded-xl hover:bg-surface-container hover:text-on-surface transition-colors"
+              className="px-3.5 py-2 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors"
             >
-              Peta Kajian
-            </Link>
-            <Link
-              href="/masjid"
-              className="px-3.5 py-2 rounded-xl hover:bg-surface-container hover:text-on-surface transition-colors"
-            >
-              Direktori Masjid
+              Kajian
             </Link>
             <Link
               href="/live"
-              className="px-3.5 py-2 rounded-xl hover:bg-surface-container hover:text-on-surface transition-colors flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center gap-1.5"
             >
-              <span>Live Streaming</span>
+              <span>Live</span>
               {activeLiveStreams.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
               )}
             </Link>
             <Link
-              href="/leaderboard"
-              className="px-3.5 py-2 rounded-xl hover:bg-surface-container hover:text-on-surface transition-colors"
+              href="/masjid"
+              className="px-3.5 py-2 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors"
             >
-              Peringkat
+              Masjid
+            </Link>
+            <Link
+              href={currentUser ? '/kontributor/profile' : '/login'}
+              className="px-3.5 py-2 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors"
+            >
+              Profil
             </Link>
           </nav>
 
-          {/* Header Actions (Theme, Login/Profile, Mobile Hamburger) */}
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={requestUserLocation}
               disabled={isLocating}
-              className="w-9 h-9 rounded-xl flex items-center justify-center bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/60 transition-colors cursor-pointer"
-              title={`Lokasi: ${locationName}. Ketuk untuk perbarui GPS`}
-              aria-label={`Lokasi: ${locationName}`}
+              className="w-10 h-10 rounded-xl flex items-center justify-center bg-surface-container-low hover:bg-surface-container text-on-surface border border-outline-variant/25 transition-colors cursor-pointer"
+              title={`Perbarui lokasi GPS (${locationName})`}
+              aria-label="Perbarui lokasi GPS"
             >
               <span
-                className={`material-symbols-outlined text-[18px] text-emerald-600 ${
+                className={`material-symbols-outlined text-[18px] text-[#126947] dark:text-emerald-400 ${
                   isLocating ? 'animate-spin' : ''
                 }`}
               >
@@ -432,685 +521,608 @@ export default function HomeDashboardClient() {
             </button>
             <ThemeToggle
               variant="icon"
-              className="!w-9 !h-9 !rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/60 shadow-none"
+              className="!w-10 !h-10 !rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/25"
             />
-
-            {currentUser ? (
-              <Link
-                href="/kontributor/profile"
-                className="hidden sm:flex items-center gap-2 py-1.5 px-3 rounded-xl bg-surface-container hover:bg-surface-container-high border border-outline-variant/60 text-xs font-bold text-on-surface transition-colors"
-              >
-                <span className="material-symbols-outlined text-[18px] text-emerald-600">
-                  account_circle
-                </span>
-                <span className="truncate max-w-[120px]">
-                  {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0]}
-                </span>
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="hidden sm:inline-flex items-center gap-1.5 py-1.5 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-xs transition-colors"
-              >
-                <span className="material-symbols-outlined text-[16px]">login</span>
-                <span>Masuk</span>
-              </Link>
-            )}
-
-            {/* Mobile Menu Hamburger */}
-            <button
-              type="button"
-              onClick={() => setIsNavDrawerOpen(true)}
-              className="md:hidden w-9 h-9 rounded-xl flex items-center justify-center bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/60 cursor-pointer"
-              aria-label="Buka menu navigasi"
-            >
-              <span className="material-symbols-outlined text-[20px]">menu</span>
-            </button>
           </div>
         </div>
       </header>
 
-      {/* 2. HERO BENTO SECTION: Waktu Sholat Kemenag RI & Pencarian Cepat */}
-      <section className="relative overflow-hidden bg-gradient-to-b from-emerald-600/10 via-emerald-600/5 to-transparent pt-4 sm:pt-6 pb-6 sm:pb-8 border-b border-outline-variant/30">
-        {/* Quick Switch Dark Mode Khusus Mobile (Pojok Kanan Atas, Ukuran Ringkas Hijau) */}
-        <div className="md:hidden absolute top-3.5 right-3.5 z-20 flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={requestUserLocation}
-            disabled={isLocating}
-            className="w-8 h-8 rounded-xl bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs flex items-center justify-center text-on-surface transition-all cursor-pointer active:scale-95"
-            title={`Lokasi: ${locationName}. Ketuk untuk perbarui GPS`}
-            aria-label={`Lokasi: ${locationName}`}
-          >
-            <span
-              className={`material-symbols-outlined text-[17px] text-emerald-600 ${
-                isLocating ? 'animate-spin' : ''
-              }`}
-            >
-              {isLocating ? 'progress_activity' : 'near_me'}
-            </span>
-          </button>
-          <ThemeToggle
-            variant="icon"
-            className="!w-8 !h-8 !rounded-xl bg-surface/90 hover:bg-surface border border-outline-variant/60 shadow-xs"
-          />
-        </div>
-
-        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-4 sm:space-y-6">
-          {/* Baris Sapaan & Tanggal */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="pr-20 md:pr-0 min-w-0 flex-1">
+      {/* CONTAINER UTAMA BERANDA (Margin 16px, Jarak Antar Section 24px) */}
+      <main className="w-full max-w-xl md:max-w-3xl mx-auto px-4 pt-4 sm:pt-6 space-y-6">
+        {/* =========================================================
+            1. HEADER RINGKAS: Tanggal, Salam, Notifikasi/Tema, Search
+           ========================================================= */}
+        <section className="space-y-3.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
               <p
                 suppressHydrationWarning
-                className="text-[11px] sm:text-xs font-semibold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider"
+                className="text-[12px] font-medium text-on-surface-variant truncate"
               >
-                {todayFormatted}
+                {dateInfo.fullMasehi} &middot; {dateInfo.hijriFormatted}
               </p>
-              <h1 className="text-lg sm:text-2xl lg:text-3xl font-extrabold text-on-surface tracking-tight mt-0.5">
-                {currentUser?.user_metadata?.full_name
-                  ? `Assalamu'alaikum, ${currentUser.user_metadata.full_name}`
-                  : "Assalamu'alaikum, Penuntut Ilmu"}
+              <h1 className="text-[24px] font-extrabold text-on-surface tracking-tight leading-[1.25] mt-0.5">
+                Assalamu&apos;alaikum, {greetingName}
               </h1>
-              <p className="text-[11px] sm:text-sm text-on-surface-variant mt-0.5 sm:mt-1 max-w-xl">
-                Temukan jadwal majelis ilmu, siaran live streaming, dan navigasi masjid terdekat di seluruh Indonesia.
-              </p>
             </div>
 
-            {/* Global Search Input (Dipindahkan ke posisi lokasi sebelumnya) */}
-            <div className="w-full md:w-80 lg:w-96 shrink-0 pt-1 md:pt-0">
-              <form onSubmit={handleSearchSubmit} className="relative w-full">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant">
-                  search
-                </span>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cari kajian, ustadz, atau masjid..."
-                  className="w-full pl-9 pr-14 py-2 sm:py-2.5 text-xs sm:text-sm bg-surface rounded-xl sm:rounded-2xl border border-outline-variant/60 shadow-xs focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-on-surface placeholder:text-on-surface-variant/60"
-                />
-                <button
-                  type="submit"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 px-2.5 sm:px-3 py-1 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-extrabold transition-colors cursor-pointer"
-                >
-                  Cari
-                </button>
-              </form>
+            {/* Ikon Notifikasi & Mode Gelap (Minimal 44x44px Touch Target) */}
+            <div className="flex items-center gap-2 shrink-0 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsNotifSheetOpen((prev) => !prev)}
+                className="relative w-11 h-11 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/25 shadow-2xs flex items-center justify-center text-on-surface transition-all cursor-pointer active:scale-95"
+                title="Pengingat Sholat, Puasa & Lokasi"
+                aria-label="Pengingat dan Lokasi"
+                aria-expanded={isNotifSheetOpen}
+              >
+                <span className="material-symbols-outlined text-[20px]">notifications</span>
+                {(dateInfo.fastingInfo || isNearPrayerTime) && (
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-[#126947] dark:bg-emerald-400" />
+                )}
+              </button>
+
+              <ThemeToggle
+                variant="icon"
+                className="!w-11 !h-11 !rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low !border !border-outline-variant/25 shadow-2xs"
+              />
             </div>
           </div>
 
-          {/* Baris Waktu Sholat Real-Time (Kemenag RI) */}
-          <div className="p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface/95 backdrop-blur-md border border-emerald-600/25 shadow-sm space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-between gap-2 border-b border-outline-variant/30 pb-2.5 sm:pb-3">
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-outlined text-[17px] sm:text-[20px]">schedule</span>
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <h2 className="text-xs sm:text-sm font-extrabold text-on-surface">
-                      Waktu Sholat
-                    </h2>
-                    <span className="px-1.5 py-0.2 rounded bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[9px] sm:text-[10px] font-bold">
-                      {prayerSchedule.timezoneLabel}
-                    </span>
-                  </div>
-                  <p className="text-[10px] sm:text-[11px] text-on-surface-variant">
-                    Standar Kemenag RI
-                  </p>
-                </div>
+          {/* Panel Ringkas Pengingat & Lokasi (Saat ikon lonceng diketuk) */}
+          {isNotifSheetOpen && (
+            <div className="p-3.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center justify-between">
+                <span className="text-[14px] font-bold text-on-surface flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[18px] text-[#126947] dark:text-emerald-400">
+                    notifications_active
+                  </span>
+                  Asisten Harian &amp; Lokasi
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsNotifSheetOpen(false)}
+                  className="text-[12px] font-semibold text-on-surface-variant hover:text-on-surface cursor-pointer"
+                >
+                  Tutup
+                </button>
               </div>
 
-              {/* Countdown Target Sholat Berikutnya */}
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-xl sm:rounded-2xl bg-emerald-600 text-white shadow-xs shrink-0 text-right">
-                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-0 sm:gap-1.5">
-                  <span
-                    suppressHydrationWarning
-                    className="text-[10px] sm:text-xs font-extrabold whitespace-nowrap leading-tight"
-                  >
-                    {prayerSchedule.nextPrayer.name} {prayerSchedule.nextPrayer.time}
+              {dateInfo.fastingInfo && !dateInfo.fastingInfo.isForbidden && (
+                <Link
+                  href="/kalender"
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-[#e4eee8]/70 dark:bg-emerald-950/50 text-[#126947] dark:text-emerald-300 text-[12px] font-semibold"
+                >
+                  <span>Hari ini: {dateInfo.fastingInfo.label}</span>
+                  <span className="material-symbols-outlined text-[16px]">chevron_right</span>
+                </Link>
+              )}
+
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <div className="text-[12px] text-on-surface-variant truncate">
+                  Zona waktu: <strong className="text-on-surface">{prayerSchedule.timezoneLabel} &middot; {locationName}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={requestUserLocation}
+                  disabled={isLocating}
+                  className="px-3 py-1.5 rounded-xl bg-[#126947] text-white text-[12px] font-bold flex items-center gap-1 shrink-0 cursor-pointer active:scale-95 disabled:opacity-60"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${isLocating ? 'animate-spin' : ''}`}>
+                    {isLocating ? 'progress_activity' : 'my_location'}
                   </span>
-                  <span className="hidden sm:inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  <span>Perbarui GPS</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Search Bar */}
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[20px] text-on-surface-variant pointer-events-none">
+              search
+            </span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari kajian, ustadz, atau masjid..."
+              className="w-full h-12 pl-11 pr-10 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs focus:outline-none focus:border-[#126947] focus:ring-2 focus:ring-[#126947]/15 text-[14px] text-on-surface placeholder:text-on-surface-variant/70 transition-all"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface cursor-pointer"
+                aria-label="Bersihkan pencarian"
+              >
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            )}
+          </form>
+        </section>
+
+        {/* =========================================================
+            2. KARTU HERO WAKTU SHOLAT (Anchor Utama)
+           ========================================================= */}
+        <section
+          aria-label="Jadwal Waktu Sholat"
+          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#167952] via-[#126947] to-[#0d5237] dark:from-[#136645] dark:via-[#0f5439] dark:to-[#093b27] text-white p-5 sm:p-6 shadow-sm"
+        >
+          {/* Pola Geometris Islami Tipis di Latar Belakang */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 opacity-[0.08]"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-width='1'%3E%3Cpath d='M24 0 L48 24 L24 48 L0 24 Z'/%3E%3Cpath d='M24 8 L40 24 L24 40 L8 24 Z'/%3E%3Ccircle cx='24' cy='24' r='3'/%3E%3C/g%3E%3C/svg%3E")`,
+              backgroundSize: '48px 48px',
+            }}
+          />
+
+          <div className="relative z-10 space-y-4">
+            {/* Baris Atas: Label Menuju Sholat & Badge Zona Waktu */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  suppressHydrationWarning
+                  className="text-[12px] font-bold uppercase tracking-wider text-white/95 truncate"
+                >
+                  MENUJU {prayerSchedule.nextPrayer.name.toUpperCase()} &middot;{' '}
+                  {prayerSchedule.nextPrayer.time}
+                </span>
+                {isNearPrayerTime && (
+                  <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping shrink-0" />
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={requestUserLocation}
+                disabled={isLocating}
+                className="px-3 py-1 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-xs text-[12px] font-semibold text-white/95 transition-colors shrink-0 cursor-pointer"
+                title="Ketuk untuk memperbarui lokasi GPS waktu sholat"
+              >
+                {prayerSchedule.timezoneLabel} &middot; {locationName}
+              </button>
+            </div>
+
+            {/* Countdown Dominan (Berdetak Halus Setiap Detik - Skala 24px) */}
+            <div
+              suppressHydrationWarning
+              className="flex items-baseline flex-wrap gap-y-1 pt-0.5 pb-1"
+            >
+              {prayerSchedule.nextPrayer.hoursPart > 0 && (
+                <div className="flex items-baseline mr-3">
                   <span
                     suppressHydrationWarning
-                    className="text-[9px] sm:text-xs font-semibold sm:font-bold text-emerald-100 sm:text-white font-mono whitespace-nowrap leading-tight"
+                    className="text-[24px] font-extrabold tracking-tight tabular-nums leading-none"
                   >
-                    {prayerSchedule.nextPrayer.countdownText}
+                    {prayerSchedule.nextPrayer.hoursPart}
+                  </span>
+                  <span className="text-[14px] font-medium text-white/85 ml-1.5">
+                    jam
                   </span>
                 </div>
+              )}
+
+              <div className="flex items-baseline mr-3">
+                <span
+                  suppressHydrationWarning
+                  className="text-[24px] font-extrabold tracking-tight tabular-nums leading-none"
+                >
+                  {String(prayerSchedule.nextPrayer.minutesPart).padStart(2, '0')}
+                </span>
+                <span className="text-[14px] font-medium text-white/85 ml-1.5">
+                  menit
+                </span>
+              </div>
+
+              <div className="flex items-baseline">
+                <span
+                  suppressHydrationWarning
+                  className="text-[24px] font-extrabold tracking-tight tabular-nums leading-none text-white/95"
+                >
+                  {String(prayerSchedule.nextPrayer.secondsPart).padStart(2, '0')}
+                </span>
+                <span className="text-[12px] font-medium text-white/80 ml-1">
+                  detik
+                </span>
               </div>
             </div>
 
-            {/* Grid 5 Waktu Sholat */}
+            {/* Lima Waktu Sholat dalam Satu Baris Kecil */}
             <div className="grid grid-cols-5 gap-1.5 sm:gap-2.5 text-center">
               {(
                 [
-                  { id: 'subuh', label: 'Subuh', time: prayerSchedule.subuh, icon: 'wb_twilight' },
-                  { id: 'dzuhur', label: 'Dzuhur', time: prayerSchedule.dzuhur, icon: 'wb_sunny' },
-                  { id: 'ashar', label: 'Ashar', time: prayerSchedule.ashar, icon: 'light_mode' },
-                  { id: 'maghrib', label: 'Maghrib', time: prayerSchedule.maghrib, icon: 'wb_twilight' },
-                  { id: 'isya', label: 'Isya', time: prayerSchedule.isya, icon: 'bedtime' },
+                  { id: 'subuh', label: 'Subuh', time: prayerSchedule.subuh },
+                  { id: 'dzuhur', label: 'Dzuhur', time: prayerSchedule.dzuhur },
+                  { id: 'ashar', label: 'Ashar', time: prayerSchedule.ashar },
+                  { id: 'maghrib', label: 'Maghrib', time: prayerSchedule.maghrib },
+                  { id: 'isya', label: 'Isya', time: prayerSchedule.isya },
                 ] as const
               ).map((item) => {
                 const isNext = prayerSchedule.nextPrayer.id === item.id;
                 return (
                   <div
                     key={item.id}
-                    className={`flex flex-col items-center justify-center py-2 sm:py-3 px-1 sm:px-2 rounded-xl sm:rounded-2xl transition-all border ${
+                    className={`flex flex-col items-center justify-center py-2.5 sm:py-3 px-1 rounded-2xl transition-all ${
                       isNext
-                        ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm ring-1 sm:ring-2 ring-emerald-500/20'
-                        : 'bg-surface-container-low/70 hover:bg-surface-container-low border-outline-variant/40 text-on-surface'
+                        ? 'bg-white text-[#0d4f35] shadow-sm font-extrabold'
+                        : 'bg-white/12 border border-white/10 text-white'
                     }`}
                   >
                     <span
-                      className={`material-symbols-outlined text-[16px] sm:text-[20px] mb-0.5 sm:mb-1 ${
-                        isNext ? 'text-white' : 'text-emerald-600 dark:text-emerald-400 opacity-80'
-                      }`}
-                    >
-                      {item.icon}
-                    </span>
-                    <span
-                      className={`text-[10px] sm:text-xs font-semibold leading-tight ${
-                        isNext ? 'text-white/95' : 'text-on-surface-variant'
+                      className={`text-[12px] leading-tight ${
+                        isNext ? 'font-bold text-[#0d4f35]/85' : 'font-medium text-white/80'
                       }`}
                     >
                       {item.label}
                     </span>
-                    <span className="text-[11px] sm:text-sm font-extrabold mt-0.5 sm:mt-1 tracking-tight font-mono">
+                    <span
+                      className={`text-[14px] mt-1 tracking-tight tabular-nums ${
+                        isNext ? 'font-extrabold text-[#0d4f35]' : 'font-bold text-white'
+                      }`}
+                    >
                       {item.time}
                     </span>
                   </div>
                 );
               })}
             </div>
-          </div>
-        </div>
-      </section>
 
-      {/* 3. BENTO QUICK LINKS: 4 PILAR UTAMA */}
-      <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-8 w-full">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
-          {/* Pilar 1: Peta Kajian */}
+            {/* Dua Aksi Cepat Peka Waktu di Dalam Kartu Hero */}
+            <div className="grid grid-cols-2 gap-2.5 pt-0.5">
+              <Link
+                href="/sholat?tab=kiblat"
+                className="min-h-[44px] py-2.5 px-3 rounded-2xl bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center gap-2 text-[14px] font-bold text-white transition-all active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-[18px]">explore</span>
+                <span>Arah Kiblat</span>
+              </Link>
+
+              <Link
+                href="/dzikir"
+                className="min-h-[44px] py-2.5 px-3 rounded-2xl bg-white/12 hover:bg-white/20 border border-white/15 flex items-center justify-center gap-2 text-[14px] font-bold text-white transition-all active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-[18px]">wb_twilight</span>
+                <span>{isAfternoonOrEvening ? 'Dzikir Petang' : 'Dzikir Pagi'}</span>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* =========================================================
+            3. LIVE NOW STRIP (Kondisional: Hanya Muncul Jika Ada Siaran)
+           ========================================================= */}
+        {primaryLiveStream && (
+          <section aria-label="Siaran Langsung Saat Ini">
+            <div className="rounded-2xl bg-[#fbeeee] dark:bg-red-950/35 border border-red-200/80 dark:border-red-800/40 p-3.5 sm:p-4 flex items-center justify-between gap-3 shadow-2xs">
+              <Link
+                href="/live"
+                className="flex items-center gap-3 min-w-0 flex-1 group"
+              >
+                {/* Titik Merah Berkedip */}
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
+                </span>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12px] font-extrabold uppercase tracking-wider text-red-700 dark:text-red-400 truncate">
+                    LIVE SEKARANG &middot; {activeLiveStreams.length} SIARAN
+                  </p>
+                  <h2 className="text-[16px] font-bold text-on-surface group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors truncate mt-0.5">
+                    {primaryLiveStream.title}
+                  </h2>
+                  <p className="text-[12px] text-on-surface-variant truncate">
+                    {primaryLiveStream.channelName}
+                  </p>
+                </div>
+              </Link>
+
+              <button
+                type="button"
+                onClick={() =>
+                  playStream({
+                    videoId: primaryLiveStream.videoId,
+                    title: primaryLiveStream.title,
+                    channelName: primaryLiveStream.channelName,
+                    speakerName: primaryLiveStream.speakerName,
+                  })
+                }
+                className="min-h-[44px] px-4 py-2 rounded-full bg-[#d92d20] hover:bg-red-700 text-white text-[14px] font-bold flex items-center gap-1.5 shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer"
+              >
+                <span
+                  className="material-symbols-outlined text-[16px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  play_arrow
+                </span>
+                <span>Tonton</span>
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* =========================================================
+            4. QUICK ACCESS: SATU BARIS 5 IKON (Seragam Hijau, Tanpa Warna-Warni)
+           ========================================================= */}
+        <section aria-label="Akses Cepat" className="grid grid-cols-5 gap-2 sm:gap-3">
           <Link
             href="/peta"
-            className="group p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface hover:bg-surface-container-low border border-outline-variant/50 hover:border-emerald-500/50 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+            className="flex flex-col items-center gap-2 group cursor-pointer"
           >
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-2 sm:mb-3">
-                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <span className="material-symbols-outlined text-[20px] sm:text-[24px]">map</span>
-                </div>
-                <span className="px-1.5 sm:px-2.5 py-0.5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[9px] sm:text-[10px] font-extrabold truncate">
-                  {sessions.length > 0 ? `${sessions.length} Kajian` : 'Peta'}
-                </span>
-              </div>
-              <h3 className="text-xs sm:text-base font-extrabold text-on-surface group-hover:text-emerald-600 transition-colors leading-snug">
-                Peta Kajian
-              </h3>
-              <p className="hidden sm:block text-xs text-on-surface-variant mt-1 leading-relaxed">
-                Eksplorasi persebaran ratusan jadwal kajian di peta lengkap dengan navigasi jalan.
-              </p>
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#e4eee8] dark:bg-emerald-950/60 border border-[#126947]/10 dark:border-emerald-400/15 text-[#126947] dark:text-emerald-300 flex items-center justify-center group-hover:bg-[#d6e6dc] dark:group-hover:bg-emerald-900/60 transition-all active:scale-95">
+              <span className="material-symbols-outlined text-[24px]">map</span>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-2.5 sm:mt-4">
-              <span>Buka Peta</span>
-              <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
-                arrow_forward
-              </span>
-            </div>
+            <span className="text-[12px] font-semibold text-on-surface text-center leading-tight">
+              Peta Kajian
+            </span>
           </Link>
 
-          {/* Pilar 2: Direktori Masjid */}
           <Link
             href="/masjid"
-            className="group p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface hover:bg-surface-container-low border border-outline-variant/50 hover:border-teal-500/50 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+            className="flex flex-col items-center gap-2 group cursor-pointer"
           >
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-2 sm:mb-3">
-                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <span className="material-symbols-outlined text-[20px] sm:text-[24px]">mosque</span>
-                </div>
-                <span className="px-1.5 sm:px-2.5 py-0.5 rounded-full bg-teal-600/10 text-teal-700 dark:text-teal-300 text-[9px] sm:text-[10px] font-extrabold truncate">
-                  13.000+ Masjid
-                </span>
-              </div>
-              <h3 className="text-xs sm:text-base font-extrabold text-on-surface group-hover:text-teal-600 transition-colors leading-snug">
-                Direktori Masjid
-              </h3>
-              <p className="hidden sm:block text-xs text-on-surface-variant mt-1 leading-relaxed">
-                Temukan masjid sunnah di sekitar Anda dengan info fasilitas, rute, dan jadwal rutin.
-              </p>
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#e4eee8] dark:bg-emerald-950/60 border border-[#126947]/10 dark:border-emerald-400/15 text-[#126947] dark:text-emerald-300 flex items-center justify-center group-hover:bg-[#d6e6dc] dark:group-hover:bg-emerald-900/60 transition-all active:scale-95">
+              <span className="material-symbols-outlined text-[24px]">mosque</span>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-teal-600 dark:text-teal-400 mt-2.5 sm:mt-4">
-              <span>Cari Masjid</span>
-              <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
-                arrow_forward
-              </span>
-            </div>
+            <span className="text-[12px] font-semibold text-on-surface text-center leading-tight">
+              Masjid
+            </span>
           </Link>
 
-          {/* Pilar 3: Live Streaming */}
           <Link
-            href="/live"
-            className="group p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface hover:bg-surface-container-low border border-outline-variant/50 hover:border-red-500/50 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+            href="/doa"
+            className="flex flex-col items-center gap-2 group cursor-pointer"
           >
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-2 sm:mb-3">
-                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <span className="material-symbols-outlined text-[20px] sm:text-[24px]">smart_display</span>
-                </div>
-                {activeLiveStreams.length > 0 ? (
-                  <span className="inline-flex items-center gap-1 px-1.5 sm:px-2.5 py-0.5 rounded-full bg-red-600 text-white text-[9px] sm:text-[10px] font-extrabold animate-pulse truncate">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0" />
-                    <span>{activeLiveStreams.length} Live</span>
-                  </span>
-                ) : (
-                  <span className="px-1.5 sm:px-2.5 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[9px] sm:text-[10px] font-extrabold truncate">
-                    Streaming
-                  </span>
-                )}
-              </div>
-              <h3 className="text-xs sm:text-base font-extrabold text-on-surface group-hover:text-red-600 transition-colors leading-snug">
-                Live Kajian
-              </h3>
-              <p className="hidden sm:block text-xs text-on-surface-variant mt-1 leading-relaxed">
-                Tonton siaran langsung majelis ilmu dari berbagai channel dakwah sunnah terpercaya.
-              </p>
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#e4eee8] dark:bg-emerald-950/60 border border-[#126947]/10 dark:border-emerald-400/15 text-[#126947] dark:text-emerald-300 flex items-center justify-center group-hover:bg-[#d6e6dc] dark:group-hover:bg-emerald-900/60 transition-all active:scale-95">
+              <span className="material-symbols-outlined text-[24px]">menu_book</span>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-red-600 dark:text-red-400 mt-2.5 sm:mt-4">
-              <span>Tonton Siaran</span>
-              <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
-                arrow_forward
-              </span>
-            </div>
+            <span className="text-[12px] font-semibold text-on-surface text-center leading-tight">
+              Doa Harian
+            </span>
           </Link>
 
-          {/* Pilar 4: Menu Lainnya (Membuka Vaul Bottom Sheet) */}
+          <Link
+            href="/sifat-sholat"
+            className="flex flex-col items-center gap-2 group cursor-pointer"
+          >
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#e4eee8] dark:bg-emerald-950/60 border border-[#126947]/10 dark:border-emerald-400/15 text-[#126947] dark:text-emerald-300 flex items-center justify-center group-hover:bg-[#d6e6dc] dark:group-hover:bg-emerald-900/60 transition-all active:scale-95">
+              <span className="material-symbols-outlined text-[24px]">accessibility_new</span>
+            </div>
+            <span className="text-[12px] font-semibold text-on-surface text-center leading-tight">
+              Panduan Sholat
+            </span>
+          </Link>
+
           <button
             type="button"
             onClick={() => setIsMoreMenuOpen(true)}
-            className="group p-3 sm:p-5 rounded-2xl sm:rounded-3xl bg-surface hover:bg-surface-container-low border border-outline-variant/50 hover:border-emerald-500/50 shadow-xs hover:shadow-md transition-all flex flex-col justify-between text-left cursor-pointer"
+            className="flex flex-col items-center gap-2 group cursor-pointer"
           >
-            <div>
-              <div className="flex items-center justify-between gap-1.5 mb-2 sm:mb-3">
-                <div className="w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300 flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <span className="material-symbols-outlined text-[20px] sm:text-[24px]">widgets</span>
-                </div>
-                <span className="px-1.5 sm:px-2.5 py-0.5 rounded-full bg-indigo-600/10 text-indigo-700 dark:text-indigo-300 text-[9px] sm:text-[10px] font-extrabold truncate">
-                  Lengkap
-                </span>
-              </div>
-              <h3 className="text-xs sm:text-base font-extrabold text-on-surface group-hover:text-emerald-600 transition-colors leading-snug">
-                Menu Lainnya
-              </h3>
-              <p className="hidden sm:block text-xs text-on-surface-variant mt-1 leading-relaxed">
-                Buku saku, leaderboard, info relawan, bantuan &amp; pengaturan tema aplikasi.
-              </p>
+            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-[#e4eee8] dark:bg-emerald-950/60 border border-[#126947]/10 dark:border-emerald-400/15 text-[#126947] dark:text-emerald-300 flex items-center justify-center group-hover:bg-[#d6e6dc] dark:group-hover:bg-emerald-900/60 transition-all active:scale-95">
+              <span className="material-symbols-outlined text-[24px]">grid_view</span>
             </div>
-            <div className="inline-flex items-center gap-1 text-[10px] sm:text-xs font-bold text-indigo-600 dark:text-indigo-400 mt-2.5 sm:mt-4">
-              <span>Buka Menu</span>
-              <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
-                arrow_forward
-              </span>
-            </div>
-          </button>
-        </div>
-      </section>
-
-
-      {/* 3.5 QUICK ACCESS: AMALAN & IBADAH HARIAN */}
-      <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
-        <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs">
-          <div className="flex items-center justify-between mb-2.5 px-1">
-            <div className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[17px] sm:text-[19px] text-emerald-600 dark:text-emerald-400">
-                auto_awesome
-              </span>
-              <h2 className="text-xs sm:text-sm font-extrabold text-on-surface uppercase tracking-wider">
-                Amalan &amp; Ibadah Harian
-              </h2>
-            </div>
-            <span className="text-[10px] text-on-surface-variant font-medium hidden sm:inline">
-              Akses cepat sarana ibadah harian sesuai sunnah
+            <span className="text-[12px] font-semibold text-on-surface text-center leading-tight">
+              Semua
             </span>
-          </div>
-
-          <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
-            {/* 1. Dzikir Pagi & Petang */}
-            <Link
-              href="/dzikir"
-              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-emerald-500/40 transition-all text-center sm:text-left group cursor-pointer"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">wb_twilight</span>
-              </div>
-              <div className="min-w-0 w-full">
-                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-emerald-600 transition-colors truncate">
-                  Dzikir
-                </h3>
-                <p className="text-[9px] sm:text-[10px] text-on-surface-variant truncate">
-                  Pagi &amp; Petang
-                </p>
-              </div>
-            </Link>
-
-            {/* 2. Doa Harian Hisnul Muslim */}
-            <Link
-              href="/doa"
-              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-teal-500/40 transition-all text-center sm:text-left group cursor-pointer"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-teal-500/15 text-teal-700 dark:text-teal-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">menu_book</span>
-              </div>
-              <div className="min-w-0 w-full">
-                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-teal-600 transition-colors truncate">
-                  Doa Harian
-                </h3>
-                <p className="text-[9px] sm:text-[10px] text-on-surface-variant truncate">
-                  Hisnul Muslim
-                </p>
-              </div>
-            </Link>
-
-            {/* 3. Panduan Sholat Nabi Sesuai Sunnah */}
-            <Link
-              href="/sifat-sholat"
-              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-indigo-500/40 transition-all text-center sm:text-left group cursor-pointer"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">accessibility_new</span>
-              </div>
-              <div className="min-w-0 w-full">
-                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-indigo-600 transition-colors truncate">
-                  Panduan Sholat
-                </h3>
-                <p className="text-[9px] sm:text-[10px] text-on-surface-variant truncate">
-                  Tuntunan Sunnah
-                </p>
-              </div>
-            </Link>
-
-            {/* 4. Jadwal Sholat Kemenag RI */}
-            <Link
-              href="/sholat?tab=jadwal"
-              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-sky-500/40 transition-all text-center sm:text-left group cursor-pointer"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-sky-500/15 text-sky-700 dark:text-sky-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">schedule</span>
-              </div>
-              <div className="min-w-0 w-full">
-                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-sky-600 transition-colors truncate">
-                  Jadwal Sholat
-                </h3>
-                <p className="text-[9px] sm:text-[10px] text-on-surface-variant truncate">
-                  Waktu Sholat
-                </p>
-              </div>
-            </Link>
-
-            {/* 5. Arah Kiblat Interaktif */}
-            <Link
-              href="/sholat?tab=kiblat"
-              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-blue-500/40 transition-all text-center sm:text-left group cursor-pointer"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/15 text-blue-700 dark:text-blue-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">explore</span>
-              </div>
-              <div className="min-w-0 w-full">
-                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-blue-600 transition-colors truncate">
-                  Arah Kiblat
-                </h3>
-                <p className="text-[9px] sm:text-[10px] text-on-surface-variant truncate">
-                  Kompas Kiblat
-                </p>
-              </div>
-            </Link>
-
-            {/* 6. Kalender Hijriyah & Puasa */}
-            <Link
-              href="/kalender"
-              className="flex flex-col sm:flex-row items-center sm:items-center gap-1.5 sm:gap-2.5 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/40 hover:border-amber-500/40 transition-all text-center sm:text-left group cursor-pointer"
-            >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/15 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                <span className="material-symbols-outlined text-[19px] sm:text-[21px]">calendar_month</span>
-              </div>
-              <div className="min-w-0 w-full">
-                <h3 className="text-[11px] sm:text-xs font-black text-on-surface group-hover:text-amber-600 transition-colors truncate">
-                  Kalender
-                </h3>
-                <p className="text-[9px] sm:text-[10px] text-on-surface-variant truncate">
-                  Puasa Sunnah
-                </p>
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 3.6 SEKSI BACAAN ARTIKEL ISLAM (hanya tampil jika ada artikel di database) */}
-      {(isArticlesLoading || featuredArticles.length > 0) && (
-        <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
-          <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-between gap-2 px-1">
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="material-symbols-outlined text-[17px] sm:text-[20px] text-emerald-600 dark:text-emerald-400">
-                  auto_stories
-                </span>
-                <h2 className="text-xs sm:text-sm font-extrabold text-on-surface uppercase tracking-wider">
-                  Artikel Islam
-                </h2>
-              </div>
-
-              <Link
-                href="/artikel"
-                className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 shrink-0"
-              >
-                <span>Lihat Semua</span>
-                <span className="material-symbols-outlined text-sm">chevron_right</span>
-              </Link>
-            </div>
-
-            {/* Horizontal Slider di Mobile (Scroll Snap) & 3-Kolom Grid di Desktop */}
-            <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-3 gap-3 sm:gap-4 no-scrollbar">
-              {isArticlesLoading
-                ? Array.from({ length: 3 }).map((_, idx) => (
-                    <HomeArticleCardSkeleton key={idx} />
-                  ))
-                : featuredArticles.map((art, idx) => (
-                <HomeArticleCard
-                  key={art.id}
-                  art={art}
-                  className={idx >= 3 ? 'sm:hidden' : ''}
-                />
-              ))}
-            </div>
-          </div>
+          </button>
         </section>
-      )}
 
-      {/* 4. SEKSI SEDANG LIVE STREAMING (JIKA ADA SIARAN AKTIF) */}
-      {activeLiveStreams.length > 0 && (
-        <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-6 sm:pb-8 w-full">
-          <div className="p-3.5 sm:p-6 rounded-2xl sm:rounded-3xl bg-red-600/5 border border-red-500/25 space-y-3 sm:space-y-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-600 animate-ping shrink-0" />
-                <h2 className="text-sm sm:text-lg font-extrabold text-on-surface truncate">
-                  Sedang Siaran Langsung Saat Ini
-                </h2>
-                <span className="px-1.5 sm:px-2 py-0.2 rounded-full bg-red-600 text-white text-[9px] sm:text-[10px] font-black uppercase tracking-wider shrink-0">
-                  Live
-                </span>
-              </div>
-              <Link
-                href="/live"
-                className="text-[11px] sm:text-xs font-bold text-red-600 dark:text-red-400 hover:opacity-80 transition-opacity inline-flex items-center gap-1 shrink-0"
+        {/* =========================================================
+            5. KAJIAN UNTUK ANDA HARI INI (Konten Inti, Dinaikkan)
+           ========================================================= */}
+        <section aria-labelledby="kajian-hari-ini-heading" className="space-y-3.5">
+          {/* Header Seksi */}
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <h2
+                id="kajian-hari-ini-heading"
+                className="text-[18px] font-extrabold text-on-surface tracking-tight"
               >
-                <span>Lihat Semua ({activeLiveStreams.length})</span>
-                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-              </Link>
-            </div>
-
-            {/* Horizontal Slider di Mobile (Scroll Snap) & Grid di Tablet/Desktop */}
-            <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 no-scrollbar">
-              {activeLiveStreams.slice(0, 6).map((item, idx) => (
-                <div
-                  key={item.id}
-                  className={`w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-surface border border-red-500/20 shadow-xs flex flex-col justify-between space-y-2.5 ${
-                    idx >= 3 ? 'lg:hidden' : ''
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-extrabold text-red-600 dark:text-red-400 uppercase tracking-wider truncate">
-                        {item.channelName}
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded-md bg-red-600 text-white text-[9px] font-extrabold shrink-0">
-                        ON AIR
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-xs sm:text-sm text-on-surface line-clamp-2 leading-snug">
-                      {item.title}
-                    </h3>
-                    <p className="text-[11px] text-on-surface-variant font-medium truncate">
-                      Pemateri: {item.speakerName}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-outline-variant/20">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        playStream({
-                          videoId: item.videoId,
-                          title: item.title,
-                          channelName: item.channelName,
-                          speakerName: item.speakerName,
-                        })
-                      }
-                      className="flex-1 py-1.5 sm:py-2 px-2.5 sm:px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-[15px] sm:text-[16px]">play_arrow</span>
-                      <span>Tonton Langsung</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        openStudyMode({
-                          videoId: item.videoId,
-                          title: item.title,
-                          speakerName: item.speakerName,
-                          channelName: item.channelName,
-                        })
-                      }
-                      className="p-1.5 sm:p-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/50 transition-colors"
-                      title="Catat Faedah Ilmu"
-                    >
-                      <span className="material-symbols-outlined text-[16px] sm:text-[18px]">edit_note</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* 5. SEKSI MUTIARA HADITS (FAEDAH ILMU) */}
-      <DailyHadithCard />
-
-      {/* 6. SEKSI KAJIAN HARI INI */}
-      <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-24 sm:pb-12 w-full">
-        <div className="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-surface/90 border border-outline-variant/50 shadow-xs space-y-3 sm:space-y-4">
-          {/* Header Seksi Terstandar */}
-          <div className="flex items-center justify-between gap-2 px-1">
-            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-              <span className="material-symbols-outlined text-[17px] sm:text-[20px] text-emerald-600 dark:text-emerald-400">
-                event_note
-              </span>
-              <h2 className="text-xs sm:text-sm font-extrabold text-on-surface uppercase tracking-wider truncate">
-                Kajian Hari Ini
+                {isShowingUpcomingFallback && activeKajianChip === 'hari_ini'
+                  ? 'Kajian untuk Anda besok'
+                  : 'Kajian untuk Anda hari ini'}
               </h2>
-              {todayKajianList.length > 0 && (
-                <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[10px] sm:text-[11px] font-extrabold shrink-0">
-                  {todayKajianList.length} Agenda
-                </span>
-              )}
+              <p
+                suppressHydrationWarning
+                className="text-[12px] text-on-surface-variant mt-0.5"
+              >
+                {filteredKajianList.length} agenda &middot; {dateInfo.shortMasehi}
+              </p>
             </div>
 
             <Link
               href="/peta"
-              className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-0.5 shrink-0"
+              className="min-h-[36px] inline-flex items-center gap-1 text-[12px] font-bold text-[#126947] dark:text-emerald-400 hover:underline shrink-0 pt-0.5"
             >
-              <span>Lihat Semua di Peta</span>
-              <span className="material-symbols-outlined text-sm">chevron_right</span>
+              <span>Lihat di peta</span>
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
             </Link>
           </div>
 
-          {/* Daftar Kartu Kajian (Horizontal Slider di Mobile, Grid 4-Kolom di Desktop) */}
+          {/* Filter Chips: Hari ini · Dekat saya · Online · Tersimpan */}
+          <div
+            role="tablist"
+            aria-label="Filter kajian beranda"
+            className="flex items-center gap-2 overflow-x-auto no-scrollbar py-0.5"
+          >
+            {(
+              [
+                { id: 'hari_ini', label: 'Hari ini' },
+                { id: 'dekat_saya', label: 'Dekat saya' },
+                { id: 'online', label: 'Online' },
+                { id: 'tersimpan', label: 'Tersimpan' },
+              ] as const
+            ).map((chip) => {
+              const isSelected = activeKajianChip === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isSelected}
+                  onClick={() => handleSelectChip(chip.id)}
+                  className={`min-h-[42px] px-4 py-2 rounded-full text-[14px] transition-all shrink-0 cursor-pointer active:scale-95 ${
+                    isSelected
+                      ? 'bg-[#126947] text-white font-bold shadow-2xs'
+                      : 'bg-surface-container-lowest hover:bg-surface-container-low text-on-surface font-semibold border border-outline-variant/30'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Daftar Kartu Vertikal (Maksimal 3 Item) */}
           {isSessionsLoading ? (
-            <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <HomeKajianCardSkeleton key={i} className="w-[78vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <HomeKajianCardSkeleton key={i} />
               ))}
             </div>
-          ) : todayKajianList.length === 0 ? (
-            <div className="p-6 sm:p-8 text-center rounded-xl sm:rounded-2xl border border-outline-variant/40 bg-surface-container-low text-on-surface-variant space-y-2">
-              <span className="material-symbols-outlined text-[32px] sm:text-[36px] text-outline">event_busy</span>
-              <p className="text-xs sm:text-sm font-bold">Belum ada agenda kajian untuk hari ini.</p>
-              <Link
-                href="/peta"
-                className="inline-block text-xs font-bold text-emerald-600 hover:opacity-80 transition-opacity"
-              >
-                Lihat Seluruh Jadwal Mendatang di Peta Kajian →
-              </Link>
+          ) : filteredKajianList.length === 0 ? (
+            <div className="p-6 text-center rounded-2xl border border-outline-variant/25 bg-surface-container-lowest text-on-surface-variant space-y-2">
+              <span className="material-symbols-outlined text-[32px] text-outline">
+                {activeKajianChip === 'tersimpan' ? 'bookmark_border' : 'event_busy'}
+              </span>
+              <p className="text-[14px] font-bold text-on-surface">
+                {activeKajianChip === 'tersimpan'
+                  ? 'Belum ada kajian yang disimpan'
+                  : activeKajianChip === 'online'
+                  ? 'Belum ada kajian online aktif saat ini'
+                  : 'Belum ada agenda kajian untuk filter ini'}
+              </p>
+              <p className="text-[12px] text-on-surface-variant">
+                {activeKajianChip === 'tersimpan'
+                  ? 'Ketuk tombol Simpan pada kartu kajian untuk menyimpannya di beranda Anda.'
+                  : 'Jelajahi seluruh jadwal kajian di Peta Kajian.'}
+              </p>
+              {activeKajianChip !== 'hari_ini' && (
+                <button
+                  type="button"
+                  onClick={() => setActiveKajianChip('hari_ini')}
+                  className="mt-1 inline-flex items-center gap-1 px-3.5 py-2 rounded-xl bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 text-[12px] font-bold cursor-pointer"
+                >
+                  Kembali ke Hari ini
+                </button>
+              )}
             </div>
           ) : (
-            <div className="flex overflow-x-auto snap-x snap-mandatory pb-1 -mx-3.5 sm:mx-0 sm:pb-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 no-scrollbar">
-              {todayKajianList.map(({ session, formattedSchedule, distanceKm, distanceLabel }) => {
+            <div className="space-y-3">
+              {filteredKajianList.slice(0, 3).map(({ session, formattedSchedule, distanceKm, distanceLabel, isLive }) => {
                 const booked = isBookmarked(session.id);
                 const attend = isAttending(session.id);
 
                 return (
-                  <div
+                  <article
                     key={session.id}
-                    className="w-[82vw] sm:w-auto shrink-0 snap-start first:ml-3.5 last:mr-3.5 sm:first:ml-0 sm:last:mr-0 group p-4 rounded-2xl border border-outline-variant/50 bg-surface-container-low hover:bg-surface-container hover:border-emerald-500/50 shadow-2xs hover:shadow-sm transition-all flex flex-col justify-between gap-3"
+                    className="p-4 rounded-2xl border border-outline-variant/25 bg-surface-container-lowest hover:border-[#126947]/40 shadow-2xs transition-all space-y-3"
                   >
-                    <div className="space-y-2">
-                      {/* Baris Atas: Badge Waktu, Status & Tombol Bookmark */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                          {/* Badge Tanggal & Jam */}
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-600/10 px-2.5 py-0.5 rounded-full shrink-0">
-                            <span className="material-symbols-outlined text-[13px]">calendar_today</span>
-                            <span className="truncate">{formattedSchedule}</span>
-                          </span>
+                    {/* Baris Atas: Jam, Jarak / Online, Status Personal */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="inline-flex items-center gap-1 text-[12px] font-bold text-[#126947] dark:text-emerald-300 bg-[#e4eee8] dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg">
+                          <span className="material-symbols-outlined text-[14px]">schedule</span>
+                          <span>{formattedSchedule}</span>
+                        </span>
 
-                          {/* Badge Status Online atau Jarak Fisik */}
-                          {session.is_online ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded-full shrink-0 border border-red-500/20">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                              <span>Live</span>
+                        {isLive && (
+                          <span className="inline-flex items-center gap-1 text-[12px] font-bold text-red-700 dark:text-red-300 bg-red-500/12 px-2 py-1 rounded-lg">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            <span>Berlangsung</span>
+                          </span>
+                        )}
+
+                        {session.is_online ? (
+                          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-on-surface-variant bg-surface-container-low px-2.5 py-1 rounded-lg">
+                            <span className="material-symbols-outlined text-[14px]">videocam</span>
+                            <span>Online</span>
+                          </span>
+                        ) : distanceKm !== null ? (
+                          <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-on-surface-variant bg-surface-container-low px-2.5 py-1 rounded-lg">
+                            <span className="material-symbols-outlined text-[14px] text-[#126947] dark:text-emerald-400">
+                              near_me
                             </span>
-                          ) : distanceKm !== null ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-on-surface-variant bg-surface-container px-2 py-0.5 rounded-full shrink-0 border border-outline-variant/30">
-                              <span className="material-symbols-outlined text-[11px] text-emerald-600">near_me</span>
-                              <span>{distanceLabel || (distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`)}</span>
+                            <span>
+                              {distanceLabel ||
+                                (distanceKm < 1
+                                  ? `${Math.round(distanceKm * 1000)} m`
+                                  : `${distanceKm.toFixed(1)} km`)}
                             </span>
-                          ) : null}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {(booked || attend) && (
+                        <span className="text-[12px] font-bold text-[#126947] dark:text-emerald-400 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">verified</span>
+                          <span>Diikuti</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Judul Penuh (2 Baris), Ustadz, dan Lokasi */}
+                    <div className="space-y-1.5">
+                      <Link
+                        href={`/peta?session=${session.id}`}
+                        className="font-bold text-[16px] text-on-surface hover:text-[#126947] dark:hover:text-emerald-400 transition-colors line-clamp-2 leading-snug block"
+                      >
+                        {session.title}
+                      </Link>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-[14px] text-on-surface-variant pt-0.5">
+                        <div className="flex items-center gap-1.5 font-semibold text-on-surface/90 min-w-0">
+                          <span className="material-symbols-outlined text-[16px] text-[#126947] dark:text-emerald-400 shrink-0">
+                            person
+                          </span>
+                          <span className="truncate">{session.speaker_name}</span>
                         </div>
 
-                        {/* Tombol Bookmark (Sudut Kanan Atas) */}
+                        <div className="flex items-center gap-1.5 text-on-surface-variant min-w-0">
+                          <span className="material-symbols-outlined text-[16px] text-outline shrink-0">
+                            {session.is_online ? 'language' : 'location_on'}
+                          </span>
+                          <span className="truncate">
+                            {session.is_online
+                              ? 'Siaran Kajian Online'
+                              : session.venues?.name || 'Lokasi Masjid'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Baris Aksi Bawah: Tombol Hadir, Simpan, dan Detail Peta (Min 44px Touch Target) */}
+                    <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-outline-variant/20">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleAttendance(session.id)}
+                          className={`min-h-[44px] inline-flex items-center gap-1.5 text-[14px] font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer active:scale-95 ${
+                            attend
+                              ? 'bg-[#126947] text-white border-[#126947]'
+                              : 'bg-[#e4eee8]/70 dark:bg-emerald-950/50 hover:bg-[#e4eee8] border-transparent text-[#126947] dark:text-emerald-300'
+                          }`}
+                        >
+                          <span
+                            className="material-symbols-outlined text-[16px]"
+                            style={{ fontVariationSettings: attend ? "'FILL' 1" : "'FILL' 0" }}
+                          >
+                            {attend ? 'check_circle' : 'how_to_reg'}
+                          </span>
+                          <span>Hadir</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => toggleBookmark(session.id)}
-                          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                          className={`min-h-[44px] inline-flex items-center gap-1.5 text-[14px] font-bold px-3.5 py-2 rounded-xl border transition-all cursor-pointer active:scale-95 ${
                             booked
-                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 shadow-2xs'
-                              : 'text-on-surface-variant/60 hover:text-on-surface hover:bg-surface-container-high'
+                              ? 'bg-[#e4eee8] dark:bg-emerald-950/80 text-[#126947] dark:text-emerald-300 border-[#126947]/30'
+                              : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
                           }`}
-                          title={booked ? 'Hapus dari Tersimpan' : 'Simpan Kajian'}
-                          aria-label="Simpan Kajian"
                         >
                           <span
                             className="material-symbols-outlined text-[16px]"
@@ -1118,119 +1130,85 @@ export default function HomeDashboardClient() {
                           >
                             bookmark
                           </span>
+                          <span>{booked ? 'Tersimpan' : 'Simpan'}</span>
                         </button>
                       </div>
 
-                      {/* Judul Kajian & Nama Pemateri */}
-                      <div>
-                        <Link
-                          href={`/peta?session=${session.id}`}
-                          className="font-extrabold text-[14px] sm:text-[15px] text-on-surface hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors line-clamp-2 leading-snug block"
-                          title={session.title}
-                        >
-                          {session.title}
-                        </Link>
-                        <div className="flex items-center gap-1.5 text-xs text-on-surface-variant font-medium mt-1">
-                          <span className="material-symbols-outlined text-[15px] text-emerald-600 shrink-0">person</span>
-                          <span className="truncate">{session.speaker_name}</span>
-                        </div>
-                      </div>
-
-                      {/* Judul Kitab (Jika Ada) */}
-                      {session.book_title && session.book_title.trim() !== '' && session.book_title.toLowerCase() !== 'null' && (
-                        <div className="flex items-center gap-1.5 text-[11px] text-outline font-medium truncate">
-                          <span className="material-symbols-outlined text-[13px] shrink-0 text-outline">menu_book</span>
-                          <span className="truncate">{session.book_title}</span>
-                        </div>
-                      )}
-
-                      {/* Lokasi / Masjid */}
-                      <div className="flex items-center gap-1.5 text-xs text-on-surface-variant/80 pt-0.5">
-                        <span className="material-symbols-outlined text-[14px] text-emerald-600 shrink-0">
-                          {session.is_online ? 'videocam' : 'location_on'}
-                        </span>
-                        <span className="truncate">
-                          {session.is_online
-                            ? 'Kajian Online / Disiarkan'
-                            : session.venues?.name || 'Lokasi belum ditentukan'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Tombol Aksi Bawah: Presensi & Buka Peta */}
-                    <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-outline-variant/30">
-                      <button
-                        type="button"
-                        onClick={() => toggleAttendance(session.id)}
-                        className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
-                          attend
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                            : 'bg-surface hover:bg-surface-container-high border-outline-variant/60 text-on-surface'
-                        }`}
-                        title={attend ? 'Batalkan presensi kehadiran' : 'Tandai Insya Allah hadir'}
-                      >
-                        <span className="material-symbols-outlined text-[15px]">
-                          {attend ? 'check_circle' : 'how_to_reg'}
-                        </span>
-                        <span>{attend ? 'Hadir' : 'Saya Hadir'}</span>
-                      </button>
-
                       <Link
                         href={`/peta?session=${session.id}`}
-                        className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-600/10 hover:bg-emerald-600 hover:text-white px-3 py-1.5 rounded-xl transition-all active:scale-95 shrink-0"
+                        className="min-h-[44px] inline-flex items-center gap-1 px-3 py-2 rounded-xl text-[14px] font-bold text-[#126947] dark:text-emerald-400 hover:bg-surface-container-low transition-colors shrink-0"
                       >
-                        <span>Lihat di Peta</span>
-                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                        <span>Detail</span>
+                        <span className="material-symbols-outlined text-[16px]">chevron_right</span>
                       </Link>
                     </div>
-                  </div>
+                  </article>
                 );
               })}
+
+              {filteredKajianList.length > 3 && (
+                <Link
+                  href="/peta"
+                  className="w-full min-h-[44px] py-2.5 px-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/25 text-[14px] font-bold text-[#126947] dark:text-emerald-400 flex items-center justify-center gap-1.5 transition-colors shadow-2xs"
+                >
+                  <span>Lihat semua {filteredKajianList.length} agenda kajian di peta</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </Link>
+              )}
             </div>
           )}
-        </div>
-      </section>
+        </section>
 
-      {/* 7. FOOTER (Hanya tampil di Desktop, disembunyikan di Mobile karena ada Bottom Navigation) */}
-      <footer className="hidden md:block mt-auto border-t border-outline-variant/40 bg-surface-container-low py-6 sm:py-8 text-xs text-on-surface-variant">
-        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4 text-center sm:text-left">
-            <div className="flex items-center gap-2">
-              <img src="/logo.png?v=3" alt="Logo" className="w-5 h-5 sm:w-6 sm:h-6 rounded-md object-contain" />
-              <span className="font-extrabold text-on-surface text-xs sm:text-sm">Peta Kajian Indonesia</span>
-            </div>
+        {/* =========================================================
+            6. RENUNGAN HARIAN (Satu Kartu Hadits dengan Tipografi Serif)
+           ========================================================= */}
+        <DailyHadithCard />
 
-            <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[11px] sm:text-xs">
-              <Link href="/peta" className="hover:text-emerald-600 transition-colors">
-                Peta Kajian
-              </Link>
-              <Link href="/masjid" className="hover:text-emerald-600 transition-colors">
-                Direktori Masjid
-              </Link>
-              <Link href="/live" className="hover:text-emerald-600 transition-colors">
-                Live Streaming
-              </Link>
-              <Link href="/leaderboard" className="hover:text-emerald-600 transition-colors">
-                Papan Peringkat
-              </Link>
-              <Link href="/faq" className="hover:text-emerald-600 transition-colors">
-                Bantuan &amp; FAQ
-              </Link>
-            </div>
+        {/* =========================================================
+            7. ARTIKEL PILIHAN (3 Kartu List dengan Thumbnail Kecil di Kiri)
+           ========================================================= */}
+        <section aria-labelledby="artikel-pilihan-heading" className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2
+              id="artikel-pilihan-heading"
+              className="text-[18px] font-extrabold text-on-surface tracking-tight"
+            >
+              Artikel pilihan
+            </h2>
+
+            <Link
+              href="/artikel"
+              className="min-h-[36px] inline-flex items-center gap-1 text-[12px] font-bold text-[#126947] dark:text-emerald-400 hover:underline shrink-0"
+            >
+              <span>Lihat semua</span>
+              <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </Link>
           </div>
 
-          <div className="border-t border-outline-variant/30 pt-3 sm:pt-4 flex flex-col sm:flex-row items-center justify-between gap-1.5 text-[10px] sm:text-[11px] text-outline text-center sm:text-left">
-            <p>
-              &copy; {new Date().getFullYear()} Peta Kajian Indonesia.
-            </p>
-            <p>
-              Data lokasi masjid &copy; Overture Maps Foundation, OSM contributors.
-            </p>
+          <div className="space-y-3">
+            {isArticlesLoading
+              ? Array.from({ length: 3 }).map((_, idx) => <HomeArticleCardSkeleton key={idx} />)
+              : featuredArticles.slice(0, 3).map((art, idx) => (
+                  <HomeArticleListItem key={art.id} art={art} index={idx} />
+                ))}
           </div>
+        </section>
+      </main>
+
+      {/* FOOTER DESKTOP */}
+      <footer className="hidden md:block mt-12 border-t border-outline-variant/25 bg-surface-container-low py-6 text-[12px] text-on-surface-variant">
+        <div className="max-w-3xl mx-auto px-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <img src="/logo.png?v=3" alt="Logo" className="w-5 h-5 rounded-md object-contain" />
+            <span className="font-bold text-on-surface">Peta Kajian Indonesia</span>
+          </div>
+          <p className="text-[12px] text-outline">
+            &copy; {new Date().getFullYear()} Peta Kajian Indonesia
+          </p>
         </div>
       </footer>
 
-      {/* Vaul Bottom Sheet Menu Lainnya */}
+      {/* Bottom Sheet Menu Lengkap ("Semua") */}
       <MoreMenuBottomSheet
         isOpen={isMoreMenuOpen}
         onClose={() => setIsMoreMenuOpen(false)}
@@ -1240,7 +1218,7 @@ export default function HomeDashboardClient() {
         onOpenRequestContributor={() => setIsRequestModalOpen(true)}
       />
 
-      {/* Modal Navigasi Mobile Drawer (Fallback) */}
+      {/* Modal Navigasi Mobile Drawer */}
       <MobileNavDrawer
         isOpen={isNavDrawerOpen}
         onClose={() => setIsNavDrawerOpen(false)}

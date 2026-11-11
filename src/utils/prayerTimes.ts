@@ -20,6 +20,9 @@ export interface DailyPrayerTimes {
     name: string;
     time: string;
     minutesRemaining: number;
+    hoursPart: number;
+    minutesPart: number;
+    secondsPart: number;
     countdownText: string;
   };
 }
@@ -114,7 +117,7 @@ function getSunPosition(jd: number): { declination: number; equationOfTime: numb
   const declination = Math.asin(dsin(e) * dsin(L)) * RAD_TO_DEG;
   let eqt = q / 15 - RA;
   if (eqt > 12) eqt -= 24;
-  if (eqt < -12) eqt += 24;
+  if (eqt < -12) eqt -= 24;
 
   return { declination, equationOfTime: eqt };
 }
@@ -166,6 +169,8 @@ export function getPrayerScheduleAndNext(
   const day = targetLocalDate.getDate();
   const currentMinutes =
     targetLocalDate.getHours() * 60 + targetLocalDate.getMinutes();
+  const currentTotalSeconds =
+    currentMinutes * 60 + targetLocalDate.getSeconds();
 
   const jd = getJulianDate(year, month, day) - lng / (15 * 24);
   const { declination, equationOfTime } = getSunPosition(jd + 0.5);
@@ -203,17 +208,22 @@ export function getPrayerScheduleAndNext(
     { id: 'isya', name: 'Isya', minutes: isyaMin, time: formatMinutesToHHMM(isyaMin) },
   ];
 
-  // Cari waktu sholat berikutnya
-  let next = prayers.find((p) => p.minutes > currentMinutes);
-  let minutesRemaining: number;
+  // Cari waktu sholat berikutnya berdasarkan detik untuk akurasi penuh
+  let next = prayers.find((p) => p.minutes * 60 > currentTotalSeconds);
+  let secondsRemaining: number;
 
   if (next) {
-    minutesRemaining = next.minutes - currentMinutes;
+    secondsRemaining = next.minutes * 60 - currentTotalSeconds;
   } else {
     // Jika sudah lewat Isya, waktu sholat berikutnya adalah Subuh esok hari
     next = prayers[0];
-    minutesRemaining = 1440 - currentMinutes + next.minutes;
+    secondsRemaining = 86400 - currentTotalSeconds + next.minutes * 60;
   }
+
+  const minutesRemaining = Math.ceil(secondsRemaining / 60);
+  const hoursPart = Math.floor(secondsRemaining / 3600);
+  const minutesPart = Math.floor((secondsRemaining % 3600) / 60);
+  const secondsPart = secondsRemaining % 60;
 
   return {
     subuh: prayers[0].time,
@@ -228,6 +238,9 @@ export function getPrayerScheduleAndNext(
       name: next.name,
       time: next.time,
       minutesRemaining,
+      hoursPart,
+      minutesPart,
+      secondsPart,
       countdownText: formatCountdownMinutes(minutesRemaining),
     },
   };

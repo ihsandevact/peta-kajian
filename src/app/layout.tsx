@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Geist_Mono, Lora } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ConfirmDialogProvider } from "@/context/ConfirmDialogContext";
@@ -15,18 +15,29 @@ import QueryProvider from "@/components/providers/QueryProvider";
 import PWASplashScreen from "@/components/PWASplashScreen";
 import { Analytics } from '@vercel/analytics/next';
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const plusJakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
 });
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const loraSerif = Lora({
+  variable: "--font-lora-serif",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
 });
 
 export const viewport: Viewport = {
-  themeColor: "#047857",
+  themeColor: "#126947",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -35,6 +46,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://petakajian.id'),
   title: "Peta Kajian Indonesia",
   description: "Temukan jadwal kajian terdekat di seluruh wilayah Indonesia.",
   appleWebApp: {
@@ -62,10 +74,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="referrer" content="strict-origin-when-cross-origin" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500;1,600;1,700;1,800&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap"
+          rel="stylesheet"
+        />
         <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
       </head>
       <body 
-        className="font-geist antialiased bg-surface text-on-surface h-full flex flex-col"
+        className={`${plusJakartaSans.variable} ${geistMono.variable} ${loraSerif.variable} font-sans antialiased bg-surface text-on-surface h-full flex flex-col`}
         suppressHydrationWarning
       >
         <QueryProvider>
@@ -91,4 +107,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     </html>
   );
 }
-

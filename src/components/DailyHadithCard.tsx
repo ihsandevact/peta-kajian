@@ -58,109 +58,96 @@ export default function DailyHadithCard() {
 
   // Bagikan ke WhatsApp dengan format rapi
   const handleShareWhatsApp = useCallback(() => {
-    const shareText = `*Mutiara Hadits — Peta Kajian Indonesia*\n\n"${hadith.translation}"\n\n_${hadith.narrator}_\n\n📲 Temukan jadwal kajian sunnah & direktori masjid di: https://petakajian.id`;
+    const shareText = `*Renungan Harian — Peta Kajian Indonesia*\n\n"${hadith.translation}"\n\n_${hadith.narrator}_\n\n📲 Temukan jadwal kajian sunnah & direktori masjid di: https://petakajian.id`;
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`;
     window.open(url, '_blank');
   }, [hadith]);
 
   return (
-    <section className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 pb-4 sm:pb-6 w-full">
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-br from-emerald-600/10 via-surface to-surface-container-low/50 border border-emerald-500/25 p-3.5 sm:p-5 shadow-xs">
-        {/* Dekorasi Watermark Kutipan di Latar Belakang */}
-        <span
-          aria-hidden="true"
-          className="material-symbols-outlined text-[90px] sm:text-[130px] text-emerald-600/5 dark:text-emerald-400/5 absolute -right-3 -bottom-5 select-none pointer-events-none"
+    <section aria-labelledby="renungan-harian-heading" className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h2
+          id="renungan-harian-heading"
+          className="text-[18px] font-extrabold text-on-surface tracking-tight"
         >
-          format_quote
-        </span>
+          Renungan harian
+        </h2>
+      </div>
 
-        {/* Baris Atas: Badge Topik & Tombol Interaktif */}
-        <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3 relative z-10">
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[15px] sm:text-[17px]">auto_stories</span>
-            </div>
-            <span className="text-[11px] sm:text-xs font-black text-on-surface tracking-tight uppercase">
-              Mutiara Hadits
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 text-[10px] sm:text-[11px] font-extrabold truncate">
-              {hadith.topic}
-            </span>
-          </div>
+      <div className="relative overflow-hidden rounded-2xl bg-surface-container-lowest border border-outline-variant/25 p-4 sm:p-5 shadow-2xs">
+        {/* Baris Atas: Topik & Ikon Aksi Kecil Netral */}
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <span className="px-2.5 py-1 rounded-full bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 text-[12px] font-bold truncate">
+            {hadith.topic}
+          </span>
 
-          {/* Tombol Aksi (Acak, Salin, Share WA) */}
-          <div className="flex items-center gap-1 shrink-0">
-            {/* Tombol Ganti Hadits / Shuffle */}
+          {/* Tombol Aksi Ikon Kecil (Touch target 44x44px, tanpa tombol hijau mencolok) */}
+          <div className="flex items-center gap-0.5 -mr-1.5 shrink-0">
             <button
               type="button"
               onClick={handleShuffle}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg sm:rounded-xl bg-surface hover:bg-surface-container border border-outline-variant/60 text-on-surface-variant hover:text-on-surface text-[11px] font-bold shadow-2xs transition-all cursor-pointer active:scale-95"
-              title="Ganti Hadits Lain (Acak)"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95"
+              title="Ganti hadits lain"
+              aria-label="Ganti hadits lain"
             >
               <span
-                className={`material-symbols-outlined text-[14px] sm:text-[16px] text-emerald-600 transition-transform ${
+                className={`material-symbols-outlined text-[19px] transition-transform duration-200 ${
                   isFading ? 'rotate-180' : ''
                 }`}
               >
                 shuffle
               </span>
-              <span className="hidden sm:inline">Acak</span>
             </button>
 
-            {/* Tombol Salin */}
             <button
               type="button"
               onClick={handleCopy}
-              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg sm:rounded-xl border text-[11px] font-bold shadow-2xs transition-all cursor-pointer active:scale-95 ${
+              className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer active:scale-95 ${
                 copied
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-surface hover:bg-surface-container border-outline-variant/60 text-on-surface-variant hover:text-on-surface'
+                  ? 'text-[#126947] dark:text-emerald-400 bg-[#e4eee8]/60 dark:bg-emerald-950/50'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
               }`}
-              title="Salin Kutipan Hadits"
+              title={copied ? 'Tersalin ke clipboard' : 'Salin kutipan hadits'}
+              aria-label="Salin kutipan hadits"
             >
-              <span className="material-symbols-outlined text-[14px] sm:text-[16px]">
+              <span className="material-symbols-outlined text-[19px]">
                 {copied ? 'check' : 'content_copy'}
               </span>
-              <span className="hidden sm:inline">{copied ? 'Tersalin' : 'Salin'}</span>
             </button>
 
-            {/* Tombol Bagikan ke WhatsApp */}
             <button
               type="button"
               onClick={handleShareWhatsApp}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg sm:rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold shadow-2xs transition-all cursor-pointer active:scale-95"
-              title="Bagikan Hadits ke WhatsApp"
+              className="w-11 h-11 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95"
+              title="Bagikan hadits"
+              aria-label="Bagikan hadits"
             >
-              <span className="material-symbols-outlined text-[14px] sm:text-[16px]">share</span>
-              <span className="hidden sm:inline">Bagikan</span>
+              <span className="material-symbols-outlined text-[19px]">share</span>
             </button>
           </div>
         </div>
 
-        {/* Konten Hadits */}
+        {/* Konten Hadits dengan Tipografi Serif */}
         <div
-          className={`relative z-10 transition-opacity duration-150 ${
-            isFading ? 'opacity-0 scale-[0.99]' : 'opacity-100 scale-100'
+          className={`transition-opacity duration-150 ${
+            isFading ? 'opacity-0' : 'opacity-100'
           }`}
         >
-          {/* Teks Arab (Jika ada) */}
           {hadith.arabic && (
             <p
               dir="rtl"
-              className="font-serif text-sm sm:text-base text-right text-emerald-950 dark:text-emerald-200/90 leading-relaxed mb-1.5 selection:bg-emerald-500/30"
+              className="font-serif text-[18px] text-right text-on-surface leading-loose mb-2.5 selection:bg-emerald-500/20"
             >
               {hadith.arabic}
             </p>
           )}
 
-          {/* Terjemahan */}
-          <blockquote className="text-xs sm:text-sm font-medium text-on-surface leading-relaxed italic">
+          <blockquote className="font-serif text-[16px] text-on-surface leading-relaxed italic">
             &ldquo;{hadith.translation}&rdquo;
           </blockquote>
 
-          {/* Perawi */}
-          <p className="text-[10px] sm:text-xs font-bold text-emerald-700 dark:text-emerald-400 mt-2 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 shrink-0" />
+          <p className="text-[12px] font-semibold text-on-surface-variant mt-3 flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#126947] dark:bg-emerald-400 shrink-0" />
             <span>{hadith.narrator}</span>
           </p>
         </div>
