@@ -3,7 +3,11 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { DAILY_HADITHS, type DailyHadith } from '@/data/dailyHadiths';
 
-export default function DailyHadithCard() {
+interface DailyHadithCardProps {
+  variant?: 'default' | 'sidebar';
+}
+
+export default function DailyHadithCard({ variant = 'default' }: DailyHadithCardProps) {
   // Hitung indeks hadits harian otomatis berdasarkan hari dalam tahun (Day of Year)
   const defaultIndex = useMemo(() => {
     const now = new Date();
@@ -63,6 +67,100 @@ export default function DailyHadithCard() {
     window.open(url, '_blank');
   }, [hadith]);
 
+  // Render Varian Sidebar (Desktop Kolom Kanan)
+  if (variant === 'sidebar') {
+    return (
+      <section aria-label="Renungan Hari Ini" className="space-y-3">
+        <div className="relative overflow-hidden rounded-2xl bg-surface-container-lowest border border-outline-variant/25 p-5 shadow-2xs space-y-3.5">
+          {/* Header Compact Sidebar: Ikon Kutip + Label */}
+          <div className="flex items-center gap-1.5 text-[#126947] dark:text-emerald-400">
+            <span
+              className="material-symbols-outlined text-[18px]"
+              style={{ fontVariationSettings: "'FILL' 1" }}
+            >
+              format_quote
+            </span>
+            <span className="text-[11px] font-extrabold uppercase tracking-wider">
+              Renungan Hari Ini
+            </span>
+          </div>
+
+          {/* Konten Hadits dengan Tipografi Serif Miring */}
+          <div
+            className={`transition-opacity duration-150 ${
+              isFading ? 'opacity-0' : 'opacity-100'
+            }`}
+          >
+            {hadith.arabic && (
+              <p
+                dir="rtl"
+                className="font-serif text-[17px] text-right text-on-surface leading-loose mb-2 selection:bg-emerald-500/20"
+              >
+                {hadith.arabic}
+              </p>
+            )}
+
+            <blockquote className="font-serif text-[15px] sm:text-[16px] text-on-surface leading-relaxed italic">
+              &ldquo;{hadith.translation}&rdquo;
+            </blockquote>
+          </div>
+
+          {/* Footer Baris: Perawi di Kiri, Aksi Ikon Kecil di Kanan */}
+          <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-outline-variant/15 text-on-surface-variant">
+            <span className="text-[12px] font-medium text-on-surface-variant truncate">
+              {hadith.narrator}
+            </span>
+
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={handleShuffle}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95"
+                title="Ganti hadits lain"
+                aria-label="Ganti hadits lain"
+              >
+                <span
+                  className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${
+                    isFading ? 'rotate-180' : ''
+                  }`}
+                >
+                  shuffle
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleCopy}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer active:scale-95 ${
+                  copied
+                    ? 'text-[#126947] dark:text-emerald-400 bg-[#e4eee8]/60 dark:bg-emerald-950/50'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                }`}
+                title={copied ? 'Tersalin ke clipboard' : 'Salin kutipan hadits'}
+                aria-label="Salin kutipan hadits"
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  {copied ? 'check' : 'content_copy'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareWhatsApp}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-colors cursor-pointer active:scale-95"
+                title="Bagikan hadits"
+                aria-label="Bagikan hadits"
+              >
+                <span className="material-symbols-outlined text-[16px]">share</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  // Render Varian Default (Mobile & Tablet Vertikal)
   return (
     <section aria-labelledby="renungan-harian-heading" className="space-y-3">
       <div className="flex items-center justify-between">
