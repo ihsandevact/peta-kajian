@@ -12,6 +12,7 @@ import {
   type BacaanItem,
 } from '@/data/sifatSholatData';
 import ThemeToggle from '@/components/ThemeToggle';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 export default function SifatSholatPage() {
   const router = useRouter();
@@ -202,8 +203,15 @@ export default function SifatSholatPage() {
         </div>
       )}
 
-      {/* 1. HEADER STICKY */}
-      <header className="sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-outline-variant/60 shadow-2xs">
+      {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+      <DesktopTopNavbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Cari rukun, gerakan, atau bacaan sholat..."
+      />
+
+      {/* 1. HEADER STICKY (Mobile < lg) */}
+      <header className="lg:hidden sticky top-0 z-30 bg-surface/95 backdrop-blur-md border-b border-outline-variant/60 shadow-2xs">
         <div className="max-w-4xl mx-auto px-3.5 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
             <button

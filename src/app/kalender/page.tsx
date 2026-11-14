@@ -10,6 +10,7 @@ import {
 } from '@/utils/hijri';
 import HijriCalendarGrid from '@/components/kalender/HijriCalendarGrid';
 import ThemeToggle from '@/components/ThemeToggle';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 export default function KalenderPage() {
   const router = useRouter();
@@ -119,9 +120,12 @@ export default function KalenderPage() {
   }, [cells, selectedCell]);
 
   return (
-    <div className="min-h-screen bg-background text-on-surface font-geist flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
-      {/* 1. TOP NAVBAR HEADER */}
-      <header className="sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
+    <div className="min-h-screen bg-background text-on-surface font-sans flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
+      {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+      <DesktopTopNavbar />
+
+      {/* 1. TOP NAVBAR HEADER (Mobile < lg) */}
+      <header className="lg:hidden sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
         <div className="max-w-4xl mx-auto px-3.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Tombol Kembali & Judul */}
           <div className="flex items-center gap-2.5 min-w-0">
