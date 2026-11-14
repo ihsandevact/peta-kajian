@@ -139,7 +139,7 @@ const KajianSidebarCard = React.memo(
             : 'bg-surface-container-lowest border-outline-variant/25 hover:border-[#126947]/40 shadow-2xs'
         }`}
       >
-        {/* 1. Baris Header Full-Width: Status + Jadwal + Jarak di Kiri, Tombol Bookmark di Kanan */}
+        {/* 1. Baris Header Full-Width: Status + Jadwal di Kiri, Tombol Bookmark di Kanan */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
             {isLive ? (
@@ -175,15 +175,6 @@ const KajianSidebarCard = React.memo(
               <span className="material-symbols-outlined text-[13px] shrink-0">schedule</span>
               <span className="truncate">{info.dateLabel}</span>
             </span>
-
-            {distanceLabel && (
-              <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-surface-container-low border border-outline-variant/20 text-on-surface-variant text-[10px] font-bold shrink-0">
-                <span className="material-symbols-outlined text-[12px] text-[#126947] dark:text-emerald-400">
-                  near_me
-                </span>
-                <span>{distanceLabel}</span>
-              </span>
-            )}
 
             {session.is_test && (
               <span className="inline-flex items-center gap-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 shrink-0">
@@ -249,7 +240,7 @@ const KajianSidebarCard = React.memo(
               </div>
             )}
 
-            {/* Lokasi Masjid / Online */}
+            {/* Lokasi Masjid / Online + Jarak */}
             <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant min-w-0">
               <span
                 className={`material-symbols-outlined text-[14px] shrink-0 ${
@@ -258,9 +249,16 @@ const KajianSidebarCard = React.memo(
               >
                 {session.venues ? 'location_on' : 'videocam'}
               </span>
-              <span className="truncate">
-                {session.venues ? session.venues.name : 'Kajian Online · Disiarkan'}
-              </span>
+              <div className="flex items-center gap-1 min-w-0 flex-1">
+                <span className="truncate">
+                  {session.venues ? session.venues.name : 'Kajian Online · Disiarkan'}
+                </span>
+                {distanceLabel && (
+                  <span className="text-[10px] font-semibold text-outline shrink-0 whitespace-nowrap">
+                    &middot; {distanceLabel}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 

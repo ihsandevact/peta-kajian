@@ -3,11 +3,11 @@ import React from 'react';
 export default function SkeletonCard() {
   return (
     <div className="p-3.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs overflow-hidden cursor-default pointer-events-none select-none animate-pulse">
-      {/* 1. Baris Header Full-Width: Status + Jadwal + Jarak di Kiri, Bookmark di Kanan */}
+      {/* 1. Baris Header Full-Width: Status + Jadwal di Kiri, Bookmark di Kanan */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
           <div className="h-5 w-14 rounded-lg bg-surface-container-high shrink-0" />
-          <div className="h-5 w-36 rounded-lg bg-[#e4eee8]/80 dark:bg-emerald-950/50" />
+          <div className="h-5 w-32 rounded-lg bg-[#e4eee8]/80 dark:bg-emerald-950/50" />
         </div>
         <div className="w-7 h-7 rounded-lg bg-surface-container-high shrink-0" />
       </div>
@@ -27,10 +27,11 @@ export default function SkeletonCard() {
             <div className="h-3 bg-surface-container rounded w-1/2" />
           </div>
 
-          {/* Lokasi */}
+          {/* Lokasi + Jarak */}
           <div className="flex items-center gap-1.5">
             <div className="w-3.5 h-3.5 rounded-full bg-surface-container-high shrink-0" />
-            <div className="h-3 bg-surface-container rounded w-2/3" />
+            <div className="h-3 bg-surface-container rounded w-1/2" />
+            <div className="h-3 bg-surface-container-high rounded w-12" />
           </div>
         </div>
 
