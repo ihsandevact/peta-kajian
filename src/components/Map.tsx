@@ -511,8 +511,8 @@ export default function AppMap({
     if (typeof window !== 'undefined') {
       const isDesktop = window.innerWidth >= 768;
       if (isDesktop) {
-        // Desktop: offset Y positif (200px - 260px) agar card & poster berada aman di bawah pill info live
-        offsetY = Math.min(260, Math.max(200, Math.round(window.innerHeight * 0.28)));
+        // Desktop: offset Y positif (245px - 300px) agar card & thumbnail berada aman di bawah DesktopTopNavbar & pill info live
+        offsetY = Math.min(300, Math.max(245, Math.round(window.innerHeight * 0.34)));
       } else {
         // Mobile: posisikan card utuh tepat di tengah layar secara vertikal
         // Anchor popup di bagian bawah (titik marker), sehingga marker diposisikan ~180px - 220px di bawah tengah viewport

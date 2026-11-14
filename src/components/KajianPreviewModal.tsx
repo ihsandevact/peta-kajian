@@ -116,12 +116,19 @@ export default function KajianPreviewModal({
     ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB'
     : '';
 
-  const hasPoster = Boolean(
-    session.poster_url &&
-    session.poster_url.trim() !== '' &&
-    session.poster_url.toLowerCase() !== 'null' &&
-    !imgError
-  );
+  const ytVideoId = extractYouTubeVideoId(session.stream_url);
+  const rawPoster = session.poster_url?.trim();
+  const resolvedPosterUrl =
+    rawPoster &&
+    rawPoster !== '' &&
+    rawPoster.toLowerCase() !== 'null' &&
+    rawPoster.toLowerCase() !== 'undefined'
+      ? rawPoster
+      : ytVideoId
+      ? `https://i.ytimg.com/vi/${ytVideoId}/hqdefault.jpg`
+      : null;
+
+  const hasPoster = Boolean(resolvedPosterUrl && !imgError);
 
   const hasRoute = hasPhysicalLocation(session);
   const hasLive = Boolean(
@@ -158,8 +165,8 @@ export default function KajianPreviewModal({
   };
 
   const handleOpenFullImage = () => {
-    if (session.poster_url) {
-      window.open(session.poster_url, '_blank', 'noopener,noreferrer');
+    if (resolvedPosterUrl) {
+      window.open(resolvedPosterUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -571,7 +578,7 @@ export default function KajianPreviewModal({
               {hasPoster ? (
                 <>
                   <img
-                    src={session.poster_url}
+                    src={resolvedPosterUrl!}
                     alt={`Poster ${session.title}`}
                     className={`max-h-[78vh] w-auto h-auto max-w-full object-contain rounded-xl sm:rounded-2xl shadow-2xl transition-transform duration-300 hover:scale-[1.02] ${
                       isPast ? 'grayscale-[30%] brightness-90' : ''
@@ -676,7 +683,7 @@ export default function KajianPreviewModal({
                 {hasPoster && (
                   <div className="w-full bg-neutral-950 rounded-2xl p-3 flex flex-col items-center justify-center select-none shrink-0 overflow-hidden shadow-sm">
                     <img
-                      src={session.poster_url}
+                      src={resolvedPosterUrl!}
                       alt={`Poster ${session.title}`}
                       className={`max-h-[34vh] w-auto h-auto max-w-full object-contain rounded-xl shadow-lg ${
                         isPast ? 'grayscale-[30%] brightness-90' : ''

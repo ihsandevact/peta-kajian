@@ -13,6 +13,7 @@ import {
 import { getFullPrayerSchedule, type FullPrayerSchedule } from '@/utils/prayerTimes';
 import QiblaCompass from '@/components/sholat/QiblaCompass';
 import ThemeToggle from '@/components/ThemeToggle';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 function SholatContent() {
   const router = useRouter();
@@ -159,9 +160,12 @@ function SholatContent() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-on-surface font-geist flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
-      {/* 1. TOP NAVBAR HEADER */}
-      <header className="sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
+    <div className="min-h-screen bg-background text-on-surface font-sans flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
+      {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+      <DesktopTopNavbar />
+
+      {/* 1. TOP NAVBAR HEADER (Mobile < lg) */}
+      <header className="lg:hidden sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
         <div className="max-w-4xl mx-auto px-3.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Tombol Kembali & Judul */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -196,6 +200,10 @@ function SholatContent() {
         </div>
       </header>
 
+      {/* =====================================================================
+          TAMPILAN MOBILE & TABLET (< lg): TETAP 100% SEPERTI SEMULA
+         ===================================================================== */}
+      <div className="lg:hidden flex flex-col flex-1">
       {/* 2. BAR PEMILIH LOKASI (GPS / GANTI KOTA) */}
       <section className="w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-4 pb-2">
         <div className="flex items-center justify-between gap-2 p-2.5 rounded-2xl bg-surface border border-outline-variant/60 shadow-xs">
@@ -456,6 +464,259 @@ function SholatContent() {
             <span>Buka Panduan</span>
             <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
           </Link>
+        </div>
+      </main>
+      </div>
+
+      {/* =====================================================================
+          TAMPILAN DESKTOP (lg+): 2 KOLOM ASIMETRIS BERGAYA HOMEPAGE
+         ===================================================================== */}
+      <main className="hidden lg:block max-w-7xl mx-auto px-4 lg:px-6 py-7 flex-1 w-full space-y-6">
+        {/* Header Desktop & Pemilih Lokasi */}
+        <div className="flex items-center justify-between gap-4 pb-5 border-b border-outline-variant/20">
+          <div>
+            <p className="text-[13px] font-medium text-on-surface-variant" suppressHydrationWarning>
+              {formattedDate} · Standar Kementerian Agama RI
+            </p>
+            <h1 className="text-3xl font-extrabold text-on-surface tracking-tight mt-0.5">
+              Jadwal Sholat &amp; Arah Kiblat
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setIsCityModalOpen(true)}
+              className="h-11 px-4 rounded-2xl bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/30 flex items-center gap-2.5 transition-all shadow-2xs cursor-pointer"
+            >
+              <div className="w-7 h-7 rounded-lg bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[17px]">
+                  {isGpsActive ? 'my_location' : 'location_on'}
+                </span>
+              </div>
+              <div className="text-left">
+                <div className="text-xs font-extrabold text-on-surface flex items-center gap-1.5">
+                  <span>{activeLocationName}</span>
+                  <span className="px-1.5 py-0.2 rounded bg-[#e4eee8] dark:bg-emerald-950 text-[#126947] dark:text-emerald-300 text-[10px] font-bold">
+                    {prayerSchedule.timezoneLabel}
+                  </span>
+                </div>
+                <div className="text-[10px] text-on-surface-variant">Klik untuk ganti wilayah</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGetLocation}
+              disabled={isLocating}
+              className={`h-11 px-4 rounded-2xl text-xs font-bold border transition-all flex items-center gap-2 cursor-pointer ${
+                isGpsActive
+                  ? 'bg-[#126947] text-white border-[#126947] shadow-xs'
+                  : 'bg-surface-container-lowest hover:bg-surface-container-low text-on-surface border-outline-variant/30'
+              }`}
+            >
+              <span
+                className={`material-symbols-outlined text-[17px] ${
+                  isLocating ? 'animate-spin' : ''
+                }`}
+              >
+                {isLocating ? 'sync' : 'near_me'}
+              </span>
+              <span>{isLocating ? 'Mencari...' : isGpsActive ? 'GPS Aktif' : 'Deteksi GPS'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Grid 2 Kolom Desktop: Kiri (Jadwal Sholat & Panduan) + Kanan (Kompas Kiblat) */}
+        <div className="grid grid-cols-[minmax(0,1fr)_380px] xl:grid-cols-[minmax(0,1fr)_410px] gap-8 items-start">
+          {/* KOLOM KIRI: Hero Jadwal Sholat + Grid 8 Waktu + Dalil + Panduan */}
+          <div className="space-y-6 min-w-0">
+            {/* Hero Card Jadwal Sholat Bergaya Homepage (#0c432d) */}
+            <div className="rounded-3xl bg-gradient-to-br from-[#0c432d] via-[#0f5439] to-[#0a3826] text-white p-6 shadow-md relative overflow-hidden border border-white/10">
+              <div className="absolute -right-8 -top-8 w-44 h-44 rounded-full bg-emerald-400/10 blur-2xl pointer-events-none" />
+              <div className="relative z-10 flex items-center justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-emerald-100/90">
+                    <span>
+                      MENUJU {prayerSchedule.nextPrayer.name.toUpperCase()} ·{' '}
+                      {prayerSchedule.nextPrayer.time}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-3">
+                    <h2 className="text-4xl font-black tracking-tight">
+                      {prayerSchedule.nextPrayer.name}
+                    </h2>
+                    <span className="text-2xl font-black text-amber-300 font-mono">
+                      {prayerSchedule.nextPrayer.time} {prayerSchedule.timezoneLabel}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 border border-white/15 text-xs font-bold text-white">
+                    <span className="w-2 h-2 rounded-full bg-amber-300 animate-pulse" />
+                    <span suppressHydrationWarning>{prayerSchedule.nextPrayer.countdownText}</span>
+                  </div>
+                </div>
+
+                <div className="hidden xl:flex flex-col items-end text-right">
+                  <span className="px-3 py-1 rounded-full bg-white/10 border border-white/15 text-[11px] font-semibold text-emerald-50">
+                    {prayerSchedule.timezoneLabel} · UTC+{prayerSchedule.utcOffsetHours}
+                  </span>
+                  <span className="text-xs text-emerald-100/80 mt-2">
+                    Lokasi: <strong className="text-white">{activeLocationName}</strong>
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Grid 8 Waktu Sholat & Amalan */}
+            <div className="grid grid-cols-4 gap-3.5">
+              {prayerSchedule.prayers.map((prayer) => {
+                const isNext = prayerSchedule.nextPrayer.id === prayer.id;
+                const icon = getPrayerIcon(prayer.id);
+
+                return (
+                  <div
+                    key={prayer.id}
+                    className={`p-4 rounded-2xl border transition-all flex flex-col justify-between ${
+                      isNext
+                        ? 'bg-[#e4eee8]/70 dark:bg-emerald-950/50 border-[#126947] shadow-xs ring-1 ring-[#126947]/30'
+                        : 'bg-surface-container-lowest border-outline-variant/25 shadow-2xs'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                            isNext
+                              ? 'bg-[#126947] text-white'
+                              : 'bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300'
+                          }`}
+                        >
+                          <span className="material-symbols-outlined text-[17px]">{icon}</span>
+                        </div>
+                        <span
+                          className={`text-[13px] font-extrabold truncate ${
+                            isNext ? 'text-[#126947] dark:text-emerald-300' : 'text-on-surface'
+                          }`}
+                        >
+                          {prayer.name}
+                        </span>
+                      </div>
+                      {isNext && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#126947] text-white text-[9px] font-extrabold uppercase">
+                          Berikutnya
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-baseline justify-between mt-auto pt-1">
+                      <span
+                        className={`text-2xl font-extrabold tracking-tight ${
+                          isNext ? 'text-[#126947] dark:text-emerald-300' : 'text-on-surface'
+                        }`}
+                      >
+                        {prayer.time}
+                      </span>
+                      <span className="text-[11px] text-on-surface-variant font-semibold">
+                        {prayerSchedule.timezoneLabel}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dalil Keutamaan Sholat Bergaya Renungan Homepage */}
+            <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/25 p-5 shadow-2xs space-y-2.5">
+              <div className="flex items-center gap-1.5 text-[#126947] dark:text-emerald-400">
+                <span
+                  className="material-symbols-outlined text-[18px]"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  format_quote
+                </span>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider">
+                  Keutamaan Sholat di Awal Waktu
+                </span>
+              </div>
+              <blockquote className="font-serif italic text-[16px] text-on-surface leading-relaxed">
+                “Aku bertanya kepada Rasulullah ﷺ: ‘Amalan apakah yang paling dicintai Allah?’
+                Beliau menjawab: ‘Sholat pada waktunya.’”
+              </blockquote>
+              <p className="text-[12px] font-medium text-on-surface-variant pt-1">
+                HR. Al-Bukhari no. 527 &amp; Muslim no. 85 — Abdullah bin Mas&apos;ud radhiyallahu
+                &apos;anhu
+              </p>
+            </div>
+
+            {/* Banner Panduan Sifat Sholat Nabi */}
+            <div className="p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">accessibility_new</span>
+                </div>
+                <div>
+                  <h4 className="text-sm font-extrabold text-on-surface">
+                    Panduan Sifat Sholat Nabi ﷺ Sesuai Sunnah
+                  </h4>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    Pelajari rukun, wajib, tata cara thuma&apos;ninah, dan bacaan sholat dari takbir
+                    hingga salam.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/sifat-sholat"
+                className="px-4 py-2.5 rounded-full bg-[#126947] hover:bg-[#0e5237] text-white text-xs font-bold transition-all shadow-2xs shrink-0 inline-flex items-center gap-1.5"
+              >
+                <span>Buka Panduan</span>
+                <span className="material-symbols-outlined text-[15px]">arrow_forward</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* KOLOM KANAN (SIDEBAR): Kompas Arah Kiblat Interaktif */}
+          <aside className="space-y-4 sticky top-22">
+            <div className="p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[18px]">explore</span>
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-sm text-on-surface">Kompas Arah Kiblat</h3>
+                    <p className="text-[11px] text-on-surface-variant">
+                      Azimuth Ka&apos;bah dari {activeLocationName}
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 text-xs font-extrabold">
+                  {Math.round(qiblaInfo.bearing)}°
+                </span>
+              </div>
+
+              <QiblaCompass
+                qiblaBearing={qiblaInfo.bearing}
+                distanceKm={qiblaInfo.distanceKm}
+                cityName={activeLocationName}
+                compassHeadingLabel={qiblaInfo.compassHeadingLabel}
+              />
+
+              <div className="pt-3 border-t border-outline-variant/20 space-y-2 text-xs text-on-surface-variant">
+                <div className="flex items-center justify-between">
+                  <span>Jarak ke Masjidil Haram:</span>
+                  <strong className="text-on-surface font-bold">
+                    {qiblaInfo.distanceKm.toLocaleString('id-ID')} km
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Arah Mata Angin:</span>
+                  <strong className="text-on-surface font-bold">
+                    {qiblaInfo.compassHeadingLabel}
+                  </strong>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </main>
 

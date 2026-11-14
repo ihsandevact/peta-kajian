@@ -24,6 +24,7 @@ import { type PendingStudySession } from '@/utils/studyNotes';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useBottomNav } from '@/context/BottomNavContext';
 import DynamicBackButton from '@/components/navigation/DynamicBackButton';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 const StudyLoginModal = dynamic(() => import('@/components/StudyLoginModal'), {
   ssr: false,
@@ -608,8 +609,15 @@ export default function LiveStreamingPage() {
       {/* TAMPILAN KATALOG / GRID (DESKTOP >= 640px) */}
       {!isMobileScreen && (
         <div className="hidden sm:flex flex-col flex-1">
-        {/* TOP HEADER (HANYA DITAMPILKAN DI DESKTOP, DISEMBUNYIKAN DI MOBILE VIEW) */}
-        <header className="hidden md:block sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
+          {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+          <DesktopTopNavbar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Cari siaran live, judul kajian, atau ustadz..."
+          />
+
+          {/* TOP HEADER KHUSUS TABLET (md hingga lg) */}
+          <header className="hidden md:block lg:hidden sticky top-0 z-40 bg-surface-container-lowest/90 backdrop-blur-md border-b border-surface-container-high/60 shadow-xs">
           <div className="max-w-7xl mx-auto px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
             
             {/* Sisi Kiri: Tombol Back Dinamis & Logo */}
@@ -777,24 +785,118 @@ export default function LiveStreamingPage() {
              TAMPILAN BROWSE GRID YOUTUBE DESKTOP
              ======================================================== */
           <>
-            {/* 1. FILTER CHIPS BAR KHAS YOUTUBE DESKTOP */}
-            <div className="flex items-center gap-2 pb-4 mb-6 border-b border-surface-container-high/60 overflow-x-auto no-scrollbar">
+            {/* 1. TITLE HEADER DESKTOP (lg+) */}
+            <div className="hidden lg:flex items-center justify-between pb-5 mb-6 border-b border-outline-variant/20">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 text-[12px] font-bold">
+                    {liveChannels.length > 0 ? `${liveChannels.length} Siaran Sedang Live` : 'Siaran Majelis Ilmu'}
+                  </span>
+                  <span className="text-[12px] text-on-surface-variant font-medium">
+                    YouTube Live Tracker
+                  </span>
+                </div>
+                <h1 className="text-3xl font-extrabold text-on-surface tracking-tight">
+                  Live Streaming Kajian
+                </h1>
+                <p className="text-[14px] text-on-surface-variant mt-0.5">
+                  Pantau siaran langsung majelis ilmu sunnah dan arsip rekaman video kajian dari asatidzah terpercaya.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {(liveChannels.length > 0 || endedStreams.length > 0 || upcomingStreams.length > 0) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstLive = liveChannels.find((c) => !!c.current_video_id);
+                      if (firstLive && firstLive.current_video_id) {
+                        setSelectedVideo({
+                          videoId: firstLive.current_video_id,
+                          title: firstLive.current_video_title || `Live Streaming ${firstLive.channel_name}`,
+                          channelName: firstLive.channel_name,
+                          speakerName: firstLive.default_speaker_name || '',
+                          avatarUrl: firstLive.avatar_url || undefined,
+                          isLive: true,
+                          channelHandle: firstLive.channel_handle || undefined,
+                          sessionId: firstLive.current_session_id || undefined,
+                        });
+                      } else if (endedStreams.length > 0) {
+                        const e = endedStreams[0];
+                        setSelectedVideo({
+                          videoId: e.videoId,
+                          title: e.title,
+                          channelName: e.channelName,
+                          speakerName: e.speakerName || e.channel.default_speaker_name || '',
+                          avatarUrl: e.channel.avatar_url || undefined,
+                          isLive: false,
+                          timeText: e.endedAt ? formatEndedTime(e.endedAt) : undefined,
+                          channelHandle: e.channel.channel_handle || undefined,
+                        });
+                      } else if (upcomingStreams.length > 0) {
+                        const u = upcomingStreams[0];
+                        setSelectedVideo({
+                          videoId: u.videoId,
+                          title: u.title,
+                          channelName: u.channelName,
+                          speakerName: u.speakerName || u.channel.default_speaker_name || '',
+                          avatarUrl: u.channel.avatar_url || undefined,
+                          isLive: false,
+                          timeText: formatUpcomingTime(u.scheduledStartTime),
+                          channelHandle: u.channel.channel_handle || undefined,
+                        });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#126947] hover:bg-[#0e5237] text-white text-xs font-bold transition-colors cursor-pointer active:scale-95 shadow-2xs"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">play_circle</span>
+                    <span>Mode Tonton Layar Besar</span>
+                  </button>
+                )}
+                {isAdmin && (
+                  <Link
+                    href="/admin/youtube"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 text-xs font-bold transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">admin_panel_settings</span>
+                    <span>Admin YouTube</span>
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => refetch()}
+                  disabled={isFetching}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-surface-container-low hover:bg-surface-container border border-outline-variant/25 text-xs font-bold text-on-surface transition-colors cursor-pointer active:scale-95"
+                  title="Perbarui Data Siaran"
+                >
+                  <span className={`material-symbols-outlined text-[16px] ${isFetching ? 'animate-spin' : ''}`}>
+                    refresh
+                  </span>
+                  <span>Perbarui</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 2. FILTER CHIPS BAR BERGAYA HOMEPAGE (ROUNDED-FULL PILLS) */}
+            <div className="flex items-center gap-2 pb-4 mb-6 border-b border-outline-variant/20 overflow-x-auto no-scrollbar">
               <button
                 type="button"
                 onClick={() => setActiveTab('live')}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95 border ${
                   activeTab === 'live'
-                    ? 'bg-on-surface text-surface shadow-xs'
-                    : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
+                    ? 'bg-[#126947] text-white border-[#126947] shadow-xs'
+                    : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    liveChannels.length > 0 ? 'bg-red-600 animate-pulse' : 'bg-outline/50'
+                    liveChannels.length > 0 ? 'bg-white animate-pulse' : 'bg-outline/50'
                   }`}
                 />
                 <span>Sedang Live</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-surface-container-high text-[10px] font-black">
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  activeTab === 'live' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'
+                }`}>
                   {liveChannels.length}
                 </span>
               </button>
@@ -802,15 +904,17 @@ export default function LiveStreamingPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab('upcoming')}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95 border ${
                   activeTab === 'upcoming'
-                    ? 'bg-on-surface text-surface shadow-xs'
-                    : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
+                    ? 'bg-[#126947] text-white border-[#126947] shadow-xs'
+                    : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
                 }`}
               >
                 <span className="material-symbols-outlined text-[15px]">schedule</span>
                 <span>Akan Tayang</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-surface-container-high text-[10px] font-black">
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  activeTab === 'upcoming' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'
+                }`}>
                   {upcomingStreams.length}
                 </span>
               </button>
@@ -818,23 +922,25 @@ export default function LiveStreamingPage() {
               <button
                 type="button"
                 onClick={() => setActiveTab('ended')}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-[13px] font-bold transition-all cursor-pointer whitespace-nowrap active:scale-95 border ${
                   activeTab === 'ended'
-                    ? 'bg-on-surface text-surface shadow-xs'
-                    : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
+                    ? 'bg-[#126947] text-white border-[#126947] shadow-xs'
+                    : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
                 }`}
               >
                 <span className="material-symbols-outlined text-[15px]">history</span>
                 <span>Rekaman Selesai</span>
-                <span className="px-1.5 py-0.2 rounded-full bg-surface-container-high text-[10px] font-black">
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                  activeTab === 'ended' ? 'bg-white/20 text-white' : 'bg-surface-container text-on-surface-variant'
+                }`}>
                   {endedStreams.length}
                 </span>
               </button>
 
-              <div className="h-5 w-px bg-surface-container-high mx-1 shrink-0" />
+              <div className="h-5 w-px bg-outline-variant/25 mx-1 shrink-0" />
 
               {/* Quick Channel Chips (Filter Cepat Channel Saluran) */}
-              {endedChannelsList.slice(0, 6).map(({ channel, count }) => (
+              {endedChannelsList.slice(0, 6).map(({ channel }) => (
                 <button
                   key={channel.id}
                   type="button"
@@ -842,10 +948,10 @@ export default function LiveStreamingPage() {
                     setActiveTab('ended');
                     setSelectedEndedChannelId(selectedEndedChannelId === channel.id ? 'all' : channel.id);
                   }}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] font-medium transition-all cursor-pointer whitespace-nowrap border ${
                     selectedEndedChannelId === channel.id
-                      ? 'bg-red-600 text-white font-bold shadow-xs'
-                      : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
+                      ? 'bg-[#126947] text-white border-[#126947] font-bold shadow-xs'
+                      : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
                   }`}
                 >
                   {channel.avatar_url ? (

@@ -33,6 +33,7 @@ import {
   getStoredVehicleIcon,
 } from '@/utils/navigationVehicle';
 import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 const MosqueMap = dynamic(() => import('./MosqueMap'), { ssr: false });
 const MosqueProfileModal = dynamic(() => import('./MosqueProfileModal'), { ssr: false });
@@ -840,63 +841,97 @@ export default function MosqueClient() {
 
   return (
     <div className="relative w-full h-[100dvh] flex flex-col bg-background text-on-surface overflow-hidden">
+      {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+      <DesktopTopNavbar
+        fullWidth
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Cari nama masjid, jalan, atau kota..."
+      />
+
       {/* BODY KONTEN (SPLIT SCREEN DESKTOP / SWITCH VIEW MOBILE) */}
       <div className="flex-1 relative flex overflow-hidden">
         {/* SIDEBAR PANEL (DAFTAR & FILTER MASJID) */}
         <aside
-          className={`w-full sm:w-[420px] lg:w-[480px] xl:w-[510px] h-full flex flex-col bg-surface border-r border-outline-variant/40 shrink-0 z-30 transition-transform duration-200 ${
+          className={`w-full sm:w-[420px] lg:w-[480px] xl:w-[510px] h-full flex flex-col bg-surface border-r border-outline-variant/25 shrink-0 z-30 transition-transform duration-200 ${
             mobileView === 'list'
               ? 'flex absolute inset-0 sm:relative sm:inset-auto'
               : 'hidden sm:flex'
           }`}
         >
           {/* SIDEBAR HEADER + SEARCH & FILTERS */}
-          <div className="p-3 sm:p-4 border-b border-outline-variant/40 space-y-3 bg-surface shrink-0">
-            {/* Baris 1 Desktop: Header Direktori Masjid & Darkmode (Hanya Tampil di Desktop, Di-takeout di Mobile View) */}
-            <div className="hidden sm:flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                  <span className="material-symbols-outlined text-[16px]">mosque</span>
-                </div>
-                <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-on-surface">
+          <div className="p-3 sm:p-4 border-b border-outline-variant/25 space-y-2.5 bg-surface-container-lowest shrink-0">
+            {/* Desktop Header Sidebar (lg+): Minimalist Title + Count Badge + Filter Button */}
+            <div className="hidden lg:flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="font-extrabold text-[15px] tracking-tight text-on-surface leading-tight truncate">
                   Direktori Masjid
                 </h1>
+                <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface-variant text-[11px] font-bold shrink-0">
+                  {filteredMosques.length.toLocaleString('id-ID')}
+                </span>
               </div>
+
+              {/* Tombol Filter Wilayah & Radius di Header Desktop */}
+              <button
+                type="button"
+                onClick={() => setIsFilterOpen(true)}
+                className={`relative h-8 px-3 rounded-full border flex items-center justify-center gap-1.5 text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
+                  hasActiveFilterModal
+                    ? 'bg-[#126947] text-white border-[#126947] shadow-2xs'
+                    : 'bg-surface-container-low hover:bg-surface-container border-outline-variant/30 text-on-surface'
+                }`}
+                title="Filter Lokasi, Radius & Kajian Masjid"
+              >
+                <span className="material-symbols-outlined text-[15px]">tune</span>
+                <span className="max-w-[110px] truncate">
+                  {selectedRegion ? selectedRegion.name : 'Filter Wilayah'}
+                </span>
+                {hasActiveFilterModal && (
+                  <span className="w-2 h-2 rounded-full bg-amber-300" />
+                )}
+              </button>
             </div>
 
-            {/* Baris 1.5: Indikator Waktu Sholat & Countdown Real-Time (Kemenag RI) */}
-            <div className="rounded-xl bg-emerald-600/8 dark:bg-emerald-500/10 border border-emerald-600/20 px-2.5 py-1.5 transition-all">
+            {/* MINI PRAYER HERO CARD BERGAYA HOMEPAGE (#0c432d Dark Emerald Gradient) */}
+            <div className="rounded-2xl bg-gradient-to-br from-[#0c432d] via-[#0f5439] to-[#0a3826] text-white p-3 shadow-xs border border-white/10 transition-all">
               <button
                 type="button"
                 onClick={() => setIsPrayerScheduleExpanded((prev) => !prev)}
                 className="w-full flex items-center justify-between gap-2 text-left cursor-pointer"
                 title="Klik untuk melihat jadwal 5 waktu sholat hari ini"
               >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="material-symbols-outlined text-[15px] text-emerald-600 dark:text-emerald-400 shrink-0">
-                    schedule
-                  </span>
-                  <span className="text-[11px] font-bold text-on-surface truncate">
-                    Menuju{' '}
-                    <span
-                      suppressHydrationWarning
-                      className="text-emerald-700 dark:text-emerald-300 font-extrabold"
-                    >
-                      {prayerSchedule.nextPrayer.name} {prayerSchedule.nextPrayer.time}
-                    </span>{' '}
-                    <span suppressHydrationWarning>{prayerSchedule.timezoneLabel}</span>
-                  </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-outlined text-[16px] text-emerald-200">
+                      schedule
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90 leading-none">
+                      Jadwal Sholat · Kemenag RI
+                    </div>
+                    <div className="text-xs font-extrabold text-white truncate mt-0.5">
+                      Menuju{' '}
+                      <span suppressHydrationWarning className="text-amber-300">
+                        {prayerSchedule.nextPrayer.name} · {prayerSchedule.nextPrayer.time}
+                      </span>{' '}
+                      <span suppressHydrationWarning className="text-[10px] opacity-80">
+                        {prayerSchedule.timezoneLabel}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <span
                     suppressHydrationWarning
-                    className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-extrabold shadow-2xs"
+                    className="px-2.5 py-1 rounded-full bg-white text-[#0c432d] text-[10px] font-extrabold shadow-2xs"
                   >
                     {prayerSchedule.nextPrayer.countdownText}
                   </span>
                   <span
-                    className={`material-symbols-outlined text-[16px] text-on-surface-variant transition-transform duration-200 ${
+                    className={`material-symbols-outlined text-[17px] text-emerald-100 transition-transform duration-200 ${
                       isPrayerScheduleExpanded ? 'rotate-180' : ''
                     }`}
                   >
@@ -906,7 +941,7 @@ export default function MosqueClient() {
               </button>
 
               {isPrayerScheduleExpanded && (
-                <div className="grid grid-cols-5 gap-1 mt-2 pt-2 border-t border-emerald-600/15 text-center">
+                <div className="grid grid-cols-5 gap-1.5 mt-2.5 pt-2.5 border-t border-white/15 text-center">
                   {(
                     [
                       { id: 'subuh', label: 'Subuh', time: prayerSchedule.subuh },
@@ -920,16 +955,16 @@ export default function MosqueClient() {
                     return (
                       <div
                         key={item.id}
-                        className={`py-1 px-1 rounded-lg transition-colors ${
+                        className={`py-1.5 px-1 rounded-xl transition-colors ${
                           isNext
-                            ? 'bg-emerald-600 text-white font-extrabold shadow-2xs'
-                            : 'bg-surface/70 text-on-surface-variant'
+                            ? 'bg-white text-[#0c432d] font-extrabold shadow-xs'
+                            : 'bg-white/10 text-emerald-100'
                         }`}
                       >
-                        <div className="text-[9px] uppercase tracking-wider opacity-85">
+                        <div className="text-[9px] uppercase tracking-wider opacity-85 font-bold">
                           {item.label}
                         </div>
-                        <div className="text-[11px] font-bold mt-0.5">{item.time}</div>
+                        <div className="text-[11px] font-extrabold mt-0.5">{item.time}</div>
                       </div>
                     );
                   })}
@@ -937,9 +972,9 @@ export default function MosqueClient() {
               )}
             </div>
 
-            {/* Baris 2: Search Input + Tombol Icon Filter Wilayah */}
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
+            {/* Search Input + Mobile Filter Button Row (Tampil di Mobile & Tablet < lg; di lg+ sudah ada di DesktopTopNavbar, namun muncul jika sedang ada kata kunci aktif) */}
+            <div className={`${searchQuery ? 'flex' : 'flex lg:hidden'} items-center gap-2`}>
+              <div className="relative flex-1 min-w-0">
                 <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant">
                   search
                 </span>
@@ -948,35 +983,36 @@ export default function MosqueClient() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Cari nama masjid, jalan, atau kota..."
-                  className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm bg-surface-container-low border border-outline-variant/60 rounded-xl focus:outline-none focus:border-emerald-500 text-on-surface placeholder:text-on-surface-variant/60"
+                  className="w-full pl-9 pr-8 py-2 text-xs sm:text-[13px] bg-surface-container-low border border-outline-variant/30 rounded-xl focus:outline-none focus:border-[#126947] text-on-surface placeholder:text-on-surface-variant/60"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[16px]">close</span>
                   </button>
                 )}
               </div>
 
-              {/* Tombol Icon Filter Lokasi/Wilayah (Modal di Desktop / Vaul Bottom Sheet di Mobile) */}
+              {/* Tombol Filter Wilayah & Radius di Mobile (< lg) satu baris dengan Search */}
               <button
                 type="button"
                 onClick={() => setIsFilterOpen(true)}
-                className={`relative h-9 sm:h-[38px] px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                className={`lg:hidden relative h-[36px] px-3 rounded-xl border flex items-center justify-center gap-1.5 text-xs font-bold shrink-0 transition-all cursor-pointer ${
                   hasActiveFilterModal
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-surface-container-low hover:bg-surface-container border-outline-variant/60 text-on-surface'
+                    ? 'bg-[#126947] text-white border-[#126947] shadow-2xs'
+                    : 'bg-surface-container-low hover:bg-surface-container border-outline-variant/30 text-on-surface'
                 }`}
-                title="Filter Lokasi & Wilayah Masjid"
-                aria-label="Filter Lokasi & Wilayah Masjid"
+                title="Filter Lokasi, Radius & Kajian Masjid"
               >
-                <span className="material-symbols-outlined text-[18px]">tune</span>
-                <span className="hidden xs:inline">Wilayah</span>
+                <span className="material-symbols-outlined text-[16px]">tune</span>
+                <span className="max-w-[90px] truncate">
+                  {selectedRegion ? selectedRegion.name : 'Wilayah'}
+                </span>
                 {hasActiveFilterModal && (
-                  <span className="w-2 h-2 rounded-full bg-amber-300" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
                 )}
               </button>
             </div>
@@ -1051,10 +1087,10 @@ export default function MosqueClient() {
                         setIsRadiusEnabled(false);
                       }
                     }}
-                    className={`px-2.5 py-1 text-xs font-semibold rounded-lg shrink-0 transition-colors cursor-pointer ${
+                    className={`px-3 py-1 text-[12px] font-bold rounded-full shrink-0 transition-all cursor-pointer border ${
                       isActive
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high'
+                        ? 'bg-[#126947] text-white border-[#126947] shadow-xs'
+                        : 'bg-surface-container-low text-on-surface-variant hover:text-on-surface border-outline-variant/30 hover:bg-surface-container'
                     }`}
                   >
                     {city}

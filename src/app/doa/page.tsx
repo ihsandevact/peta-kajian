@@ -9,6 +9,7 @@ import {
   type DoaCategory,
 } from '@/data/doaData';
 import ThemeToggle from '@/components/ThemeToggle';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 export default function DoaPage() {
   const router = useRouter();
@@ -217,9 +218,16 @@ export default function DoaPage() {
   }, [arabicFontSize]);
 
   return (
-    <div className="min-h-screen bg-background text-on-surface font-geist flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
-      {/* 1. TOP NAVBAR HEADER */}
-      <header className="sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
+    <div className="min-h-screen bg-background text-on-surface font-sans flex flex-col pb-[calc(76px+env(safe-area-inset-bottom,16px))] md:pb-12">
+      {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+      <DesktopTopNavbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Cari doa harian, dzikir, atau situasi..."
+      />
+
+      {/* 1. TOP NAVBAR HEADER (Mobile < lg) */}
+      <header className="lg:hidden sticky top-0 z-40 w-full bg-surface/90 backdrop-blur-md border-b border-outline-variant/40 transition-colors">
         <div className="max-w-4xl mx-auto px-3.5 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-3">
           {/* Tombol Kembali & Judul Halaman */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -254,10 +262,54 @@ export default function DoaPage() {
         </div>
       </header>
 
+      {/* DESKTOP HERO HEADER (lg+) */}
+      <section className="hidden lg:block w-full max-w-7xl mx-auto px-4 lg:px-6 pt-7 pb-4">
+        <div className="flex items-center justify-between gap-6 pb-5 border-b border-outline-variant/20">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 text-[12px] font-bold">
+                Hisnul Muslim · Dalil Shahih
+              </span>
+              <span className="text-[12px] text-on-surface-variant font-medium">
+                {DOA_ITEMS.length} Doa Pilihan
+              </span>
+            </div>
+            <h1 className="text-3xl font-extrabold text-on-surface tracking-tight">
+              Doa Harian Sunnah
+            </h1>
+            <p className="text-[14px] text-on-surface-variant mt-0.5">
+              Kumpulan doa sehari-hari dari Al-Qur&apos;an dan As-Sunnah yang shahih lengkap dengan
+              teks Arab, transliterasi, dan faedah ilmiah.
+            </p>
+          </div>
+
+          {/* Kotak Kutipan Dalil Doa (Gaya Homepage) */}
+          <div className="max-w-sm p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs shrink-0">
+            <div className="flex items-center gap-1.5 text-[#126947] dark:text-emerald-400 mb-1">
+              <span
+                className="material-symbols-outlined text-[16px]"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                format_quote
+              </span>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider">
+                Keutamaan Berdoa
+              </span>
+            </div>
+            <p className="font-serif italic text-[13px] text-on-surface leading-relaxed">
+              “Doa adalah inti dari ibadah.”
+            </p>
+            <p className="text-[11px] text-on-surface-variant font-medium mt-1">
+              HR. Tirmidzi no. 3371 — Dishahihkan Al-Albani
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* 2. SEARCH BAR & QUICK FILTERS */}
-      <section className="w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-4 pb-2 space-y-3">
-        {/* Input Pencarian */}
-        <div className="relative">
+      <section className="w-full max-w-4xl lg:max-w-7xl mx-auto px-3.5 sm:px-6 pt-4 lg:pt-1 pb-2 space-y-3">
+        {/* Input Pencarian (Tampil di < lg atau saat ada kata kunci aktif) */}
+        <div className={`${searchQuery ? 'block' : 'block lg:hidden'} relative`}>
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-on-surface-variant">
             <span className="material-symbols-outlined text-[20px]">search</span>
           </div>
@@ -280,8 +332,8 @@ export default function DoaPage() {
           )}
         </div>
 
-        {/* Carousel Kategori Doa */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
+        {/* Carousel Kategori Doa (Rounded-Full Pills Gaya Homepage) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
           {DOA_CATEGORIES.map((cat) => {
             const isActive = selectedCategory === cat.id;
             const isSaved = cat.id === 'saved';
@@ -292,10 +344,10 @@ export default function DoaPage() {
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 border active:scale-95 ${
                   isActive
-                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
-                    : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-on-surface border-outline-variant/50'
+                    ? 'bg-[#126947] text-white border-[#126947] shadow-2xs'
+                    : 'bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container-low hover:text-on-surface border-outline-variant/30'
                 }`}
               >
                 <span className="material-symbols-outlined text-[16px]">{cat.icon}</span>
@@ -316,17 +368,17 @@ export default function DoaPage() {
       </section>
 
       {/* 3. PENGATURAN TAMPILAN & JUMLAH HASIL */}
-      <section className="w-full max-w-4xl mx-auto px-3.5 sm:px-6 py-2">
-        <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 text-xs">
+      <section className="w-full max-w-4xl lg:max-w-7xl mx-auto px-3.5 sm:px-6 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs text-xs">
           {/* Info Jumlah Hasil */}
           <div className="flex items-center gap-1.5 text-on-surface-variant font-medium">
-            <span className="material-symbols-outlined text-[16px] text-emerald-600 dark:text-emerald-400">
+            <span className="material-symbols-outlined text-[16px] text-[#126947] dark:text-emerald-400">
               menu_book
             </span>
             <span>
               Menampilkan{' '}
               <strong className="text-on-surface font-extrabold">{filteredDoaItems.length}</strong>{' '}
-              doa
+              doa pilihan
             </span>
           </div>
 
@@ -336,10 +388,10 @@ export default function DoaPage() {
             <button
               type="button"
               onClick={handleToggleLatin}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1 rounded-full text-[11px] font-bold border transition-colors cursor-pointer flex items-center gap-1 ${
                 showLatin
-                  ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-                  : 'bg-surface-container text-on-surface-variant border-outline-variant/40 hover:text-on-surface'
+                  ? 'bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 border-[#126947]/25'
+                  : 'bg-surface-container text-on-surface-variant border-outline-variant/30 hover:text-on-surface'
               }`}
               title="Tampilkan / Sembunyikan transliterasi latin"
             >
@@ -348,13 +400,13 @@ export default function DoaPage() {
             </button>
 
             {/* Font Size Selector */}
-            <div className="inline-flex rounded-lg bg-surface-container border border-outline-variant/40 p-0.5">
+            <div className="inline-flex rounded-full bg-surface-container-low border border-outline-variant/30 p-0.5">
               <button
                 type="button"
                 onClick={() => handleFontSizeChange('normal')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer ${
                   arabicFontSize === 'normal'
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? 'bg-[#126947] text-white shadow-2xs'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
                 title="Ukuran Arab: Sedang"
@@ -364,9 +416,9 @@ export default function DoaPage() {
               <button
                 type="button"
                 onClick={() => handleFontSizeChange('large')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer ${
                   arabicFontSize === 'large'
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? 'bg-[#126947] text-white shadow-2xs'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
                 title="Ukuran Arab: Besar"
@@ -376,9 +428,9 @@ export default function DoaPage() {
               <button
                 type="button"
                 onClick={() => handleFontSizeChange('xlarge')}
-                className={`px-2 py-0.5 rounded-md text-[11px] font-extrabold transition-all cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold transition-all cursor-pointer ${
                   arabicFontSize === 'xlarge'
-                    ? 'bg-emerald-600 text-white shadow-xs'
+                    ? 'bg-[#126947] text-white shadow-2xs'
                     : 'text-on-surface-variant hover:text-on-surface'
                 }`}
                 title="Ukuran Arab: Ekstra Besar"
@@ -390,11 +442,11 @@ export default function DoaPage() {
         </div>
       </section>
 
-      {/* 4. DAFTAR KARTU DOA */}
-      <main className="w-full max-w-4xl mx-auto px-3.5 sm:px-6 pt-2 pb-6 space-y-4 flex-1">
+      {/* 4. DAFTAR KARTU DOA (1 Kolom di Mobile, 2 Kolom Grid di Desktop lg+) */}
+      <main className="w-full max-w-4xl lg:max-w-7xl mx-auto px-3.5 sm:px-6 pt-2 pb-6 flex-1">
         {filteredDoaItems.length === 0 ? (
           // Empty State
-          <div className="py-14 px-4 text-center flex flex-col items-center justify-center space-y-3 rounded-3xl bg-surface border border-outline-variant/40">
+          <div className="py-14 px-4 text-center flex flex-col items-center justify-center space-y-3 rounded-3xl bg-surface-container-lowest border border-outline-variant/25">
             <div className="w-16 h-16 rounded-2xl bg-surface-container-high flex items-center justify-center text-on-surface-variant">
               <span className="material-symbols-outlined text-[32px]">
                 {selectedCategory === 'saved' ? 'bookmark_border' : 'search_off'}
@@ -416,7 +468,7 @@ export default function DoaPage() {
               <button
                 type="button"
                 onClick={() => setSelectedCategory('all')}
-                className="mt-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                className="mt-2 px-4 py-2 rounded-full bg-[#126947] hover:bg-[#0e5237] text-white text-xs font-bold transition-colors cursor-pointer"
               >
                 Jelajahi Semua Doa
               </button>
@@ -427,14 +479,15 @@ export default function DoaPage() {
                   setSearchQuery('');
                   setSelectedCategory('all');
                 }}
-                className="mt-2 px-4 py-2 rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/60 text-xs font-bold transition-colors cursor-pointer"
+                className="mt-2 px-4 py-2 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40 text-xs font-bold transition-colors cursor-pointer"
               >
                 Reset Pencarian
               </button>
             )}
           </div>
         ) : (
-          filteredDoaItems.map((item, idx) => {
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 items-stretch">
+          {filteredDoaItems.map((item, idx) => {
             const isSaved = bookmarkedIds.has(item.id);
             const isCopied = copiedId === item.id;
 
@@ -442,7 +495,7 @@ export default function DoaPage() {
               <article
                 key={item.id}
                 id={item.id}
-                className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-surface border border-outline-variant/60 shadow-xs hover:border-emerald-500/30 transition-all flex flex-col gap-4"
+                className="p-4 sm:p-6 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs hover:border-[#126947]/35 transition-all flex flex-col gap-4"
               >
                 {/* Header Kartu: Kategori, Nomor, Judul & Action Buttons */}
                 <div className="flex items-start justify-between gap-3 border-b border-outline-variant/30 pb-3">
@@ -562,7 +615,8 @@ export default function DoaPage() {
                 )}
               </article>
             );
-          })
+          })}
+          </div>
         )}
       </main>
 

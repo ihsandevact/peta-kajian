@@ -22,6 +22,7 @@ import {
   HomeArticleDesktopGridSkeleton,
 } from '@/components/HomeDashboardSkeleton';
 import DailyHadithCard from '@/components/DailyHadithCard';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 import { type IslamicArticle } from '@/data/initialArticles';
 
 // Dynamic lazy imports for interactive sheets/modals
@@ -711,120 +712,14 @@ export default function HomeDashboardClient({ initialArticles = [] }: HomeDashbo
 
   return (
     <div className="min-h-screen bg-surface text-on-surface font-sans flex flex-col selection:bg-[#126947]/20 selection:text-[#126947] dark:selection:text-emerald-200 pb-[calc(88px+env(safe-area-inset-bottom,16px))] md:pb-12">
-      {/* NAVBAR DESKTOP (Hanya tampil di layar md ke atas) */}
-      <header className="hidden md:block sticky top-0 z-40 w-full bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline-variant/25 transition-colors">
-        <div className="max-w-7xl mx-auto px-4 lg:px-6 h-16 flex items-center justify-between gap-4">
-          {/* Logo & 5 Menu Navigasi Utama */}
-          <div className="flex items-center gap-6 xl:gap-8">
-            <Link href="/" className="flex items-center gap-2.5 group shrink-0">
-              <img
-                src="/logo.png?v=3"
-                alt="Peta Kajian Logo"
-                className="w-9 h-9 rounded-xl object-contain shadow-2xs group-hover:scale-105 transition-transform"
-              />
-              <span className="font-extrabold text-[16px] tracking-tight text-on-surface">
-                Peta Kajian
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-1 text-[13px] font-bold text-on-surface-variant">
-              <Link
-                href="/"
-                className="px-3.5 py-1.5 rounded-xl bg-[#e4eee8] dark:bg-emerald-950/70 text-[#126947] dark:text-emerald-300 font-extrabold"
-              >
-                Beranda
-              </Link>
-              <Link
-                href="/peta"
-                className="px-3 py-1.5 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors"
-              >
-                Kajian
-              </Link>
-              <Link
-                href="/live"
-                className="px-3 py-1.5 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors flex items-center gap-1.5"
-              >
-                <span>Live</span>
-                {activeLiveStreams.length > 0 && (
-                  <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                )}
-              </Link>
-              <Link
-                href="/masjid"
-                className="px-3 py-1.5 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors"
-              >
-                Masjid
-              </Link>
-              <Link
-                href="/artikel"
-                className="px-3 py-1.5 rounded-xl hover:bg-surface-container-low hover:text-on-surface transition-colors"
-              >
-                Artikel
-              </Link>
-            </nav>
-          </div>
-
-          {/* Sisi Kanan: Search Input Desktop (lg+), Notif, Theme, User Avatar */}
-          <div className="flex items-center gap-2.5">
-            {/* Search Bar Terintegrasi Navbar (khusus lg+) */}
-            <form
-              onSubmit={handleSearchSubmit}
-              className="hidden lg:flex items-center relative w-60 xl:w-72"
-            >
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-[18px] text-on-surface-variant/70 pointer-events-none">
-                search
-              </span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cari kajian, ustadz, atau masjid..."
-                className="w-full h-10 pl-9 pr-8 rounded-2xl bg-surface-container-low border border-outline-variant/25 focus:outline-none focus:border-[#126947] focus:ring-2 focus:ring-[#126947]/15 text-[13px] text-on-surface placeholder:text-on-surface-variant/70 transition-all"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface cursor-pointer"
-                  aria-label="Bersihkan pencarian"
-                >
-                  <span className="material-symbols-outlined text-[15px]">close</span>
-                </button>
-              )}
-            </form>
-
-            {/* Tombol Notifikasi / Pengingat */}
-            <button
-              type="button"
-              onClick={() => setIsNotifSheetOpen((prev) => !prev)}
-              className="relative w-10 h-10 rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/25 flex items-center justify-center text-on-surface transition-all cursor-pointer active:scale-95"
-              title="Pengingat Sholat, Puasa & Lokasi"
-              aria-label="Pengingat dan Lokasi"
-              aria-expanded={isNotifSheetOpen}
-            >
-              <span className="material-symbols-outlined text-[19px]">notifications</span>
-              {(dateInfo.fastingInfo || isNearPrayerTime) && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-[#126947] dark:bg-emerald-400" />
-              )}
-            </button>
-
-            {/* Toggle Tema (Dark / Light) */}
-            <ThemeToggle
-              variant="icon"
-              className="!w-10 !h-10 !rounded-xl bg-surface-container-low hover:bg-surface-container border border-outline-variant/25"
-            />
-
-            {/* Avatar Profil Pengguna (Lingkaran Hijau) */}
-            <Link
-              href={currentUser ? '/kontributor/profile' : '/login'}
-              className="w-10 h-10 rounded-full bg-[#126947] hover:bg-[#0e5237] text-white font-extrabold text-[15px] flex items-center justify-center shadow-2xs transition-colors shrink-0"
-              title={currentUser ? `Profil: ${greetingName}` : 'Masuk ke Akun'}
-            >
-              {avatarInitial}
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* NAVBAR DESKTOP (Hanya tampil di layar lg ke atas) */}
+      <DesktopTopNavbar
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        onOpenNotifications={() => setIsNotifSheetOpen((prev) => !prev)}
+        hasNotificationBadge={Boolean(dateInfo.fastingInfo || isNearPrayerTime)}
+      />
 
       {/* CONTAINER UTAMA BERANDA */}
       <main className="w-full max-w-xl md:max-w-3xl lg:max-w-6xl xl:max-w-7xl mx-auto px-4 lg:px-6 pt-4 sm:pt-6 lg:pt-8">

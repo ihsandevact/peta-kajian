@@ -23,6 +23,7 @@ import {
 } from '@/utils/navigationVehicle';
 import { getSavedParkingSpot, type SavedParkingSpot } from '@/utils/parkingSpot';
 import { MapCanvasSkeleton } from '@/components/PetaPageSkeleton';
+import DesktopTopNavbar from '@/components/navigation/DesktopTopNavbar';
 
 const InAppRoutePanel = dynamic(() => import('@/components/InAppRoutePanel'), {
   ssr: false,
@@ -692,279 +693,18 @@ export default function HomeClient() {
   }, [filters, sortedSessions, activeRouteSession, userLocation]);
 
   return (
-    <div className="w-full h-screen bg-surface font-geist text-on-surface flex overflow-hidden">
-      
-      {/* GLOBAL SIDEBAR (Kiri Jauh) */}
-      <aside className={`hidden lg:flex transition-all duration-300 bg-surface-container-lowest z-50 flex-col justify-between py-6 shadow-[0_1px_8px_rgba(0,0,0,0.04)] shrink-0 relative ${isSidebarCollapsed ? 'w-[72px]' : 'w-64'}`}>
-        
-        {/* Toggle Button */}
-        <button 
-          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className={`absolute -right-3 top-8 w-6 h-6 bg-surface-container-high rounded-full flex items-center justify-center text-on-surface hover:bg-primary-container hover:text-on-primary transition-colors shadow-sm z-50`}
-        >
-          <span className="material-symbols-outlined text-[14px]">
-            {isSidebarCollapsed ? 'chevron_right' : 'chevron_left'}
-          </span>
-        </button>
+    <div className="w-full h-screen bg-surface font-sans text-on-surface flex flex-col overflow-hidden">
+      {/* NAVBAR DESKTOP UNIFIED (lg+) */}
+      <DesktopTopNavbar
+        fullWidth
+        searchQuery={filters.searchQuery}
+        onSearchChange={(q) => setFilters((prev) => ({ ...prev, searchQuery: q }))}
+        searchPlaceholder="Cari kajian, ustadz, kitab, atau masjid..."
+      />
 
-        <div className={`flex flex-col gap-6 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          {/* Logo Area */}
-          <Link href="/" className={`flex items-center gap-3 group ${isSidebarCollapsed ? 'justify-center' : 'px-1'}`} title="Kembali ke Beranda">
-            <img
-              src="/logo.png?v=3"
-              alt="Peta Kajian Logo"
-              className={`${isSidebarCollapsed ? 'w-11 h-11' : 'w-12 h-12'} object-contain shrink-0 transition-all drop-shadow-xs group-hover:scale-105`}
-            />
-            {!isSidebarCollapsed && (
-              <div className="flex flex-col overflow-hidden whitespace-nowrap">
-                <span className="font-bold text-base text-on-surface leading-tight tracking-tight">Peta Kajian</span>
-                <span className="text-[11px] font-medium text-outline">Seluruh Indonesia</span>
-              </div>
-            )}
-          </Link>
-          
-          {/* Navigation Links */}
-          <nav className="flex flex-col gap-1.5">
-            <Link
-              href="/"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
-            >
-              <span className="material-symbols-outlined text-[20px]">home</span>
-              {!isSidebarCollapsed && <span>Beranda</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Beranda
-                </span>
-              )}
-            </Link>
-            <a href="#" className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} bg-primary-container text-on-primary`}>
-              <span className="material-symbols-outlined text-[20px]">map</span>
-              {!isSidebarCollapsed && <span>Jelajah Peta</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Jelajah Peta
-                </span>
-              )}
-            </a>
-            <Link 
-              href="/masjid"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 w-full text-left`}
-            >
-              <span className="material-symbols-outlined text-[20px] text-emerald-600">mosque</span>
-              {!isSidebarCollapsed && <span>Cari Masjid</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Cari Masjid
-                </span>
-              )}
-            </Link>
-
-            
-            <Link 
-              href="/live"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-red-600 dark:text-red-400 hover:bg-red-500/10 w-full text-left`}
-            >
-              <span className="material-symbols-outlined text-[20px] text-red-600">smart_display</span>
-              {!isSidebarCollapsed && (
-                <span className="flex items-center gap-1.5">
-                  <span>Live Kajian</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-ping" />
-                </span>
-              )}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Live Kajian
-                </span>
-              )}
-            </Link>
-            
-            <Link 
-              href="/leaderboard"
-              className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface w-full text-left`}
-            >
-              <span className="material-symbols-outlined text-[20px] text-amber-500">workspace_premium</span>
-              {!isSidebarCollapsed && <span>Leaderboard Relawan</span>}
-              {isSidebarCollapsed && (
-                <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                  Leaderboard Relawan
-                </span>
-              )}
-            </Link>
-          </nav>
-        </div>
-        
-        <div className={`flex flex-col gap-1.5 ${isSidebarCollapsed ? 'px-2' : 'px-3'}`}>
-          {currentUser ? (
-            <>
-              {currentUserRole === 'admin' || currentUserRole === 'kontributor' ? (
-                <Link
-                  href="/kontributor/dashboard"
-                  className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface`}
-                >
-                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
-                  {!isSidebarCollapsed && <span>Kirim Info Kajian</span>}
-                  {isSidebarCollapsed && (
-                    <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                      Kirim Info Kajian
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <Link
-                  href="/kontributor/profile"
-                  className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10`}
-                >
-                  <span className="material-symbols-outlined text-[20px] text-emerald-600">volunteer_activism</span>
-                  {!isSidebarCollapsed && <span>Ajukan Jadi Relawan</span>}
-                  {isSidebarCollapsed && (
-                    <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                      Ajukan Jadi Relawan
-                    </span>
-                  )}
-                </Link>
-              )}
-
-              <Link
-                href="/kontributor/profile"
-                className={`group relative flex items-center transition-colors rounded-lg text-xs font-medium ${isSidebarCollapsed ? 'justify-center p-3' : 'px-3 py-2 gap-2'} text-on-surface hover:bg-surface-container-high`}
-              >
-                <HeaderAvatar url={currentUser.user_metadata?.avatar_url} size="w-5 h-5" />
-                {!isSidebarCollapsed && (
-                  <span className="truncate">
-                    {currentUser.user_metadata?.full_name || currentUser.email?.split('@')[0] || 'Profil Saya'}
-                  </span>
-                )}
-                {isSidebarCollapsed && (
-                  <span className="absolute left-full ml-4 px-2.5 py-1.5 bg-on-surface text-surface text-[11px] rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-lg">
-                    Profil Saya
-                  </span>
-                )}
-              </Link>
-            </>
-          ) : (
-            <div
-              ref={loginBenefitsRef}
-              onMouseEnter={() => {
-                if (closeTimerRef.current) {
-                  clearTimeout(closeTimerRef.current);
-                  closeTimerRef.current = null;
-                }
-                setShowLoginBenefits(true);
-              }}
-              onMouseLeave={() => {
-                closeTimerRef.current = setTimeout(() => {
-                  setShowLoginBenefits(false);
-                }, 200);
-              }}
-              className="relative"
-            >
-              <div
-                className={`flex items-center rounded-xl border border-primary/35 bg-primary/5 text-primary hover:bg-primary hover:text-white hover:border-primary shadow-2xs transition-all group ${
-                  isSidebarCollapsed ? 'justify-center p-1' : 'p-1'
-                }`}
-              >
-                <Link
-                  href="/login"
-                  className={`flex items-center flex-1 text-xs font-semibold rounded-lg transition-colors ${
-                    isSidebarCollapsed ? 'justify-center p-2.5' : 'px-2.5 py-1.5 gap-2'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[20px] shrink-0">login</span>
-                  {!isSidebarCollapsed && <span>Masuk</span>}
-                </Link>
-
-                {/* Tombol Info Benefit */}
-                {!isSidebarCollapsed && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setShowLoginBenefits((prev) => !prev);
-                    }}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-black/5 dark:hover:bg-white/10 group-hover:hover:bg-white/20 text-primary group-hover:text-white/90 group-hover:hover:text-white transition-colors shrink-0"
-                    title="Lihat keuntungan masuk akun"
-                    aria-label="Lihat keuntungan masuk akun"
-                  >
-                    <span className="material-symbols-outlined text-[17px]">info</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Popover / Tooltip Keuntungan Login */}
-              {showLoginBenefits && (
-                <div
-                  className={`absolute z-50 w-72 sm:w-80 bg-surface-container-lowest text-on-surface p-4 rounded-2xl shadow-xl border border-surface-container-high transition-all animate-fadeIn ${
-                    isSidebarCollapsed
-                      ? 'left-full ml-3 bottom-0'
-                      : 'left-full ml-3 bottom-0'
-                  }`}
-                >
-                  {/* Header Popover */}
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <span className="material-symbols-outlined text-[18px] text-primary font-bold">
-                      auto_stories
-                    </span>
-                    <h4 className="font-bold text-xs sm:text-sm text-on-surface">
-                      Buku Saku Penuntut Ilmu
-                    </h4>
-                  </div>
-
-                  <p className="text-[11px] text-on-surface-variant mb-3 leading-relaxed">
-                    Masuk dengan Google untuk membuka fitur agenda & catatan majelis Anda:
-                  </p>
-
-                  {/* List Benefit */}
-                  <div className="space-y-2">
-                    <div className="flex items-start gap-2.5 text-xs">
-                      <div className="w-5 h-5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-[13px]">bookmark</span>
-                      </div>
-                      <div className="text-[11px]">
-                        <span className="font-semibold text-on-surface">Simpan Kajian (Cloud Sync)</span>
-                        <p className="text-outline text-[10px] leading-tight">Akses kajian tersimpan di semua perangkat Anda.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 text-xs">
-                      <div className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-[13px]">front_hand</span>
-                      </div>
-                      <div className="text-[11px]">
-                        <span className="font-semibold text-on-surface">Tandai Hadir (InsyaAllah)</span>
-                        <p className="text-outline text-[10px] leading-tight">Rekap rencana hadir kajian Anda & bantu estimasi jamaah.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 text-xs">
-                      <div className="w-5 h-5 rounded-md bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-[13px]">campaign</span>
-                      </div>
-                      <div className="text-[11px]">
-                        <span className="font-semibold text-on-surface">Input Jadwal Kajian</span>
-                        <p className="text-outline text-[10px] leading-tight">Bantu sebar jadwal kajian masjid terdekat sebagai relawan.</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 text-xs">
-                      <div className="w-5 h-5 rounded-md bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
-                        <span className="material-symbols-outlined text-[13px]">notifications_active</span>
-                      </div>
-                      <div className="text-[11px]">
-                        <span className="font-semibold text-on-surface">Pengingat Otomatis</span>
-                        <p className="text-outline text-[10px] leading-tight">Notifikasi sebelum kajian dimulai agar tidak terlewat.</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </aside>
-
-      {/* AREA KANAN */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex min-h-0 overflow-hidden relative">
+      {/* AREA UTAMA SPLIT SCREEN (DAFTAR KAJIAN + PETA) */}
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 h-full overflow-hidden">
         
         {/* Banner Peringatan Mode Offline */}
         {(isOffline || hasConnectionError) && (
@@ -991,19 +731,19 @@ export default function HomeClient() {
         )}
 
         {/* MAIN CONTENT SPLIT */}
-        <main className={`flex-1 flex w-full h-full relative overflow-hidden bg-surface transition-all duration-300 ${
-          activeRouteSession ? 'pb-0' : 'md:pb-0 pb-[64px] /* pb-16 untuk Bottom Nav di Mobile */'
+        <main className={`flex-1 flex min-h-0 w-full h-full relative overflow-hidden bg-surface ${
+          activeRouteSession ? 'pb-0' : 'md:pb-0 pb-[64px]'
         }`}>
           
           {/* Kolom Daftar Kajian:
-              - Desktop (md:): selalu tampil di samping kiri (w-[410px] lg:w-[430px])
+              - Desktop (md:): selalu tampil di samping kiri (md:w-[420px] lg:w-[465px] xl:w-[495px])
               - Mobile (<md): tampil penuh saat mobileView === 'list', disembunyikan saat mobileView === 'map'
           */}
           <aside
-            className={`h-full flex-col bg-surface-container-lowest shadow-[1px_0_0_0_rgba(226,232,240,0.8)] shrink-0 z-30 transition-transform duration-200 overflow-hidden ${
+            className={`h-full min-h-0 flex-col bg-surface border-r border-outline-variant/25 shrink-0 z-30 overflow-hidden ${
               mobileView === 'list'
-                ? 'flex w-full absolute inset-0 md:relative md:inset-auto md:w-[410px] lg:w-[430px]'
-                : 'hidden md:flex md:w-[410px] lg:w-[430px]'
+                ? 'flex w-full absolute inset-0 md:relative md:inset-auto md:w-[420px] lg:w-[465px] xl:w-[495px]'
+                : 'hidden md:flex md:w-[420px] lg:w-[465px] xl:w-[495px]'
             }`}
           >
             <SidebarFilter 
@@ -1147,6 +887,7 @@ export default function HomeClient() {
             )}
           </div>
         </main>
+      </div>
       </div>
 
       {/* Modal Permohonan Menjadi Kontributor */}

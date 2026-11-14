@@ -6,7 +6,11 @@ import type {
   UpcomingStreamItem,
   EndedStreamItem,
 } from '@/lib/services/youtubeTracker';
-import { formatUpcomingTime, formatEndedTime, pinActiveVideoToTop } from '@/lib/services/youtubeTracker';
+import {
+  formatUpcomingTime,
+  formatEndedTime,
+  pinActiveVideoToTop,
+} from '@/lib/services/youtubeTracker';
 import { ChannelVerifiedBadge } from './ChannelVerifiedBadge';
 import {
   sendPlayVideo,
@@ -188,25 +192,69 @@ export default function DesktopYoutubeWatchView({
   }, [liveChannels, upcomingStreams, endedStreams, sidebarFilter, currentVideo.videoId, searchQuery]);
 
   return (
-    <div className="w-full font-geist">
-      {/* DUA KOLOM UTAMA KHAS YOUTUBE DESKTOP */}
-      <div className="flex flex-col lg:flex-row items-start gap-6 w-full">
+    <div className="w-full font-sans space-y-4">
+      {/* TOP BAR MODE TONTON: Switcher ke Mode Katalog Grid & Status Siaran */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-outline-variant/20">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCloseWatchView}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-surface-container-lowest hover:bg-surface-container-low border border-outline-variant/30 text-xs font-bold text-on-surface hover:text-[#126947] transition-all shadow-2xs cursor-pointer active:scale-95"
+            title="Buka tampilan katalog grid semua siaran"
+          >
+            <span className="material-symbols-outlined text-[16px]">grid_view</span>
+            <span>Jelajahi Katalog Grid</span>
+          </button>
+
+          {currentVideo.isLive ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-extrabold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+              <span>Sedang Tayang Langsung</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 text-[11px] font-bold">
+              <span className="material-symbols-outlined text-[14px]">play_circle</span>
+              <span>Mode Tonton Kajian</span>
+            </span>
+          )}
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2 text-[12px] text-on-surface-variant font-medium">
+          <span>
+            <strong className="text-on-surface font-bold">{liveChannels.length}</strong> Live
+          </span>
+          <span>·</span>
+          <span>
+            <strong className="text-on-surface font-bold">{upcomingStreams.length}</strong> Terjadwal
+          </span>
+          <span>·</span>
+          <span>
+            <strong className="text-on-surface font-bold">{endedStreams.length}</strong> Rekaman
+          </span>
+        </div>
+      </div>
+
+      {/* DUA KOLOM UTAMA KHAS HOMEPAGE / YOUTUBE DESKTOP */}
+      <div className="flex flex-col lg:flex-row items-start gap-6 lg:gap-7 w-full">
         {/* ========================================================
-            KOLOM KIRI (70%): PLAYER BESAR + DETAIL + ACTION BAR
+            KOLOM KIRI (68%): PLAYER BESAR + DETAIL CARD + ACTION BAR
            ======================================================== */}
-        <div className="w-full lg:w-[68%] xl:w-[72%] flex flex-col">
+        <div className="w-full lg:w-[66%] xl:w-[69%] flex flex-col">
           {/* 1. PLAYER 16:9 BESAR */}
-          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-xl border border-surface-container-high/60">
+          <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black shadow-lg border border-outline-variant/25">
             {isMiniPlayerActive ? (
               <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-gradient-to-b from-neutral-900 via-neutral-950 to-neutral-950 text-center select-none space-y-3 relative overflow-hidden">
-                {/* Background thumbnail blur halus */}
-                <div 
+                <div
                   className="absolute inset-0 bg-cover bg-center opacity-15 filter blur-lg scale-110 pointer-events-none"
-                  style={{ backgroundImage: `url(https://i.ytimg.com/vi/${currentVideo.videoId}/hqdefault.jpg)` }}
+                  style={{
+                    backgroundImage: `url(https://i.ytimg.com/vi/${currentVideo.videoId}/hqdefault.jpg)`,
+                  }}
                 />
-                
+
                 <div className="relative z-10 w-14 h-14 rounded-2xl bg-red-600/15 text-red-500 flex items-center justify-center border border-red-500/25 shadow-lg animate-pulse">
-                  <span className="material-symbols-outlined text-[30px]">picture_in_picture_alt</span>
+                  <span className="material-symbols-outlined text-[30px]">
+                    picture_in_picture_alt
+                  </span>
                 </div>
 
                 <div className="relative z-10 space-y-1 max-w-md">
@@ -214,7 +262,8 @@ export default function DesktopYoutubeWatchView({
                     Sedang Diputar di Mini Player Pojok Layar
                   </p>
                   <p className="text-xs text-neutral-300 leading-relaxed">
-                    Video utama dijeda agar audio tidak bertumpuk. Anda dapat menjelajahi halaman lain sambil tetap menyimak kajian.
+                    Video utama dijeda agar audio tidak bertumpuk. Anda dapat menjelajahi halaman
+                    lain sambil tetap menyimak kajian.
                   </p>
                 </div>
 
@@ -228,7 +277,7 @@ export default function DesktopYoutubeWatchView({
                         } catch {}
                         onRestoreFromMiniPlayer();
                       }}
-                      className="px-4 py-2 rounded-full bg-primary hover:bg-primary/90 text-on-primary text-xs font-bold inline-flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                      className="px-4 py-2 rounded-full bg-[#126947] hover:bg-[#0e5237] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px]">fullscreen</span>
                       <span>Kembalikan Pemutar ke Sini</span>
@@ -246,7 +295,8 @@ export default function DesktopYoutubeWatchView({
                     Rekaman Diatur Privat oleh Saluran
                   </p>
                   <p className="text-xs text-neutral-300 leading-relaxed">
-                    Saluran YouTube terkait memprivat siaran ini untuk proses editing atau rilis rekaman resmi berkualitas tinggi.
+                    Saluran YouTube terkait memprivat siaran ini untuk proses editing atau rilis
+                    rekaman resmi berkualitas tinggi.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 pt-2">
@@ -308,212 +358,228 @@ export default function DesktopYoutubeWatchView({
             )}
           </div>
 
-          {/* 2. JUDUL KAJIAN */}
-          <h1 className="text-base sm:text-lg lg:text-xl font-extrabold text-on-surface mt-3.5 leading-snug">
-            {currentVideo.title}
-          </h1>
+          {/* 2. INFO & ACTION CARD BERGAYA HOMEPAGE */}
+          <div className="mt-4 p-4 sm:p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/25 shadow-2xs space-y-4">
+            <h1 className="text-base sm:text-lg lg:text-xl font-extrabold text-on-surface leading-snug tracking-tight">
+              {currentVideo.title}
+            </h1>
 
-          {/* 3. BARIS SALURAN & TOMBOL AKSI TERPADU (GAYA YOUTUBE DESKTOP) */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 pb-3 border-b border-surface-container-high/60">
-            {/* Sisi Kiri: Profil Saluran & Ustadz */}
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              {currentVideo.channelHandle ? (
+            {/* Baris Saluran & Tombol Aksi */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 pb-3 border-b border-outline-variant/20">
+              {/* Sisi Kiri: Profil Saluran & Ustadz */}
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {currentVideo.channelHandle ? (
+                  <a
+                    href={`https://www.youtube.com/${currentVideo.channelHandle.startsWith('@') ? currentVideo.channelHandle : `@${currentVideo.channelHandle}`}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-10 h-10 rounded-full overflow-hidden bg-surface-container shrink-0 border border-outline-variant/30 shadow-2xs hover:opacity-85 transition-opacity cursor-pointer"
+                    title={`Kunjungi saluran ${currentVideo.channelName} di YouTube`}
+                  >
+                    {currentVideo.avatarUrl ? (
+                      <img
+                        src={currentVideo.avatarUrl}
+                        alt={currentVideo.channelName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#e4eee8] text-[#126947] font-bold flex items-center justify-center text-sm">
+                        {currentVideo.channelName.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </a>
+                ) : (
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container shrink-0 border border-outline-variant/30 shadow-2xs">
+                    {currentVideo.avatarUrl ? (
+                      <img
+                        src={currentVideo.avatarUrl}
+                        alt={currentVideo.channelName}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#e4eee8] text-[#126947] font-bold flex items-center justify-center text-sm">
+                        {currentVideo.channelName.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="min-w-0 pr-2">
+                  <div className="flex items-center gap-1.5">
+                    {currentVideo.channelHandle ? (
+                      <a
+                        href={`https://www.youtube.com/${currentVideo.channelHandle.startsWith('@') ? currentVideo.channelHandle : `@${currentVideo.channelHandle}`}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-extrabold text-sm text-on-surface hover:text-[#126947] hover:underline truncate transition-colors cursor-pointer"
+                        title={`Kunjungi saluran ${currentVideo.channelName} di YouTube`}
+                      >
+                        {currentVideo.channelName}
+                      </a>
+                    ) : (
+                      <h3 className="font-extrabold text-sm text-on-surface truncate">
+                        {currentVideo.channelName}
+                      </h3>
+                    )}
+                    <ChannelVerifiedBadge size="sm" />
+                  </div>
+                  {currentVideo.speakerName ? (
+                    <p className="text-xs text-on-surface-variant font-medium truncate mt-0.5">
+                      Pemateri:{' '}
+                      <span className="text-on-surface font-semibold">
+                        {currentVideo.speakerName}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-outline font-medium truncate mt-0.5">
+                      Saluran Dakwah Islam Terverifikasi
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Sisi Kanan: Action Buttons (Gaya Homepage) */}
+              <div className="flex items-center gap-2 flex-wrap shrink-0">
+                {onOpenStudyMode && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenStudyMode(currentVideo)}
+                    className="h-9 px-4 rounded-xl bg-[#126947] hover:bg-[#0e5237] text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                    title="Buka Mode Belajar untuk menyimak sambil mencatat faidah kajian"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">edit_note</span>
+                    <span>Catat Faidah</span>
+                  </button>
+                )}
+
+                {onPlayGlobalMiniPlayer && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        if (iframeRef.current) {
+                          sendMute(iframeRef.current);
+                          sendPauseVideo(iframeRef.current);
+                          sendStopVideo(iframeRef.current);
+                          iframeRef.current.src = 'about:blank';
+                        }
+                      } catch {}
+
+                      onPlayGlobalMiniPlayer(currentVideo);
+                    }}
+                    className="h-9 px-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-bold inline-flex items-center gap-1.5 border border-outline-variant/30 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                    title="Pindahkan ke pemutar mengambang mini di pojok kanan bawah"
+                  >
+                    <span className="material-symbols-outlined text-[16px] text-rose-500">
+                      picture_in_picture_alt
+                    </span>
+                    <span>Mini Player</span>
+                  </button>
+                )}
+
+                {onShare && (
+                  <button
+                    type="button"
+                    onClick={() => onShare(currentVideo)}
+                    className="h-9 px-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-bold inline-flex items-center gap-1.5 border border-outline-variant/30 active:scale-95 transition-all cursor-pointer whitespace-nowrap"
+                    title="Bagikan Tautan Kajian"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">share</span>
+                    <span>Bagikan</span>
+                  </button>
+                )}
+
                 <a
-                  href={`https://www.youtube.com/${currentVideo.channelHandle.startsWith('@') ? currentVideo.channelHandle : `@${currentVideo.channelHandle}`}`}
+                  href={`https://www.youtube.com/watch?v=${currentVideo.videoId}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="w-10 h-10 rounded-full overflow-hidden bg-surface-container shrink-0 border border-surface-container-high/70 shadow-2xs hover:opacity-85 transition-opacity cursor-pointer"
-                  title={`Kunjungi saluran ${currentVideo.channelName} di YouTube`}
+                  className="h-9 px-3.5 rounded-xl bg-surface-container-low hover:bg-surface-container text-on-surface text-xs font-bold inline-flex items-center gap-1.5 border border-outline-variant/30 active:scale-95 transition-all whitespace-nowrap"
+                  title="Buka di situs YouTube"
                 >
-                  {currentVideo.avatarUrl ? (
-                    <img
-                      src={currentVideo.avatarUrl}
-                      alt={currentVideo.channelName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-red-600/10 text-red-600 dark:text-red-400 font-bold flex items-center justify-center text-sm">
-                      {currentVideo.channelName.slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
+                  <span className="material-symbols-outlined text-[16px]">open_in_new</span>
+                  <span>YouTube</span>
                 </a>
-              ) : (
-                <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container shrink-0 border border-surface-container-high/70 shadow-2xs">
-                  {currentVideo.avatarUrl ? (
-                    <img
-                      src={currentVideo.avatarUrl}
-                      alt={currentVideo.channelName}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-red-600/10 text-red-600 dark:text-red-400 font-bold flex items-center justify-center text-sm">
-                      {currentVideo.channelName.slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="min-w-0 pr-2">
-                <div className="flex items-center gap-1.5">
-                  {currentVideo.channelHandle ? (
-                    <a
-                      href={`https://www.youtube.com/${currentVideo.channelHandle.startsWith('@') ? currentVideo.channelHandle : `@${currentVideo.channelHandle}`}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-extrabold text-sm text-on-surface hover:text-primary hover:underline truncate transition-colors cursor-pointer"
-                      title={`Kunjungi saluran ${currentVideo.channelName} di YouTube`}
-                    >
-                      {currentVideo.channelName}
-                    </a>
-                  ) : (
-                    <h3 className="font-extrabold text-sm text-on-surface truncate">
-                      {currentVideo.channelName}
-                    </h3>
-                  )}
-                  <ChannelVerifiedBadge size="sm" />
-                </div>
-                {currentVideo.speakerName ? (
-                  <p className="text-xs text-on-surface-variant font-medium truncate mt-0.5">
-                    Pemateri: <span className="text-on-surface font-semibold">{currentVideo.speakerName}</span>
-                  </p>
-                ) : (
-                  <p className="text-xs text-outline font-medium truncate mt-0.5">
-                    Saluran Dakwah Islam
-                  </p>
-                )}
               </div>
             </div>
 
-            {/* Sisi Kanan: Action Buttons (Khas YouTube Desktop) */}
-            <div className="flex items-center gap-2 flex-wrap shrink-0">
-              {/* Tombol Mode Belajar (Catat Faidah) */}
-              {onOpenStudyMode && (
-                <button
-                  type="button"
-                  onClick={() => onOpenStudyMode(currentVideo)}
-                  className="h-9 px-4 rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shadow-xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
-                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah kajian"
-                >
-                  <span className="material-symbols-outlined text-[17px]">edit_note</span>
-                  <span>Catat Faidah</span>
-                </button>
-              )}
-
-              {/* Tombol Putar di Mini Player */}
-              {onPlayGlobalMiniPlayer && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      if (iframeRef.current) {
-                        sendMute(iframeRef.current);
-                        sendPauseVideo(iframeRef.current);
-                        sendStopVideo(iframeRef.current);
-                        iframeRef.current.src = 'about:blank';
-                      }
-                    } catch {}
-
-                    onPlayGlobalMiniPlayer(currentVideo);
-                  }}
-                  className="h-9 px-3.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold inline-flex items-center gap-1.5 border border-surface-container-high/60 shadow-2xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
-                  title="Pindahkan ke pemutar mengambang mini di pojok kanan bawah"
-                >
-                  <span className="material-symbols-outlined text-[16px] text-red-600">picture_in_picture_alt</span>
-                  <span>Putar di Pojok</span>
-                </button>
-              )}
-
-              {/* Tombol Bagikan */}
-              {onShare && (
-                <button
-                  type="button"
-                  onClick={() => onShare(currentVideo)}
-                  className="h-9 px-3.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold inline-flex items-center gap-1.5 border border-surface-container-high/60 shadow-2xs active:scale-95 transition-all cursor-pointer whitespace-nowrap"
-                  title="Bagikan Tautan Kajian"
-                >
-                  <span className="material-symbols-outlined text-[16px]">share</span>
-                  <span>Bagikan</span>
-                </button>
-              )}
-
-              {/* Tombol Buka di YouTube */}
-              <a
-                href={`https://www.youtube.com/watch?v=${currentVideo.videoId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="h-9 px-3.5 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface text-xs font-semibold inline-flex items-center gap-1.5 border border-surface-container-high/60 shadow-2xs active:scale-95 transition-all whitespace-nowrap"
-                title="Buka di situs YouTube"
-              >
-                <span className="material-symbols-outlined text-[16px]">open_in_new</span>
-                <span>YouTube</span>
-              </a>
-            </div>
-          </div>
-
-          {/* 4. KOTAK DESKRIPSI (YOUTUBE DESCRIPTION BOX) */}
-          <div
-            onClick={() => setIsDescExpanded((prev) => !prev)}
-            className="mt-3.5 p-3.5 sm:p-4 rounded-xl bg-surface-container-low hover:bg-surface-container border border-surface-container-high/40 text-xs text-on-surface-variant space-y-2 cursor-pointer transition-colors"
-          >
-            <div className="flex items-center gap-2 font-bold text-on-surface text-[11px] sm:text-xs">
-              {currentVideo.isLive ? (
-                <span className="inline-flex items-center gap-1.5 text-red-600 font-extrabold">
-                  <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                  <span>Sedang Tayang Langsung</span>
-                </span>
-              ) : currentVideo.timeText ? (
-                <span>Waktu Siaran: {currentVideo.timeText}</span>
-              ) : (
-                <span>Siaran Kajian Ilmiah Islam</span>
-              )}
-              <span>•</span>
-              <span>Disiarkan oleh {currentVideo.channelName}</span>
-            </div>
-
-            <p className={`text-on-surface-variant/90 leading-relaxed ${isDescExpanded ? '' : 'line-clamp-2'}`}>
-              Kajian Islam disiarkan melalui saluran resmi YouTube {currentVideo.channelName}.
-              {currentVideo.speakerName ? ` Pemateri yang mengisi taklim: ${currentVideo.speakerName}.` : ''} Simak dengan adab menuntut ilmu dan manfaatkan fitur Mode Belajar untuk mencatat rangkuman faidah secara langsung.
-            </p>
-
-            <button
-              type="button"
-              className="font-bold text-on-surface hover:text-primary transition-colors cursor-pointer text-[11px] pt-0.5 block"
+            {/* Kotak Deskripsi */}
+            <div
+              onClick={() => setIsDescExpanded((prev) => !prev)}
+              className="p-3.5 rounded-xl bg-surface-container-low/70 hover:bg-surface-container-low border border-outline-variant/20 text-xs text-on-surface-variant space-y-1.5 cursor-pointer transition-colors"
             >
-              {isDescExpanded ? 'Tampilkan Lebih Sedikit' : '...selengkapnya'}
-            </button>
+              <div className="flex items-center gap-2 font-bold text-on-surface text-[11px] sm:text-xs">
+                {currentVideo.isLive ? (
+                  <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-extrabold">
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    <span>Sedang Tayang Langsung</span>
+                  </span>
+                ) : currentVideo.timeText ? (
+                  <span>Waktu Siaran: {currentVideo.timeText}</span>
+                ) : (
+                  <span>Siaran Kajian Ilmiah Islam</span>
+                )}
+                <span>·</span>
+                <span>Disiarkan oleh {currentVideo.channelName}</span>
+              </div>
+
+              <p
+                className={`text-on-surface-variant/90 leading-relaxed ${
+                  isDescExpanded ? '' : 'line-clamp-2'
+                }`}
+              >
+                Kajian Islam disiarkan melalui saluran resmi YouTube {currentVideo.channelName}.
+                {currentVideo.speakerName
+                  ? ` Pemateri yang mengisi taklim: ${currentVideo.speakerName}.`
+                  : ''}{' '}
+                Simak dengan adab menuntut ilmu dan manfaatkan fitur Mode Belajar untuk mencatat
+                rangkuman faidah secara langsung.
+              </p>
+
+              <button
+                type="button"
+                className="font-bold text-[#126947] dark:text-emerald-400 hover:underline transition-colors cursor-pointer text-[11px] pt-0.5 block"
+              >
+                {isDescExpanded ? 'Tampilkan Lebih Sedikit' : 'Selengkapnya...'}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* ========================================================
-            KOLOM KANAN (30%): DAFTAR REKOMENDASI KAjiAN TERKAIT
+            KOLOM KANAN (32%): PANEL REKOMENDASI KAJIAN TERKAIT (GAYA HOMEPAGE)
            ======================================================== */}
-        <div className="w-full lg:w-[32%] xl:w-[28%] flex flex-col gap-3 shrink-0">
-          {/* Header Sidebar & Filter Chips Mini */}
-          <div className="flex items-center justify-between gap-1 pb-1">
-            <h2 className="font-extrabold text-sm text-on-surface flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[17px] text-red-600">video_library</span>
-              <span>Kajian Terkait</span>
-            </h2>
-            <span className="text-[11px] text-outline font-semibold">
+        <aside className="w-full lg:w-[34%] xl:w-[31%] rounded-2xl bg-surface-container-lowest border border-outline-variant/25 p-4 shadow-2xs flex flex-col gap-3.5 shrink-0">
+          {/* Header Sidebar */}
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="font-extrabold text-[15px] text-on-surface tracking-tight">
+                Daftar Siaran &amp; Rekaman
+              </h2>
+              <p className="text-[11px] text-on-surface-variant font-medium">
+                Pilih video untuk langsung memutar di samping
+              </p>
+            </div>
+            <span className="px-2.5 py-1 rounded-full bg-[#e4eee8] dark:bg-emerald-950/60 text-[#126947] dark:text-emerald-300 text-[11px] font-extrabold shrink-0">
               {relatedVideos.length} Video
             </span>
           </div>
 
           {/* Indikator Pencarian Aktif */}
           {searchQuery && (
-            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-surface-container border border-surface-container-high text-xs animate-in fade-in duration-200">
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="material-symbols-outlined text-[15px] text-primary shrink-0">search</span>
+                <span className="material-symbols-outlined text-[15px] text-[#126947] shrink-0">
+                  search
+                </span>
                 <span className="truncate text-on-surface-variant">
-                  Hasil: <strong className="text-on-surface font-bold">"{searchQuery}"</strong>
+                  Filter: <strong className="text-on-surface font-bold">"{searchQuery}"</strong>
                 </span>
               </div>
               {onClearSearch && (
                 <button
                   type="button"
                   onClick={onClearSearch}
-                  className="text-[11px] text-primary hover:underline font-bold ml-2 shrink-0 cursor-pointer"
-                  title="Hapus filter pencarian"
+                  className="text-[11px] text-[#126947] dark:text-emerald-400 hover:underline font-bold ml-2 shrink-0 cursor-pointer"
                 >
                   Reset
                 </button>
@@ -521,41 +587,67 @@ export default function DesktopYoutubeWatchView({
             </div>
           )}
 
-          {/* Filter Chips Horizontal Mini Khas YouTube */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
-            {[
-              { id: 'live', label: `🔴 Live (${liveChannels.length})` },
-              { id: 'upcoming', label: `⏰ Mendatang (${upcomingStreams.length})` },
-              { id: 'ended', label: `📼 Rekaman (${endedStreams.length})` },
-            ].map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => setSidebarFilter(chip.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap active:scale-95 ${
-                  sidebarFilter === chip.id
-                    ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 shadow-xs'
-                    : 'bg-surface-container hover:bg-surface-container-high text-on-surface-variant'
+          {/* Filter Pills Bergaya Homepage (Rounded-Full) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+            <button
+              type="button"
+              onClick={() => setSidebarFilter('live')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border active:scale-95 ${
+                sidebarFilter === 'live'
+                  ? 'bg-[#126947] text-white border-[#126947] shadow-2xs'
+                  : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  liveChannels.length > 0 ? 'bg-rose-500 animate-pulse' : 'bg-current opacity-50'
                 }`}
-              >
-                {chip.label}
-              </button>
-            ))}
+              />
+              <span>Live ({liveChannels.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSidebarFilter('upcoming')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border active:scale-95 ${
+                sidebarFilter === 'upcoming'
+                  ? 'bg-[#126947] text-white border-[#126947] shadow-2xs'
+                  : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">schedule</span>
+              <span>Terjadwal ({upcomingStreams.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSidebarFilter('ended')}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border active:scale-95 ${
+                sidebarFilter === 'ended'
+                  ? 'bg-[#126947] text-white border-[#126947] shadow-2xs'
+                  : 'bg-surface-container-low hover:bg-surface-container text-on-surface-variant border-outline-variant/25'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">history</span>
+              <span>Rekaman ({endedStreams.length})</span>
+            </button>
           </div>
 
-          {/* List Kartu Compact Khas YouTube Sidebar */}
-          <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[calc(100vh-220px)] pr-1">
+          {/* List Kartu Video Sidebar */}
+          <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[calc(100vh-260px)] pr-1">
             {relatedVideos.length === 0 ? (
-              <div className="p-6 text-center rounded-2xl bg-surface-container-low border border-surface-container-high/60 text-outline text-xs space-y-2">
+              <div className="p-6 text-center rounded-2xl bg-surface-container-low/60 border border-outline-variant/25 text-outline text-xs space-y-2">
                 <span className="material-symbols-outlined text-[28px] text-on-surface-variant">
                   {searchQuery ? 'search_off' : 'videocam_off'}
                 </span>
                 <p className="font-bold text-on-surface">
-                  {searchQuery ? 'Tidak Ada Kajian yang Cocok' : 'Belum Ada Siaran dalam Kategori Ini'}
+                  {searchQuery
+                    ? 'Tidak Ada Kajian yang Cocok'
+                    : 'Belum Ada Siaran dalam Kategori Ini'}
                 </p>
                 <p className="text-[11px] text-on-surface-variant max-w-xs mx-auto">
                   {searchQuery
-                    ? `Tidak ditemukan kajian untuk "${searchQuery}". Silakan coba kata kunci ustadz, saluran, atau judul lain.`
+                    ? `Tidak ditemukan kajian untuk "${searchQuery}".`
                     : sidebarFilter === 'live'
                     ? 'Saat ini belum ada saluran yang sedang menyiarkan kajian langsung. Silakan jelajahi tab Rekaman.'
                     : 'Belum ada siaran kajian dakwah pada filter yang dipilih.'}
@@ -564,20 +656,10 @@ export default function DesktopYoutubeWatchView({
                   <button
                     type="button"
                     onClick={() => setSidebarFilter('ended')}
-                    className="mt-2 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary cursor-pointer inline-flex items-center gap-1 transition-colors"
+                    className="mt-2 px-3.5 py-1.5 rounded-full bg-[#126947] text-white text-xs font-bold cursor-pointer inline-flex items-center gap-1.5 transition-colors"
                   >
-                    <span className="material-symbols-outlined text-[15px]">video_library</span>
-                    <span>Lihat Rekaman Kajian</span>
-                  </button>
-                )}
-                {searchQuery && onClearSearch && (
-                  <button
-                    type="button"
-                    onClick={onClearSearch}
-                    className="mt-1 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-primary cursor-pointer inline-flex items-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-[14px]">refresh</span>
-                    <span>Reset Pencarian</span>
+                    <span className="material-symbols-outlined text-[15px]">history</span>
+                    <span>Lihat Rekaman Selesai</span>
                   </button>
                 )}
               </div>
@@ -596,14 +678,14 @@ export default function DesktopYoutubeWatchView({
                         window.scrollTo({ top: 0, behavior: 'smooth' });
                       }
                     }}
-                    className={`flex items-start gap-2.5 p-2 rounded-xl transition-all select-none ${
+                    className={`flex items-start gap-3 p-2.5 rounded-2xl transition-all select-none border group ${
                       isPlaying
-                        ? 'bg-red-500/10 dark:bg-red-500/15 border border-red-500/35 shadow-xs cursor-default'
-                        : 'hover:bg-surface-container-low cursor-pointer border border-transparent'
+                        ? 'bg-[#e4eee8]/65 dark:bg-emerald-950/40 border-[#126947] shadow-2xs cursor-default'
+                        : 'bg-surface-container-low/40 hover:bg-surface-container-low border-outline-variant/20 hover:border-[#126947]/35 cursor-pointer'
                     }`}
                   >
                     {/* Thumbnail 16:9 Compact */}
-                    <div className="w-36 sm:w-40 aspect-video rounded-xl overflow-hidden bg-surface-container shrink-0 relative shadow-2xs">
+                    <div className="w-36 aspect-video rounded-xl overflow-hidden bg-surface-container shrink-0 relative border border-outline-variant/20">
                       <img
                         src={posterUrl}
                         alt={video.title}
@@ -616,25 +698,23 @@ export default function DesktopYoutubeWatchView({
                         }}
                       />
 
-                      {/* Equalizer overlay jika video sedang diputar */}
                       {isPlaying ? (
-                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex items-center justify-center text-white">
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/80 border border-red-500/40 text-[10px] font-bold text-red-500 shadow-md">
-                            <span className="material-symbols-outlined text-[14px] animate-pulse">
+                        <div className="absolute inset-0 bg-black/55 backdrop-blur-[1px] flex items-center justify-center text-white">
+                          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#126947] text-[10px] font-bold text-white shadow-md">
+                            <span className="material-symbols-outlined text-[13px] animate-pulse">
                               equalizer
                             </span>
-                            <span className="text-white text-[9px]">Sedang Diputar</span>
+                            <span>Diputar</span>
                           </div>
                         </div>
                       ) : (
-                        /* Badge Status (LIVE / Waktu) */
                         <div className="absolute bottom-1 right-1 pointer-events-none">
                           {video.isLive ? (
-                            <span className="px-1.5 py-0.2 rounded bg-red-600 text-white text-[9px] font-black uppercase tracking-wider shadow">
+                            <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-black uppercase tracking-wider shadow">
                               LIVE
                             </span>
                           ) : video.timeText ? (
-                            <span className="px-1.5 py-0.2 rounded bg-black/80 text-white text-[9px] font-semibold shadow">
+                            <span className="px-1.5 py-0.5 rounded bg-black/80 text-white text-[9px] font-semibold shadow">
                               {video.timeText}
                             </span>
                           ) : null}
@@ -647,15 +727,15 @@ export default function DesktopYoutubeWatchView({
                       <h4
                         className={`font-bold text-xs line-clamp-2 leading-snug transition-colors ${
                           isPlaying
-                            ? 'text-red-600 dark:text-red-400 font-extrabold'
-                            : 'text-on-surface hover:text-red-600'
+                            ? 'text-[#126947] dark:text-emerald-300 font-extrabold'
+                            : 'text-on-surface group-hover:text-[#126947] dark:group-hover:text-emerald-400'
                         }`}
                         title={video.title}
                       >
                         {video.title}
                       </h4>
                       <p className="text-[11px] text-on-surface-variant font-medium truncate mt-1 flex items-center gap-1">
-                        <span>{video.channelName}</span>
+                        <span className="truncate">{video.channelName}</span>
                         <ChannelVerifiedBadge size="xs" />
                       </p>
                       {video.speakerName && (
@@ -663,19 +743,13 @@ export default function DesktopYoutubeWatchView({
                           {video.speakerName}
                         </p>
                       )}
-                      {isPlaying && (
-                        <div className="inline-flex items-center gap-1 text-[10px] font-extrabold text-red-600 dark:text-red-400 mt-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse" />
-                          <span>Sedang Ditonton</span>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
               })
             )}
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   );

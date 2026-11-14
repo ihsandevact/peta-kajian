@@ -15,7 +15,6 @@ const KajianPreviewModal = dynamic(() => import('@/components/KajianPreviewModal
 import { useLivePlayer } from '@/context/LivePlayerContext';
 import { extractYouTubeVideoId } from '@/utils/youtube';
 import { triggerLoginNudge } from '@/components/LoginNudgePrompt';
-import { FEATURE_FLAGS } from '@/config/features';
 
 interface VenueCardProps {
   session: StudySession;
@@ -24,8 +23,9 @@ interface VenueCardProps {
 }
 
 export default function VenueCard({ session, onClose, onStartRoute }: VenueCardProps) {
-  const { playStream, openStudyMode } = useLivePlayer();
+  const { playStream } = useLivePlayer();
   const [imgError, setImgError] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
 
@@ -33,6 +33,22 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
   const { isAttending, toggle: toggleAttendance, getExtraCount } = useAttendance();
 
   const ytVideoId = extractYouTubeVideoId(session.stream_url);
+
+  const thumbnailUrl = React.useMemo(() => {
+    const rawPoster = session.poster_url?.trim();
+    if (
+      rawPoster &&
+      rawPoster !== '' &&
+      rawPoster.toLowerCase() !== 'null' &&
+      rawPoster.toLowerCase() !== 'undefined'
+    ) {
+      return rawPoster;
+    }
+    if (ytVideoId) {
+      return `https://i.ytimg.com/vi/${ytVideoId}/hqdefault.jpg`;
+    }
+    return null;
+  }, [session.poster_url, ytVideoId]);
 
   const handleWatchLive = () => {
     if (ytVideoId) {
@@ -59,7 +75,8 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
 
   useEffect(() => {
     setImgError(false);
-  }, [session.id, session.poster_url]);
+    setImgLoaded(false);
+  }, [session.id, thumbnailUrl]);
 
   const now = new Date();
   const info = getEffectiveSessionInfo(session, now);
@@ -77,12 +94,7 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
     ? dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })
     : '';
 
-  const hasPoster = Boolean(
-    session.poster_url &&
-    session.poster_url.trim() !== '' &&
-    session.poster_url.toLowerCase() !== 'null' &&
-    !imgError
-  );
+  const hasValidImage = Boolean(thumbnailUrl && !imgError);
 
   const hasRoute = hasPhysicalLocation(session);
   const hasLive = Boolean(ytVideoId) && !isPast;
@@ -118,85 +130,121 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
 
   return (
     <div className="relative font-geist pointer-events-auto filter drop-shadow-xl w-[305px] sm:w-[320px]">
-      <div className={`w-full max-h-[min(540px,calc(100dvh-100px))] flex flex-col bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom overflow-hidden ${
+      <div className={`w-full max-h-[min(470px,calc(100dvh-170px))] flex flex-col bg-surface-container-lowest rounded-2xl border transition-all transform origin-bottom overflow-hidden ${
         isPast ? 'border-surface-container-highest shadow-md' : 'border-surface-container-high/80'
       }`}>
-        {/* Gambar Poster Header - Dapat diklik untuk membuka Preview Modal */}
-        {hasPoster && (
-          <div
-            onClick={() => setIsPreviewModalOpen(true)}
-            className="w-full h-[88px] sm:h-[94px] bg-surface-container shrink-0 relative overflow-hidden cursor-pointer group"
-            title="Klik untuk melihat poster penuh & detail kajian"
-          >
-            <img
-              src={session.poster_url}
-              alt={`Poster ${session.title}`}
-              className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
-                isPast ? 'grayscale-[35%] brightness-90' : ''
-              }`}
-              onError={() => setImgError(true)}
-            />
-            {/* Vignette Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
-
-            {/* Hover Zoom Indicator */}
-            <div className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white font-semibold text-[11px] pointer-events-none">
-              <span className="material-symbols-outlined text-[16px]">zoom_in</span>
-              <span>Lihat Poster</span>
+        {/* Gambar Thumbnail Header (Selalu Tampil) - Dapat diklik untuk membuka Preview Modal */}
+        <div
+          onClick={() => setIsPreviewModalOpen(true)}
+          className="w-full h-[84px] sm:h-[90px] bg-surface-container shrink-0 relative overflow-hidden cursor-pointer group"
+          title="Klik untuk melihat gambar poster penuh & detail kajian"
+        >
+          {hasValidImage ? (
+            <>
+              {!imgLoaded && (
+                <div className="absolute inset-0 bg-surface-container-high animate-pulse flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[22px] text-outline/40">
+                    image
+                  </span>
+                </div>
+              )}
+              <img
+                src={thumbnailUrl!}
+                alt={`Poster ${session.title}`}
+                className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
+                  imgLoaded ? 'opacity-100' : 'opacity-0'
+                } ${isPast ? 'grayscale-[35%] brightness-90' : ''}`}
+                onLoad={() => setImgLoaded(true)}
+                onError={() => setImgError(true)}
+              />
+              {/* Vignette Overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-black/25 pointer-events-none" />
+            </>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#0c432d] via-[#126947] to-[#0a3826] flex items-center justify-between px-4 text-white select-none relative overflow-hidden">
+              <div className="flex items-center gap-2.5 z-10 min-w-0 pr-16">
+                <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur-xs border border-white/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px] text-emerald-100">
+                    {session.venues ? 'mosque' : 'smart_display'}
+                  </span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-200/90">
+                    {session.venues ? 'Majelis Ilmu' : 'Kajian Online'}
+                  </p>
+                  <p className="text-[11px] font-semibold text-white/90 truncate">
+                    {session.venues ? session.venues.name : session.speaker_name}
+                  </p>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-[68px] text-white/10 absolute -bottom-3 right-3 pointer-events-none">
+                {session.venues ? 'mosque' : 'menu_book'}
+              </span>
             </div>
+          )}
 
-            {/* Tombol Aksi Absolute Floating (Jika ada gambar) */}
-            <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const willBookmark = !bookmarked;
-                  toggleBookmark(session.id, session);
-                  if (willBookmark) {
-                    triggerLoginNudge({ type: 'bookmark', title: session.title });
-                  }
-                }}
-                className={`w-7 h-7 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
-                  bookmarked
-                    ? 'bg-amber-500 text-white'
-                    : 'bg-black/50 text-white hover:bg-black/75'
-                }`}
-                title={bookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
+          {/* Tombol/Badge "Lihat Gambar" Selalu Tampil di Kiri Bawah Thumbnail */}
+          <div className="absolute bottom-2 left-2.5 z-10 pointer-events-none">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/55 group-hover:bg-[#126947] backdrop-blur-md text-white text-[10px] font-bold tracking-wide transition-colors shadow-sm border border-white/15">
+              <span className="material-symbols-outlined text-[13px]">zoom_in</span>
+              <span>{hasValidImage ? 'Lihat Gambar' : 'Lihat Detail'}</span>
+            </span>
+          </div>
+
+          {/* Tombol Aksi Absolute Floating (Kanan Atas) */}
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                const willBookmark = !bookmarked;
+                toggleBookmark(session.id, session);
+                if (willBookmark) {
+                  triggerLoginNudge({ type: 'bookmark', title: session.title });
+                }
+              }}
+              className={`w-7 h-7 rounded-full backdrop-blur-md flex items-center justify-center transition-all shadow-md active:scale-90 cursor-pointer ${
+                bookmarked
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-black/50 text-white hover:bg-black/75'
+              }`}
+              title={bookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian (Bookmark)'}
+            >
+              <span
+                className="material-symbols-outlined text-[15px]"
+                style={{ fontVariationSettings: bookmarked ? "'FILL' 1" : "'FILL' 0" }}
               >
-                <span className="material-symbols-outlined text-[15px]" style={{ fontVariationSettings: bookmarked ? "'FILL' 1" : "'FILL' 0" }}>
-                  bookmark
-                </span>
-              </button>
+                bookmark
+              </span>
+            </button>
 
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleShare(e);
+              }}
+              className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
+              title="Bagikan Info Kajian"
+            >
+              <span className="material-symbols-outlined text-[14px]">share</span>
+            </button>
+
+            {onClose && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleShare(e);
+                  onClose();
                 }}
                 className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
-                title="Bagikan Info Kajian"
+                title="Tutup"
               >
-                <span className="material-symbols-outlined text-[14px]">share</span>
+                <span className="material-symbols-outlined text-[16px]">close</span>
               </button>
-
-              {onClose && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClose();
-                  }}
-                  className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/75 transition-all shadow-md active:scale-90 cursor-pointer"
-                  title="Tutup"
-                >
-                  <span className="material-symbols-outlined text-[16px]">close</span>
-                </button>
-              )}
-            </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Banner Mode Pengujian Khusus Admin */}
         {session.is_test && (
@@ -232,52 +280,6 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
               {/* Toggle Pengingat Notifikasi Tepat di Samping Kategori (Hanya jika belum selesai) */}
               {!isPast && (
                 <NotificationReminderToggle sessionId={session.id} variant="inline" />
-              )}
-
-              {/* Aksi Tambahan jika TIDAK ADA poster */}
-              {!hasPoster && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const willBookmark = !bookmarked;
-                      toggleBookmark(session.id, session);
-                      if (willBookmark) {
-                        triggerLoginNudge({ type: 'bookmark', title: session.title });
-                      }
-                    }}
-                    className={`w-6 h-6 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                      bookmarked
-                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
-                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-highest'
-                    }`}
-                    title={bookmarked ? 'Hapus dari Tersimpan' : 'Simpan Kajian'}
-                  >
-                    <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: bookmarked ? "'FILL' 1" : "'FILL' 0" }}>
-                      bookmark
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleShare}
-                    className="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-highest transition-colors cursor-pointer"
-                    title="Bagikan Kajian"
-                  >
-                    <span className="material-symbols-outlined text-[13px]">share</span>
-                  </button>
-
-                  {onClose && (
-                    <button
-                      type="button"
-                      onClick={onClose}
-                      className="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:bg-surface-container-highest transition-colors cursor-pointer"
-                      title="Tutup"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">close</span>
-                    </button>
-                  )}
-                </>
               )}
             </div>
           </div>
@@ -457,29 +459,6 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                 </button>
               </div>
 
-              {ytVideoId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    openStudyMode({
-                      videoId: ytVideoId,
-                      title: session.title,
-                      speakerName: session.speaker_name,
-                      channelName: session.venues?.name || session.speaker_name,
-                      sessionId: session.id,
-                    });
-                    if (onClose) onClose();
-                  }}
-                  className={`w-full ${
-                    FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
-                  } items-center justify-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer`}
-                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
-                >
-                  <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>
-                  <span>Mode Belajar & Catat Faidah</span>
-                </button>
-              )}
-
               {hasCalendar && (
                 <a
                   href={gCalUrl.toString()}
@@ -549,29 +528,6 @@ export default function VenueCard({ session, onClose, onStartRoute }: VenueCardP
                   <span>Simpan Kalender</span>
                 </a>
               </div>
-
-              {ytVideoId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    openStudyMode({
-                      videoId: ytVideoId,
-                      title: session.title,
-                      speakerName: session.speaker_name,
-                      channelName: session.venues?.name || session.speaker_name,
-                      sessionId: session.id,
-                    });
-                    if (onClose) onClose();
-                  }}
-                  className={`w-full ${
-                    FEATURE_FLAGS.ENABLE_MOBILE_STUDY_NOTES ? 'flex' : 'hidden md:flex'
-                  } items-center justify-center gap-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 py-1.5 px-3 rounded-xl transition-all active:scale-95 shadow-2xs cursor-pointer`}
-                  title="Buka Mode Belajar untuk menyimak sambil mencatat faidah"
-                >
-                  <span className="material-symbols-outlined text-[15px] text-emerald-700 dark:text-emerald-400">edit_note</span>
-                  <span>Mode Belajar & Catat Faidah</span>
-                </button>
-              )}
             </div>
           ) : (
             /* Skenario 4: Sisa tombol tunggal jika yang lain tidak tersedia */

@@ -49,12 +49,19 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
 
   const isLive = info.isLive;
 
-  const hasPoster = Boolean(
-    session.poster_url &&
-    session.poster_url.trim() !== '' &&
-    session.poster_url.toLowerCase() !== 'null' &&
-    !imgError
-  );
+  const ytVideoId = extractYouTubeVideoId(session.stream_url);
+  const rawPoster = session.poster_url?.trim();
+  const thumbnailUrl =
+    rawPoster &&
+    rawPoster !== '' &&
+    rawPoster.toLowerCase() !== 'null' &&
+    rawPoster.toLowerCase() !== 'undefined'
+      ? rawPoster
+      : ytVideoId
+      ? `https://i.ytimg.com/vi/${ytVideoId}/hqdefault.jpg`
+      : null;
+
+  const hasPoster = Boolean(thumbnailUrl && !imgError);
 
   // Deteksi Platform Siaran
   const streamUrl = session.stream_url || '';
@@ -125,7 +132,7 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
             title="Klik untuk melihat poster penuh & detail kajian"
           >
             <img
-              src={session.poster_url}
+              src={thumbnailUrl!}
               alt={session.title}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               onError={() => setImgError(true)}
@@ -133,10 +140,12 @@ export default function OnlineStreamingOverlay({ session, onClose }: OnlineStrea
             {/* Gradient Overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-            {/* Hover Zoom Indicator */}
-            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 text-white font-semibold text-xs pointer-events-none">
-              <span className="material-symbols-outlined text-[20px]">zoom_in</span>
-              <span>Klik untuk Perbesar Poster & Detail</span>
+            {/* Badge Lihat Gambar di Kanan Bawah */}
+            <div className="absolute bottom-3 right-3 z-10 pointer-events-none">
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/55 group-hover:bg-[#126947] backdrop-blur-md text-white text-[11px] font-bold transition-colors border border-white/15 shadow-sm">
+                <span className="material-symbols-outlined text-[14px]">zoom_in</span>
+                <span>Lihat Gambar</span>
+              </span>
             </div>
 
             {/* Close Button Absolute */}
